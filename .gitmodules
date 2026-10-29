@@ -1,0 +1,3 @@
+[submodule "upstream/HypCD"]
+	path = upstream/HypCD
+	url = https://github.com/Visual-AI/HypCD.git
