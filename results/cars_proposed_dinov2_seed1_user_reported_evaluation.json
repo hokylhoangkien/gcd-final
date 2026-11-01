@@ -1,0 +1,29 @@
+{
+  "status": "observed",
+  "unit": "fraction",
+  "protocol": "balanced_ss_kmeans_train_unlabeled",
+  "all_acc": 0.8123372395833334,
+  "old_acc": 0.8665667166416792,
+  "new_acc": 0.7861453053342988,
+  "method": "proposed",
+  "backbone": "DINOv2 ViT-B/14 reg4",
+  "dataset": "Stanford Cars SSB",
+  "seed": 1,
+  "completed_epochs": 200,
+  "checkpoint_selection": "final_epoch",
+  "training_run_id": "20261031T055221Z-03368e3d",
+  "parent_training_run_id": "20261031T035726Z-761b10ee",
+  "evaluation_run_id": "20261031T172513Z-881c7f46",
+  "evidence_source": "Raw final evaluation.json, metadata, checkpoints and complete resume-chain logs copied to Mac and verified locally 2026-11-01",
+  "checkpoint": "backbone_final.pt",
+  "dependency_change": "kmeans_pytorch empty-cluster repair during resume; see reports/09_kmeans_failure.md",
+  "baseline_comparison": "not yet run under matched conditions",
+  "limitations": [
+    "single seed",
+    "no completed ablations",
+    "novelty unconfirmed",
+    "paper configuration/selection differences"
+  ],
+  "local_backup_verified": true,
+  "backup_manifest": "logs/final-backup-20261101/local_sha256_manifest.json"
+}

@@ -10,7 +10,7 @@ if __name__ == '__main__':
     cfg = load_config(sys.argv[1])
     if cfg['device'] not in ('auto', 'cuda'):
         raise RuntimeError('Remote baseline requires CUDA; CPU/MPS are smoke-only')
-    result = inspect_inputs()
+    result = inspect_inputs(cfg)
     result['probe'] = tensor_probe('cuda', baseline=True)
     result['data_counts'] = audit_dataset()
     result['backbone_probe'] = backbone_probe(cfg)

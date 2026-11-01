@@ -36,13 +36,14 @@ def verify_upstream():
     return {'sha': snapshot['commit'], 'kind': 'verified_release_snapshot'}
 
 
-def inspect_inputs():
+def inspect_inputs(cfg=None):
     upstream = ROOT / 'upstream/HypCD'
     provenance = verify_upstream()
     sha = provenance['sha']
     split = check_split(upstream / 'data/ssb_splits/scars_osr_splits.pkl')
     data, weights, _ = paths()
-    weight = weights / 'dino_vitb16_pretrain.pth'
+    variant = (cfg or {}).get('dino', 'v1')
+    weight = weights / ('dinov2_vitb14_reg4_pretrain.pth' if variant == 'v2' else 'dino_vitb16_pretrain.pth')
     required = [data / 'cars/devkit/cars_train_annos.mat',
                 data / 'cars/devkit/cars_test_annos_withlabels.mat', weight]
     missing = [str(p) for p in required if not p.is_file()]

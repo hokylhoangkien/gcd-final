@@ -25,7 +25,7 @@ class RuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'config.json'
             for key, value in [('method', 'unknown'), ('device', 'bad'), ('epochs', 0),
-                               ('seed', -1), ('dino', 'v2'), ('checkpoint_selection', 'test_best')]:
+                               ('seed', -1), ('dino', 'invalid'), ('checkpoint_selection', 'test_best')]:
                 changed = dict(cfg, **{key: value})
                 path.write_text(json.dumps(changed))
                 with self.subTest(key=key), self.assertRaises(ValueError):

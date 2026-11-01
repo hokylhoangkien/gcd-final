@@ -89,8 +89,14 @@ def backbone_probe(cfg):
     from models.vision_transformer import vit_base, DINOHead
     from hyptorch.nn import ToPoincare
     _, weights, _ = paths()
-    model = vit_base()
-    model.load_state_dict(torch.load(weights / 'dino_vitb16_pretrain.pth', map_location='cpu', weights_only=True))
+    if cfg['dino'] == 'v2':
+        from models.vision_transformer2 import vit_base as vit_base_v2
+        model = vit_base_v2()
+        filename = 'dinov2_vitb14_reg4_pretrain.pth'
+    else:
+        model = vit_base()
+        filename = 'dino_vitb16_pretrain.pth'
+    model.load_state_dict(torch.load(weights / filename, map_location='cpu', weights_only=True))
     for name, parameter in model.named_parameters():
         parameter.requires_grad = 'blocks.' in name and int(name.split('.')[1]) >= cfg['grad_from_block']
     model = model.cuda()

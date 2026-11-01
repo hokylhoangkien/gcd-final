@@ -25,7 +25,7 @@ from project_utils.cluster_and_log_utils import log_accs_from_preds
 from matplotlib import pyplot as plt
 from methods.clustering.faster_mix_k_means_pytorch import K_Means as SemiSupKMeans
 from models import vision_transformer as vits1
-# DINOv2 is deliberately unsupported by this v1 trainer
+# DINOv2 imports lazily: v1 does not require xformers.
 from data.augmentations import get_transform
 from data.get_datasets import get_datasets, get_class_splits
 from tqdm import tqdm
@@ -713,8 +713,13 @@ def run(argv, runtime):
             torch.cuda.empty_cache()
             state_dict = torch.load(dino_pretrain_path, map_location='cpu')
             model.load_state_dict(state_dict)
+        elif args.dino == 'v2':
+            from models import vision_transformer2 as vits2
+            model = vits2.vit_base()
+            torch.cuda.empty_cache()
+            model.load_state_dict(torch.load(dinov2_pretrain_path, map_location='cpu', weights_only=True))
         else:
-            raise ValueError('This audited trainer supports DINO v1 only')
+            raise ValueError('Unsupported DINO variant')
 
         if args.warmup_model_dir is not None:
             print(f'Loading weights from {args.warmup_model_dir}')

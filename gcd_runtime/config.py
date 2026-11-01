@@ -24,8 +24,8 @@ def load_config(path):
             raise ValueError(f'{key} must be a positive integer')
     if type(cfg['seed']) is not int or cfg['seed'] < 0:
         raise ValueError('seed must be a nonnegative integer')
-    if cfg['dino'] != 'v1':
-        raise ValueError('Initial runtime supports audited DINO v1 only')
+    if cfg['dino'] not in ('v1', 'v2'):
+        raise ValueError('dino must be v1 or v2')
     if cfg['prototype_extraction_interval'] != 1:
         raise ValueError('Epoch resume currently requires prototype extraction every epoch')
     if cfg['checkpoint_selection'] != 'final_epoch':

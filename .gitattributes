@@ -1,0 +1,5 @@
+# Keep report artifacts binary and retain the CSV writer's standard CRLF bytes.
+*.pdf binary
+*.pptx binary
+*.png binary
+*.csv whitespace=cr-at-eol
