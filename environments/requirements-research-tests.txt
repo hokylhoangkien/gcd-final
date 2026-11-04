@@ -1,0 +1,2 @@
+# Additional local research test runner; training dependencies stay unchanged.
+pytest==8.3.5

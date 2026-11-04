@@ -1,12 +1,11 @@
 """Internal worker, launched only after the remote readiness gate."""
-import json
 import os
 from pathlib import Path
 import runpy
 import sys
 import types
 from .checkpoint import EpochRuntime
-from .config import ROOT, paths
+from .config import ROOT, paths, load_config
 
 
 def configure_environment(run_dir):
@@ -33,8 +32,8 @@ def configure_environment(run_dir):
 
 def main():
     config_path, run_dir, mode, checkpoint = sys.argv[1:]
-    cfg = json.loads(Path(config_path).read_text())
-    upstream = configure_environment(run_dir)
+    cfg = load_config(config_path)
+    configure_environment(run_dir)
     flags = ['--dataset_name', 'scars', '--eval_funcs', 'v2', '--use_ssb_splits', 'True',
              '--contrast_unlabel_only', 'False', '--transform', 'imagenet']
     keys = ('seed', 'epochs', 'batch_size', 'num_workers', 'grad_from_block', 'lr',
@@ -42,6 +41,9 @@ def main():
             'c', 'cr', 'mlp_out_dim', 'prototype_extraction_interval', 'dino', 'kmeans_timeout_seconds')
     for key in keys:
         flags.extend(['--' + key, str(cfg[key])])
+    for key in ('momentum', 'temperature', 'distance', 'strategy', 'cluster_momentum',
+                'n_views', 'hyper_start_epoch', 'hyper_end_epoch'):
+        flags.extend(['--'+key, str(cfg[key])])
     if mode == 'evaluate':
         flags.extend(['--eval_only', '--eval_model_path', checkpoint])
     sys.argv = ['train.train_HypSelEx'] + flags

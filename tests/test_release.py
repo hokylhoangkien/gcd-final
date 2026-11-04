@@ -1,3 +1,5 @@
+"""Check the actual handoff archive, including execution outside the repository."""
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -5,35 +7,54 @@ import sys
 import tarfile
 import tempfile
 import unittest
+
 from gcd_runtime.config import ROOT
 
 
 class ReleaseTests(unittest.TestCase):
-    def test_release_contains_source_without_private_artifacts(self):
+    def test_clean_archive_is_complete_and_runs_without_git(self):
         with tempfile.TemporaryDirectory() as tmp:
-            result=subprocess.run([sys.executable,'scripts/build_release.py','--output',tmp],
-                                  cwd=ROOT,capture_output=True,text=True,timeout=20,check=True)
-            archive_path=Path(json.loads(result.stdout)['archive'])
+            result = subprocess.run([sys.executable, 'scripts/build_release.py', '--output', tmp],
+                                    cwd=ROOT, capture_output=True, text=True, timeout=20, check=True)
+            archive_path = Path(json.loads(result.stdout)['archive'])
             with tarfile.open(archive_path) as archive:
-                names=[member.name for member in archive]
-                self.assertTrue(any(name.endswith('/gcd_runtime/trainer.py') for name in names))
-                self.assertTrue(any(name.endswith('/upstream/HypCD.SNAPSHOT.json') for name in names))
-                for name in names:
-                    parts=Path(name).parts
-                    self.assertFalse(any(p in parts for p in ('.git','.venv','logs','weights','datasets','runs','legacy','__pycache__')))
-                    self.assertNotIn(Path(name).suffix,('.pt','.pth','.ckpt'))
-                # Extract only this tool's known regular-file release into a temp dir.
+                names = [member.name for member in archive]
                 for member in archive:
-                    target=Path(tmp)/member.name
+                    target = Path(tmp)/member.name
                     self.assertTrue(target.resolve().is_relative_to(Path(tmp).resolve()))
                     self.assertTrue(member.isfile())
-                    target.parent.mkdir(parents=True,exist_ok=True)
+                    self.assertFalse(any(p in Path(member.name).parts for p in
+                        ('.git', '.venv', '.archive', 'logs', 'weights', 'datasets', 'runs',
+                         'legacy', 'docs', 'reports', '__pycache__')))
+                    self.assertNotIn(target.suffix, ('.pt', '.pth', '.ckpt'))
+                    target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(archive.extractfile(member).read())
-                root=Path(tmp)/names[0].split('/')[0]
-                result=subprocess.run([sys.executable,'scripts/bootstrap_upstream.py'],cwd=root,
-                                      capture_output=True,text=True,timeout=10)
-                self.assertEqual(result.returncode,0,result.stderr)
-                result=subprocess.run([sys.executable,'-m','gcd_runtime.launch','train','--config',
-                                       'configs/cars_proposed_dino_v1.json','--dry-run'],cwd=root,
-                                      capture_output=True,text=True,timeout=10)
-                self.assertEqual(result.returncode,0,result.stderr)
+            root = Path(tmp)/names[0].split('/')[0]
+            manifest = json.loads((root/'release_manifest.json').read_text())
+            self.assertEqual(manifest['methods'], ['crish', 'baseline'])
+            for path, digest in manifest['files'].items():
+                self.assertEqual(hashlib.sha256((root/path).read_bytes()).hexdigest(), digest, path)
+            for path in ('README.md', 'AGENTS.md', 'NOTICE', 'presentation/CRISH_GCD.md',
+                         'presentation/CRISH_GCD.pdf', 'crish/training.py', 'crish/rebuild.py',
+                         'audit/baseline_trace.py', 'upstream/HypCD.SNAPSHOT.json'):
+                self.assertTrue((root/path).is_file(), path)
+            for path in ('gcd_runtime/reliability.py', 'gcd_runtime/method_config.py', 'configs/train'):
+                self.assertFalse((root/path).exists(), path)
+            result = subprocess.run([sys.executable, 'scripts/bootstrap_upstream.py'], cwd=root,
+                                    capture_output=True, text=True, timeout=10)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            # Bounded subset avoids recursively testing archive construction.
+            config = json.loads((root/'configs/local_smoke.json').read_text())
+            config['tests'] = 'tests/crish_v21'
+            target = root/'configs/release_smoke.json'
+            target.write_text(json.dumps(config))
+            result = subprocess.run([sys.executable, 'scripts/run_smoke.py', '--config', str(target)],
+                                    cwd=root, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+            self.assertEqual(json.loads((root/'results/local_validation.json').read_text())['status'], 'passed')
+            for flag in ([], ['--baseline']):
+                result = subprocess.run([sys.executable, '-m', 'gcd_runtime.train_cli', '--dry-run']+flag,
+                                        cwd=root, capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                method = 'baseline' if flag else 'crish'
+                self.assertIn('"selected_method": "'+method+'"', result.stdout)

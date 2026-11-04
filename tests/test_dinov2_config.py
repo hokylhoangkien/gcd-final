@@ -1,21 +1,12 @@
-"""Configuration and checkpoint routing; CUDA/real weights require remote gate."""
-import json
+"""Require the actual DINOv2 register checkpoint; never use a v1 substitute."""
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
-from gcd_runtime.config import ROOT, load_config
 from gcd_runtime.readiness import inspect_inputs
 
-class DinoV2ConfigTests(unittest.TestCase):
-    def test_profiles_keep_optimization_matched(self):
-        for method in ('baseline', 'proposed'):
-            v1 = load_config(ROOT / f'configs/cars_{method}_dino_v1.json')
-            v2 = load_config(ROOT / f'configs/cars_{method}_dino_v2.json')
-            self.assertEqual(v2.pop('dino'), 'v2')
-            v1.pop('dino')
-            self.assertEqual(v1, v2)
 
+class DinoV2ReadinessTests(unittest.TestCase):
     def test_gate_requires_v2_weights_even_when_v1_exists(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

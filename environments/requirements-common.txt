@@ -1,4 +1,4 @@
-# Runtime dependencies; validated locally only where recorded in reports.
+# Runtime dependencies; validation provenance is recorded in results/.
 numpy==1.24.4
 scipy==1.10.1
 scikit-learn==1.3.2

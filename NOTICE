@@ -1,0 +1,21 @@
+Third-party code and provenance
+
+upstream/HypCD is unmodified, from https://github.com/Visual-AI/HypCD,
+pinned at ffc895b7ff38be8502bb7e3bd851f1d2a55dff73. Source archives include
+a hash-verified snapshot of the same commit instead of Git metadata.
+
+The reference losses, hierarchy extraction and evaluation in gcd_runtime/trainer.py,
+the objective adapter in crish/loss.py, the shared loop in crish/training.py,
+and the USE/SSE arithmetic in crish/rebuild.py derive from
+train/train_HypSelEx.py at that commit. Copyright (c) 2025 Visual AI Lab.
+The complete MIT notice is retained in LICENSES/HypCD-MIT.txt.
+
+audit/baseline_trace.py loads hashed reference definitions solely for audit/tests.
+The reference LabelSmoothingLoss, SupConLoss and info_nce_logits definitions
+remain unchanged. CRiSH repair, legal probes and projector lookahead are
+experimental extensions; source reuse is not a novelty claim.
+
+Backbones, manifold operations, dataset loaders and evaluation helpers are
+imported from the pinned upstream source and retain their original notices,
+including Meta's notices in the transformer modules. Dependencies and pretrained
+weights retain their respective licenses. No datasets or weights are distributed.

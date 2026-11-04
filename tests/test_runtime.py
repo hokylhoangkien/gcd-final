@@ -21,11 +21,15 @@ class RuntimeTests(unittest.TestCase):
             self.assertFalse(any(isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id in ('exec','compile') for n in ast.walk(tree)))
 
     def test_config_rejects_unsupported_method(self):
-        cfg = load_config(ROOT / 'configs/cars_baseline_dino_v1.json')
+        cfg = load_config(ROOT / 'configs/baseline.json')
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'config.json'
             for key, value in [('method', 'unknown'), ('device', 'bad'), ('epochs', 0),
-                               ('seed', -1), ('dino', 'invalid'), ('checkpoint_selection', 'test_best')]:
+                               ('seed', -1), ('dino', 'invalid'), ('checkpoint_selection', 'test_best'),
+                               ('training_diagnostics_every', -1), ('training_diagnostics_every', True),
+                               ('test_every_epochs', -1), ('plain_train_eval_every', True),
+                               ('evaluation_rng', 'bad'), ('final_ss_evaluation', 'yes'),
+                               ('test_every_epochs', 1), ('early_stopping', True)]:
                 changed = dict(cfg, **{key: value})
                 path.write_text(json.dumps(changed))
                 with self.subTest(key=key), self.assertRaises(ValueError):
@@ -64,7 +68,7 @@ class RuntimeTests(unittest.TestCase):
         step(model, head, optimizer, scheduler)
         with tempfile.TemporaryDirectory() as tmp:
             runtime = EpochRuntime(tmp, {'epochs': 3, 'synthetic_fixture': True})
-            runtime.save(0, model, head, optimizer, scheduler, .75, 1., .5, .75, 1., .5)
+            runtime.save(0, model, head, optimizer, scheduler)
             expected_random = (random.random(), np.random.random())
             step(model, head, optimizer, scheduler)
             expected = copy.deepcopy(model.state_dict()), copy.deepcopy(head.state_dict())

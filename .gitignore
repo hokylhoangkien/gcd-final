@@ -17,6 +17,9 @@ runs/
 
 .cache/
 dist/
+.archive/
 
 .env.*
 !.env.example
+
+.pytest_cache/

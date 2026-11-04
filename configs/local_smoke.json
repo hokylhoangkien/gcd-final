@@ -1,0 +1,10 @@
+{
+  "kind": "synthetic_cpu_only_not_benchmark",
+  "device": "cpu",
+  "timeout_per_command_seconds": 60,
+  "upstream_sha": "ffc895b7ff38be8502bb7e3bd851f1d2a55dff73",
+  "tests": "tests",
+  "dataset": null,
+  "pretrained_weights": false,
+  "full_training_enabled": false
+}

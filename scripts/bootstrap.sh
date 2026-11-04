@@ -20,6 +20,13 @@ else
   .venv/bin/python -m pip install torch==2.4.1 torchvision==0.19.1
 fi
 .venv/bin/python -m pip install -r environments/requirements-common.txt
+.venv/bin/python -m pip install -r environments/requirements-research-tests.txt
+if [[ "$mode" == cuda ]]; then
+  # Official DINOv2 source imports SwiGLU even with memory-efficient attention
+  # disabled. Match the existing torch2.4.1 training profile without upgrading it.
+  .venv/bin/python -m pip install --only-binary=:all: --no-deps xformers==0.0.28.post1
+fi
 .venv/bin/python -m pip check
+.venv/bin/python scripts/bootstrap_upstream.py
 .venv/bin/python scripts/run_smoke.py
 # No data/weights are downloaded and no training is started.

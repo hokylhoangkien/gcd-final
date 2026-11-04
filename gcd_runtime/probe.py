@@ -1,6 +1,5 @@
 """Small real tensor checks; never downloads weights or opens a dataset."""
 import json
-from pathlib import Path
 from .config import ROOT, choose_device
 
 
@@ -30,7 +29,7 @@ def tensor_probe(requested='auto', baseline=False):
         raise RuntimeError('Invalid Poincare radius')
     if baseline:
         from .worker import configure_environment
-        upstream = configure_environment(ROOT / 'runs' / 'probe-placeholder')
+        configure_environment(ROOT / 'runs' / 'probe-placeholder')
         from . import trainer
         scope = vars(trainer)
         from types import SimpleNamespace
@@ -60,13 +59,6 @@ def tensor_probe(requested='auto', baseline=False):
                                                 np.array([True, True, True, False]))
         if not np.isclose(all_acc, 0.75) or not np.isclose(all_acc, 0.75 * old + 0.25 * new):
             raise RuntimeError('Sample-weighted All/Old/New fixture failed')
-        np.random.seed(0)
-        cluster_input = torch.tensor([[0., 0.], [.1, 0.], [0., .1],
-                                      [10., 10.], [10.1, 10.], [10., 10.1]], device=device)
-        predicted, centers = scope['kmeans'](X=cluster_input, num_clusters=2,
-                                             distance='euclidean', device=device, tqdm_flag=False)
-        if len(set(predicted[:3].tolist())) != 1 or len(set(predicted[3:].tolist())) != 1 or predicted[0] == predicted[3] or not torch.isfinite(centers).all():
-            raise RuntimeError('kmeans dependency fixture failed')
     if device.type == 'cuda':
         torch.cuda.synchronize()
     return dict(device=str(device), torch=torch.__version__, cuda_build=torch.version.cuda,
@@ -81,7 +73,7 @@ def backbone_probe(cfg):
     import torch
     from .config import paths
     from .worker import configure_environment
-    upstream = configure_environment(ROOT / 'runs/probe-placeholder')
+    configure_environment(ROOT / 'runs/probe-placeholder')
     from . import trainer
     from types import SimpleNamespace
     scope = vars(trainer)
@@ -134,45 +126,6 @@ if __name__ == '__main__':
     parser.add_argument('--baseline', action='store_true')
     args = parser.parse_args()
     print(json.dumps(tensor_probe(args.device, args.baseline), indent=2))
-
-
-
-
 def method_probe(cfg, requested='cuda'):
-    """Synthetic active-method backward, without waiting for warmup epochs."""
-    if cfg['method'] == 'baseline':
-        return dict(status='baseline_no_reliability')
-    import tempfile
-    from types import SimpleNamespace
-    import torch
-    from .worker import configure_environment
-    from .checkpoint import EpochRuntime
-    from .method_config import ReliabilitySettings
-    device = choose_device(torch, requested)
-    upstream = configure_environment(ROOT / 'runs/probe-placeholder')
-    from . import trainer
-    scope = vars(trainer)
-    scope['args'] = SimpleNamespace(c=cfg['c'])
-    from hyptorch.nn import ToPoincare
-    settings = ReliabilitySettings(**cfg['reliability'])
-    n = min(64, max(8, settings.k + 3))
-    torch.manual_seed(47)
-    features = ToPoincare(c=cfg['c'], clip_r=cfg['cr'] or None, riemannian=False)(
-        torch.randn(n, 2, 16, device=device) * .1).detach().requires_grad_()
-    pseudo = torch.zeros(n, dtype=torch.long, device=device)
-    labeled = torch.zeros(n, dtype=torch.bool, device=device)
-    labeled[:2] = True
-    epoch = settings.warmup_epochs + settings.ramp_epochs
-    with tempfile.TemporaryDirectory(prefix='gcd-method-probe-') as tmp:
-        runtime = EpochRuntime(tmp, cfg)
-        distance, angle = runtime.hierarchy_losses(scope['SupConLoss'](hyper_c=cfg['c']),
-            scope['SupConLoss'](hyper_c=0), features, pseudo, labeled,
-            torch.arange(n, device=device), epoch, 0)
-        loss = distance + angle
-        loss.backward()
-        if not torch.isfinite(loss) or not torch.isfinite(features.grad).all():
-            raise RuntimeError('Active reliability method synthetic backward failed')
-        path = Path(tmp) / 'reliability.jsonl'
-        diagnostics = json.loads(path.read_text().splitlines()[-1]) if path.exists() else None
-    return dict(status='synthetic_method_passed', device=str(device), method=cfg['method'],
-                probe_epoch=epoch, trained_epochs=0, diagnostics=diagnostics)
+    from crish.smoke import crish_method_probe
+    return crish_method_probe(cfg, requested)

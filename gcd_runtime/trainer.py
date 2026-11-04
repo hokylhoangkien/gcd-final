@@ -1,40 +1,27 @@
-# Portions derived from Visual-AI/HypCD (MIT), commit
-# ffc895b7ff38be8502bb7e3bd851f1d2a55dff73, train/train_HypSelEx.py.
-# Copyright (c) 2025 Visual AI Lab. See THIRD_PARTY_NOTICES.md and LICENSES/HypCD-MIT.txt.
-# Project extensions: explicit runtime hooks, reliability loss, final-epoch
-# selection, epoch resume and portable invocation. No upstream files are edited.
-"""Explicit Hyp-SelEx reference/proposed trainer. Import after environment setup."""
+# Reference losses/HSSK derived from Visual-AI/HypCD (MIT), commit
+# ffc895b7ff38be8502bb7e3bd851f1d2a55dff73. See NOTICE and LICENSES/HypCD-MIT.txt.
+"""Single CRiSH/B0 setup, source-faithful losses, HSSK and final evaluation."""
 import argparse
-import copy
+import math
 import os
 import random
 import warnings
-import math
-import torch
 import numpy as np
+import torch
 import torch.nn as nn
 import hyptorch.nn as hypnn
-
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
-from torch.optim import SGD, lr_scheduler
 from sklearn.cluster import KMeans
-from project_utils.cluster_utils import mixed_eval, AverageMeter
-from project_utils.general_utils import init_experiment, get_mean_lr, str2bool, get_dino_head_weights
+from project_utils.general_utils import init_experiment, str2bool
 from project_utils.cluster_and_log_utils import log_accs_from_preds
-from matplotlib import pyplot as plt
 from methods.clustering.faster_mix_k_means_pytorch import K_Means as SemiSupKMeans
 from models import vision_transformer as vits1
-# DINOv2 imports lazily: v1 does not require xformers.
 from data.augmentations import get_transform
 from data.get_datasets import get_datasets, get_class_splits
-from tqdm import tqdm
-
-from config import exp_root, dino_pretrain_path, dinov2_pretrain_path
-
-from gcd_runtime.compat import kmeans
 from hyptorch.pmath import dist_matrix
-
+from config import exp_root, dino_pretrain_path, dinov2_pretrain_path
+from tqdm import tqdm
 warnings.filterwarnings("ignore")
 
 
@@ -202,236 +189,11 @@ def info_nce_logits(features, confusion_factor, args, is_code=False, hyper_c=0):
     return logits, labels, log_confs
 
 
-def train(projection_head, model, train_loader, test_loader, unlabelled_train_loader, merge_train_loader, merge_train_loader_test, args):
-    optimizer = SGD(list(projection_head.parameters()) + list(model.parameters()), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+def train(projection_head, model, train_loader, merge_train_loader, args):
+    """Both methods use the same loop; only CrishEngine's repair switch differs."""
+    from crish.training import train_strict
+    return train_strict(projection_head, model, train_loader, merge_train_loader, args, _runtime)
 
-    exp_lr_scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr * 1e-3)
-
-    sup_con_crit = SupConLoss(hyper_c=args.c)
-    sup_con_crit_angle = SupConLoss(hyper_c=0)
-
-    best_epoch_lab, best_epoch_comb, best_epoch = 0, 0, 0
-    strategy = args.strategy
-    cluster_momentum = args.cluster_momentum
-
-    best_stats = []
-    Total_loss = []
-    Contrastive_loss = []
-
-    accuracy_old = []
-    accuracy_new = []
-    accuracy_all = []
-
-    best_train_acc = 0
-    best_test_acc_lab = 0
-    unsupervised_smoothing = args.unsupervised_smoothing
-    train_report_interval = args.train_report_interval
-    prototype_extraction_interval = args.prototype_extraction_interval
-    Distance = args.distance
-
-    start_epoch = _runtime.restore(model, projection_head, optimizer, exp_lr_scheduler)
-    if start_epoch >= args.epochs:
-        raise ValueError('Checkpoint already reached final epoch; use evaluation instead')
-    for epoch in range(start_epoch, args.epochs):
-        loss_record = AverageMeter()
-        train_acc_record = AverageMeter()
-
-        loss_cons_record = AverageMeter()
-
-        with torch.no_grad():
-            if epoch % prototype_extraction_interval == 0:
-                uq_index, all_preds, cluster_protos_list, preds_ind_list, metrics = extract_labeled_protos(model, merge_train_loader, args=args)
-                for i in range(len(preds_ind_list)):
-                    preds_ind_list[i] = preds_ind_list[i].to(device).long()
-                    cluster_protos_list[i] = cluster_protos_list[i].to(device)
-                    if Distance == 'cosine':
-                        cluster_protos_list[i] = cluster_protos_list[i] / torch.norm(cluster_protos_list[i], dim=1).unsqueeze(1)
-
-                cluster_distances_list = []
-                cluster_radius_list = []
-                for i in range(len(preds_ind_list)):
-
-                    if Distance == 'euclidean':
-                        cluster_distances = torch.cdist(cluster_protos_list[i], cluster_protos_list[i])
-                    else:
-                        cluster_distances = torch.matmul(cluster_protos_list[i], cluster_protos_list[i].T)
-
-                    cluster_distances_list.append(cluster_distances.clone())
-                    cluster_radius = (cluster_distances + torch.eye(cluster_distances.shape[0]).to(device) * cluster_distances.max()).min(dim=1)[0] / 2
-                    cluster_radius_list.append(cluster_radius.clone())
-
-
-        projection_head.train()
-        model.train()
-
-        for batch_idx, batch in enumerate(tqdm(train_loader)):
-            _runtime.begin_batch(epoch, batch_idx)
-            loss_angle, loss_distance = 0.0, 0.0
-
-            images, class_labels, uq_idxs, mask_lab = batch
-            mask_lab = mask_lab[:, 0]
-
-            class_labels, mask_lab = class_labels.to(device), mask_lab.to(device).bool()
-            images = torch.cat(images, dim=0).to(device)
-
-            # Extract features with base model
-            features = model(images)
-
-            # Pass features through projection head
-            features_1, features_2 = features.detach().chunk(2)
-            all_features = torch.cat([features_1, features_2], dim=0)
-            features = projection_head(features)
-            # L2-normalize features
-            # features = torch.nn.functional.normalize(features, dim=-1)
-            with torch.no_grad():
-                confusion_factor = 0
-                if Distance == 'euclidean':
-                    pair_dist = torch.cdist(all_features, all_features)
-                else:
-                    normalized_feats = all_features / torch.norm(all_features.unsqueeze(1))
-                    pair_dist = torch.matmul(normalized_feats, normalized_feats.T)
-
-                n_labeled = args.num_labeled_classes
-                n_unlabeled = args.num_unlabeled_classes
-
-                for i in range(len(preds_ind_list)):
-                    cluster_labels = (preds_ind_list[i][np.argsort(uq_index)[uq_idxs]]).clone()
-                    cluster_indexer = F.one_hot(cluster_labels.long(), n_labeled + n_unlabeled).float().T
-                    n_labeled = max(int(n_labeled / 2), 1)
-                    n_unlabeled = max(int(n_unlabeled / 2), 1)
-
-                    cluster_indexer = torch.cat([cluster_indexer, cluster_indexer], dim=1)
-                    n_samples = torch.sum(cluster_indexer, dim=1).unsqueeze(1)
-                    n_samples[n_samples == 0] = 1
-
-                    if Distance == 'euclidean':
-                        distance = torch.cdist(all_features, cluster_protos_list[i].float())
-                    else:
-                        normalized_feats = all_features / torch.norm(all_features.unsqueeze(1))
-                        distance = torch.matmul(normalized_feats, cluster_protos_list[i].float().T)
-
-                    cluster_radius_list[i] = (cluster_indexer * distance.T).sum(dim=1) / n_samples.squeeze()  * (1 - cluster_momentum) + cluster_radius_list[i] * cluster_momentum
-                    cluster_labels = torch.cat([cluster_labels, cluster_labels])
-
-                    if Distance == 'euclidean':
-                        if strategy == 'zero_one':
-                            confusion_factor += (pair_dist > 2 * cluster_radius_list[i][
-                                cluster_labels]).float() / 2 ** i
-                        elif strategy == 'pair_dist':
-                            confusion_factor += pair_dist / 2 ** i
-                        elif strategy == 'pair_cluster':
-                            confusion_factor += distance[:, cluster_labels] / 2 ** i
-                        else:
-                            pass
-                    else:
-                        if strategy == 'zero_one':
-                            confusion_factor += (pair_dist < distance[:, cluster_labels] / 2).float() / 2 ** i
-                        elif strategy == 'pair_dist':
-                            confusion_factor += -pair_dist / 2 ** i
-                        elif strategy == 'pair_cluster':
-                            confusion_factor += -distance[:, cluster_labels] / 2 ** i
-
-            # Choose which instances to run the contrastive loss on
-            if args.contrast_unlabel_only:
-                # Contrastive loss only on unlabelled instances
-                f1, f2 = [f[~mask_lab] for f in features.chunk(2)]
-                con_feats = torch.cat([f1, f2], dim=0)
-            else:
-                # Contrastive loss for all examples
-                con_feats = features
-            confusion_factor = (confusion_factor - confusion_factor.min()) / (confusion_factor.max() - confusion_factor.min() + 0.0000001)
-            confusion_factor = _runtime.normalize_confusion(confusion_factor)
-
-            torch.cuda.empty_cache()
-
-            contrastive_logits, contrastive_labels, similarity = info_nce_logits(features=con_feats, confusion_factor=confusion_factor, args=args, hyper_c=args.c)
-            contrastive_loss = LabelSmoothingLoss()(contrastive_logits, contrastive_labels, similarity, unsupervised_smoothing)
-            loss_distance += (1 - args.sup_con_weight) * contrastive_loss
-
-            contrastive_logits_angle, contrastive_labels_angle, similarity_angle = info_nce_logits(features=con_feats, confusion_factor=confusion_factor, args=args, hyper_c=0)
-            contrastive_loss_angle = LabelSmoothingLoss()(contrastive_logits_angle, contrastive_labels_angle, similarity_angle, unsupervised_smoothing)
-            loss_angle += (1 - args.sup_con_weight) * contrastive_loss_angle
-
-            f1n, f2n = features.chunk(2)
-            semisup_con_feats = torch.cat([f1n.unsqueeze(1), f2n.unsqueeze(1)], dim=1)
-
-            # Supervised contrastive loss
-            f1, f2 = [f[mask_lab] for f in features.chunk(2)]
-            sup_con_feats = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-            sup_con_labels = class_labels[mask_lab]
-            sup_con_loss, sup_con_loss_angle = _runtime.supervised_losses(sup_con_crit, sup_con_crit_angle, sup_con_feats, sup_con_labels)
-            dimension = semisup_con_feats.shape[-1]
-            for i in range(len(preds_ind_list)):
-                sup_con_loss += _runtime.hierarchy_loss(sup_con_crit, semisup_con_feats[:, :, :int(dimension / 2 ** (i + 1))], preds_ind_list[i][np.argsort(uq_index)[uq_idxs]], mask_lab, uq_idxs, epoch, i) / 2 ** (i + 1)
-                sup_con_loss_angle += _runtime.hierarchy_loss(sup_con_crit_angle, semisup_con_feats[:, :, :int(dimension / 2 ** (i + 1))], preds_ind_list[i][np.argsort(uq_index)[uq_idxs]], mask_lab, uq_idxs, epoch, i) / 2 ** (i + 1)
-            loss_distance += args.sup_con_weight * sup_con_loss / 2
-            loss_angle += args.sup_con_weight * sup_con_loss_angle / 2
-            # Total loss
-            lambda_distance = (epoch - (args.hyper_start_epoch - 1)) / ((args.hyper_end_epoch - 1) - (args.hyper_start_epoch - 1))
-            lambda_distance = torch.max(torch.tensor([0, lambda_distance])).item()
-            lambda_distance = torch.min(torch.tensor([1, lambda_distance])).item()
-            lambda_distance = lambda_distance * args.hyper_max_weight
-
-            loss_in = (1 - lambda_distance) * loss_angle + lambda_distance * loss_distance
-
-            # Train acc
-            _, pred = contrastive_logits.max(1)
-            acc = (pred == contrastive_labels).float().mean().item()
-            train_acc_record.update(acc, pred.size(0))
-
-            loss_cons_record.update(loss_in.item(), class_labels.size(0))
-            loss = _runtime.check_loss(loss_in, epoch, batch_idx)
-            loss_record.update(loss.item(), class_labels.size(0))
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        print('Epoch: {} Avg Loss: {:.3f} | Constrastive: {:.3f} '.format(epoch, loss_record.avg, loss_cons_record.avg))
-
-        Total_loss.append(loss_record.avg)
-        Contrastive_loss.append(loss_cons_record.avg)
-
-        with torch.no_grad():
-            if (epoch + 1) % train_report_interval == 0:
-                print('Testing on unlabelled examples in the training data...')
-                all_acc, old_acc, new_acc = test_kmeans(model, unlabelled_train_loader, epoch=epoch, save_name='Train ACC Unlabelled', args=args)
-            else:
-                all_acc, old_acc, new_acc = metrics["all_acc"], metrics["old_acc"], metrics["new_acc"]
-            print('Testing on disjoint test set...')
-            all_acc_test, old_acc_test, new_acc_test = test_kmeans(model, test_loader, epoch=epoch, save_name='Test ACC', args=args)
-
-            accuracy_old.append(old_acc)
-            accuracy_new.append(new_acc)
-            accuracy_all.append(all_acc)
-
-        # ----------------
-        # LOG
-        # ----------------
-        args.writer.add_scalar('Loss', loss_record.avg, epoch)
-        args.writer.add_scalar('Train Acc Labelled Data', train_acc_record.avg, epoch)
-        args.writer.add_scalar('LR', get_mean_lr(optimizer), epoch)
-
-        if (epoch + 1) % train_report_interval == 0:
-            print('Train Accuracies: All {:.4f} | Old {:.4f} | New {:.4f}'.format(all_acc, old_acc, new_acc))
-            print('Test Accuracies: All {:.4f} | Old {:.4f} | New {:.4f}'.format(all_acc_test, old_acc_test, new_acc_test))
-
-        # Step schedule
-        exp_lr_scheduler.step()
-
-        torch.save(model.state_dict(), args.model_path)
-        print("model saved to {}.".format(args.model_path))
-        torch.save(projection_head.state_dict(), args.model_path[:-3] + '_proj_head.pt')
-
-
-        print('Checkpoint policy: final_epoch; completed epoch {}'.format(epoch))
-
-        _runtime.save(epoch, model, projection_head, optimizer, exp_lr_scheduler,
-                      all_acc, old_acc, new_acc, all_acc_test, old_acc_test, new_acc_test)
-
-    best_stats = [all_acc, old_acc, new_acc] if start_epoch < args.epochs else [float('nan')] * 3
-    print('############# Final Reports #############')
-    print('Final reported train metrics: All {:.4f} | Old {:.4f} | New {:.4f}'.format(best_stats[0], best_stats[1], best_stats[2]))
-    print('Final epoch: {}'.format(args.epochs - 1))
 
 
 def extract_labeled_protos(model, train_loader, args):
@@ -441,11 +203,9 @@ def extract_labeled_protos(model, train_loader, args):
     targets = np.array([])
     mask = np.array([])
     ids = np.array([])
-    mask_cls = np.array([])
-    metrics = dict()
 
     for batch_idx, (images, label, uq_idx, mask_lab_) in enumerate(tqdm(train_loader)):
-        images = images[0].cuda()
+        images = images[0].to(device)
         label, mask_lab_ = label.to(device), mask_lab_.to(device).bool()
 
         # Pass features through base model and then additional learnable transform (linear layer)
@@ -454,10 +214,8 @@ def extract_labeled_protos(model, train_loader, args):
         targets = np.append(targets, label.cpu().numpy())
         ids = np.append(ids, uq_idx.cpu().numpy())
         mask = np.append(mask, mask_lab_.cpu().bool().numpy())
-        mask_cls = np.append(mask_cls, np.array([True if x.item() in range(len(args.train_classes)) else False for x in label]))
 
     mask = mask.astype(bool)
-    mask_cls = mask_cls.astype(bool)
     # -----------------------
     # K-MEANS
     # -----------------------
@@ -466,7 +224,6 @@ def extract_labeled_protos(model, train_loader, args):
     l_feats = all_feats[mask]  # Get labelled set
     u_feats = all_feats[~mask]  # Get unlabelled set
     l_targets = targets[mask]  # Get labelled targets
-    u_targets = targets[~mask]  # Get unlabelled targets
     n_samples = len(targets)
 
     if args.unbalanced:
@@ -478,14 +235,10 @@ def extract_labeled_protos(model, train_loader, args):
                               n_init=1, random_state=None, n_jobs=None, pairwise_batch_size=1024,
                               mode=None, protos=None, cluster_size=cluster_size)
 
-    l_feats, u_feats, l_targets, u_targets = (torch.from_numpy(x).to(device) for x in (l_feats, u_feats, l_targets, u_targets))
+    l_feats, u_feats, l_targets = (torch.from_numpy(x).to(device) for x in (l_feats, u_feats, l_targets))
 
     kmeanssem.fit_mix(u_feats, l_feats, l_targets)
-    all_preds = kmeanssem.labels_
-    mask_cls = mask_cls[~mask]
-    preds = all_preds.cpu().numpy()[~mask]
-    all_acc, old_acc, new_acc = log_accs_from_preds(y_true=u_targets.cpu().numpy(), y_pred=preds, mask=mask_cls, eval_funcs=args.eval_funcs, save_name='SS-K-Means Train ACC Unlabelled', print_output=True)
-    metrics["all_acc"], metrics["old_acc"], metrics["new_acc"] = all_acc, old_acc, new_acc
+    all_preds = _runtime.cluster_labels(kmeanssem.labels_, mask)
     prototype_higher = []
     prototypes = kmeanssem.cluster_centers_
     prototype_higher.append(prototypes.clone())
@@ -518,15 +271,16 @@ def extract_labeled_protos(model, train_loader, args):
                                       n_init=1, random_state=None, n_jobs=None, pairwise_batch_size=1024,
                                       mode=None, protos=None, cluster_size=cluster_size)
         kmeans_higher.fit_mix(u_feats, l_feats, level_l_targets)
-        preds_level = kmeans_higher.labels_
+        preds_level = _runtime.cluster_labels(kmeans_higher.labels_, mask_known)
         prototypes_level = kmeans_higher.cluster_centers_
         prototype_higher.append(prototypes_level.clone())
         preds_higher.append(preds_level.to(device).clone())
 
-    return ids, all_preds, prototype_higher, preds_higher, metrics
+    _runtime.capture_hierarchy(ids, all_feats, mask, l_targets.detach().cpu(), preds_higher, prototype_higher)
+    return _runtime.hierarchy_state
 
 
-def test(model, test_loader, args):
+def evaluate(model, test_loader, args):
     # test the model accuracy using BSSKMeans
     model.eval()
 
@@ -577,52 +331,13 @@ def test(model, test_loader, args):
         l_feats, u_feats, l_targets, u_targets = (torch.from_numpy(x).to(device) for x in (l_feats, u_feats, l_targets, u_targets))
 
         kmeanssem.fit_mix(u_feats, l_feats, l_targets)
-        all_preds = kmeanssem.labels_
+        all_preds = _runtime.cluster_labels(kmeanssem.labels_, mask)
         mask_cls = mask_cls[~mask]
         preds = all_preds.cpu().numpy()[~mask]
         all_acc, old_acc, new_acc = log_accs_from_preds(y_true=u_targets.cpu().numpy(), y_pred=preds, mask=mask_cls, eval_funcs=args.eval_funcs, save_name='SS-K-Means Train ACC Unlabelled Test', print_output=True)
         metrics["all_acc"], metrics["old_acc"], metrics["new_acc"] = all_acc, old_acc, new_acc
         _runtime.evaluation(metrics)
         return metrics
-
-
-def test_kmeans(model, test_loader, epoch, save_name, args, Use_GPU=True):
-    model.eval()
-    all_feats = []
-
-    targets = np.array([])
-    mask = np.array([])
-
-    # First extract all features
-    for batch_idx, (images, label, _) in enumerate(tqdm(test_loader)):
-        images = images.cuda()
-        # Pass features through base model and then additional learnable transform (linear layer)
-        feats = model(images)
-        all_feats.append(torch.nn.functional.normalize(feats, dim=-1).cpu().numpy())
-        targets = np.append(targets, label.cpu().numpy())
-        mask = np.append(mask, np.array([True if x.item() in range(len(args.train_classes)) else False for x in label]))
-
-    # Get portion of mask_cls which corresponds to the unlabelled set
-    mask = mask.astype(bool)
-    all_feats = np.concatenate(all_feats)
-    # -----------------------
-    # EVALUATE
-    # -----------------------
-    if Use_GPU:
-        preds, prototypes = kmeans(X=torch.from_numpy(all_feats).to(device), num_clusters=args.num_unlabeled_classes + args.num_labeled_classes, distance='euclidean', device=device, tqdm_flag=False, timeout_seconds=args.kmeans_timeout_seconds)
-        preds, prototypes = preds.cpu().numpy(), prototypes.cpu().numpy()
-    else:
-        kmeanss = KMeans(n_clusters=args.num_labeled_classes + args.num_unlabeled_classes, random_state=0).fit(all_feats)
-        preds = kmeanss.labels_
-
-    # -----------------------
-    # EVALUATE
-    # -----------------------
-    all_acc, old_acc, new_acc = log_accs_from_preds(y_true=targets, y_pred=preds, mask=mask, T=epoch, eval_funcs=args.eval_funcs, save_name=save_name, writer=args.writer)
-
-    return all_acc, old_acc, new_acc
-
-
 
 
 def run(argv, runtime):
@@ -760,6 +475,21 @@ def run(argv, runtime):
     # DATASETS
     # --------------------
     train_dataset, test_dataset, unlabelled_train_examples_test, datasets = get_datasets(args.dataset_name, train_transform, test_transform, args)
+    if args.eval_only:
+        if args.eval_model_path is None:
+            raise ValueError('Evaluation requires a locked backbone checkpoint')
+        train_dataset.labelled_dataset.transform = test_transform
+        train_dataset.unlabelled_dataset.transform = test_transform
+        evaluation_loader = DataLoader(train_dataset, num_workers=args.num_workers,
+                                       batch_size=args.batch_size, shuffle=False)
+        model.load_state_dict(torch.load(args.eval_model_path, map_location='cpu', weights_only=True))
+        with torch.no_grad(), runtime.evaluation_context(args.epochs-1, 'final_ss', model):
+            return evaluate(model, evaluation_loader, args)
+
+    from .training_data import sanitize_cars_training
+    train_dataset = sanitize_cars_training(train_dataset)
+    # Release all annotation-bearing evaluation objects before training.
+    test_dataset = unlabelled_train_examples_test = datasets = None
 
     # --------------------
     # SAMPLER
@@ -774,18 +504,9 @@ def run(argv, runtime):
     # --------------------
     # DATALOADERS
     # --------------------
-    train_dataset_test = copy.deepcopy(train_dataset)
-    train_dataset_test.labelled_dataset.transform = test_transform
-    train_dataset_test.unlabelled_dataset.transform = test_transform
-    merge_train_loader_test = DataLoader(train_dataset_test, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
     merge_train_loader = DataLoader(train_dataset, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False)
     train_loader = DataLoader(train_dataset, num_workers=args.num_workers, batch_size=args.batch_size, shuffle=False, sampler=sampler, drop_last=True)
-    test_loader_unlabelled = DataLoader(unlabelled_train_examples_test, num_workers=args.num_workers, batch_size=int(args.batch_size / 2), shuffle=False)
-    test_loader_labelled = DataLoader(test_dataset, num_workers=args.num_workers, batch_size=int(args.batch_size / 2), shuffle=False)
 
-    # ----------------------
-    # PROJECTION HEAD
-    # ----------------------
     projection_head = vits1.__dict__['DINOHead'](in_dim=args.feat_dim, out_dim=args.mlp_out_dim, nlayers=args.num_mlp_layers)
     if args.cr != 0:
         hyperbolic_projector = hypnn.ToPoincare(c=args.c, ball_dim=args.mlp_out_dim, riemannian=args.riemannian, clip_r=args.cr).to(device)
@@ -798,13 +519,4 @@ def run(argv, runtime):
     projection_head = nn.Sequential(projection_head, hyperbolic_projector)
     projection_head.to(device)
 
-    # ----------------------
-    # TRAIN
-    # ----------------------
-    if args.eval_only:
-        if args.eval_model_path is not None:
-            print(f'Loading evaluation model weights from {args.eval_model_path}')
-            model.load_state_dict(torch.load(args.eval_model_path, map_location='cpu'))
-            test(model, merge_train_loader_test, args)
-    else:
-        train(projection_head, model, train_loader, test_loader_labelled, test_loader_unlabelled, merge_train_loader, merge_train_loader_test, args)
+    return train(projection_head, model, train_loader, merge_train_loader, args)

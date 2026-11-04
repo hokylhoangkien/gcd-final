@@ -20,7 +20,7 @@ def run_revision():
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mode', choices=['train', 'evaluate', 'preflight'])
-    parser.add_argument('--config', default=str(ROOT / 'configs/cars_baseline_dino_v1.json'))
+    parser.add_argument('--config', default=str(ROOT / 'configs/crish.json'))
     parser.add_argument('--checkpoint', type=Path, help='Trusted resume.pt for train; backbone state_dict for evaluate')
     parser.add_argument('--dry-run', action='store_true')
     args = parser.parse_args()
@@ -44,6 +44,7 @@ def main():
     # Gate is a child with a strict deadline, including data and CUDA checks.
     env = dict(os.environ, PYTHONUNBUFFERED='1', PYTHONHASHSEED=str(cfg['seed']),
                CUBLAS_WORKSPACE_CONFIG=':4096:8')
+    env['XFORMERS_DISABLED'] = '1'
     metadata = dict(run_id=run_id, timestamp_utc=datetime.datetime.now(datetime.timezone.utc).isoformat(),
                     git_sha=run_revision(), config=cfg, command=sys.argv, seed=cfg['seed'],
                     python=sys.version, platform=platform.platform(), status='preflight',
@@ -63,13 +64,15 @@ def main():
                            args.mode, str(args.checkpoint.resolve()) if args.checkpoint else '']
                 metadata['worker_command'] = command
                 print(f'Worker command: {json.dumps(command)}', flush=True)
-                print(f'Run {run_id}; log={log}; max_runtime={cfg["max_runtime_seconds"]}s', flush=True)
+                worker_timeout = (cfg['final_eval_timeout_seconds'] if args.mode == 'evaluate'
+                                  else cfg['max_runtime_seconds'])
+                print(f'Run {run_id}; log={log}; max_runtime={worker_timeout}s', flush=True)
                 with subprocess.Popen(command, cwd=ROOT, env=env, stdout=handle, stderr=subprocess.STDOUT) as process:
                     metadata['pid'] = process.pid
                     (run_dir / 'metadata.json').write_text(json.dumps(metadata, indent=2))
                     print(f'PID={process.pid}; theo dõi: tail -f {log}', flush=True)
                     try:
-                        code = process.wait(timeout=cfg['max_runtime_seconds'])
+                        code = process.wait(timeout=worker_timeout)
                     except (subprocess.TimeoutExpired, KeyboardInterrupt):
                         # Only terminate this launcher's own bounded child.
                         process.terminate()
@@ -81,6 +84,18 @@ def main():
                         raise
                     if code:
                         raise RuntimeError(f'Worker exited {code}; inspect {log}')
+                if args.mode == 'train' and cfg['final_ss_evaluation']:
+                    checkpoint = run_dir/'backbone_final.pt'
+                    if not checkpoint.is_file():
+                        raise RuntimeError('Final checkpoint missing; no oracle evaluation started')
+                    evaluation_command = [sys.executable, '-m', 'gcd_runtime.worker', str(snapshot),
+                                          str(run_dir), 'evaluate', str(checkpoint)]
+                    metadata['final_evaluation_command'] = evaluation_command
+                    print(f'Final checkpoint locked; separate evaluation worker; timeout={cfg["final_eval_timeout_seconds"]}s', flush=True)
+                    subprocess.run(evaluation_command, cwd=ROOT, env=env, stdout=handle,
+                                   stderr=subprocess.STDOUT, timeout=cfg['final_eval_timeout_seconds'], check=True)
+                    if not (run_dir/'evaluation.json').is_file():
+                        raise RuntimeError('Final evaluation produced no metrics file')
         metadata['status'] = 'preflight_passed' if args.mode == 'preflight' else 'completed'
     except BaseException as exc:
         metadata.update(status='interrupted' if isinstance(exc, KeyboardInterrupt) else 'failed', error=repr(exc))
