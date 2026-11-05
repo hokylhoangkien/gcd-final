@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from sklearn.cluster import KMeans
 from project_utils.general_utils import init_experiment, str2bool
 from project_utils.cluster_and_log_utils import log_accs_from_preds
-from methods.clustering.faster_mix_k_means_pytorch import K_Means as SemiSupKMeans
+from gcd_runtime.kmeans import SemiSupKMeans
 from models import vision_transformer as vits1
 from data.augmentations import get_transform
 from data.get_datasets import get_datasets, get_class_splits

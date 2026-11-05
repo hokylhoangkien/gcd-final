@@ -59,10 +59,23 @@ def tensor_probe(requested='auto', baseline=False):
                                                 np.array([True, True, True, False]))
         if not np.isclose(all_acc, 0.75) or not np.isclose(all_acc, 0.75 * old + 0.25 * new):
             raise RuntimeError('Sample-weighted All/Old/New fixture failed')
+        # The previous method smoke mocked HSSK, so it missed empty-cluster
+        # NaNs. Exercise the production fitter on this actual device as well.
+        from .kmeans import SemiSupKMeans
+        from crish.rebuild import prototype_radii
+        clustering = SemiSupKMeans(k=4, max_iterations=2, n_init=1,
+                                   random_state=7, pairwise_batch_size=16, cluster_size=2)
+        anchors = torch.tensor([0, 1], device=device)
+        clustering.fit_mix(torch.ones(6, 3, device=device), torch.ones(2, 3, device=device), anchors)
+        if (not torch.equal(clustering.labels_[:2], anchors)
+                or not (torch.bincount(clustering.labels_, minlength=4) > 0).all()
+                or not torch.isfinite(prototype_radii(clustering.cluster_centers_)).all()):
+            raise RuntimeError('Empty-cluster HSSK probe failed')
     if device.type == 'cuda':
         torch.cuda.synchronize()
     return dict(device=str(device), torch=torch.__version__, cuda_build=torch.version.cuda,
                 cuda_verified=device.type == 'cuda', baseline_probe=baseline,
+                kmeans_empty_cluster_probe=baseline,
                 gpu=torch.cuda.get_device_name() if device.type == 'cuda' else None,
                 gpu_memory_bytes=torch.cuda.get_device_properties(0).total_memory if device.type == 'cuda' else None,
                 synthetic_loss=float(geometric_loss.detach().cpu()))

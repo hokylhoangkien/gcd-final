@@ -15,10 +15,16 @@ class EpochRuntime:
         import torch
         from crish.state import SupervisionState
         from crish.rebuild import prototype_radii
+        radii = []
+        for level, centers in enumerate(prototypes):
+            try:
+                radii.append(prototype_radii(centers))
+            except ValueError as exc:
+                raise ValueError(f'Hierarchy level={level}: {exc}') from exc
         self.hierarchy_state = SupervisionState(torch.as_tensor(ids), torch.as_tensor(features),
             torch.as_tensor(labeled, dtype=torch.bool), torch.as_tensor(legal_targets, dtype=torch.long),
             tuple(x.long() for x in labels), tuple(prototypes),
-            tuple(prototype_radii(x) for x in prototypes),
+            tuple(radii),
             tuple(torch.zeros(len(ids), dtype=torch.bool) for _ in labels))
 
     def restore(self, model, head, optimizer, scheduler):

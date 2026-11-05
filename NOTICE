@@ -15,6 +15,12 @@ The reference LabelSmoothingLoss, SupConLoss and info_nce_logits definitions
 remain unchanged. CRiSH repair, legal probes and projector lookahead are
 experimental extensions; source reuse is not a novelty claim.
 
+gcd_runtime/kmeans.py derives from methods/clustering/faster_mix_k_means_pytorch.py
+at the same upstream commit. It preserves the two optimization phases and adds
+empty-cluster relocation of unanchored rows, degenerate initialization handling,
+device portability, finite-input checks and bounded iteration diagnostics.
+These numerical policies are shared by CRiSH and B0, not a new research method.
+
 Backbones, manifold operations, dataset loaders and evaluation helpers are
 imported from the pinned upstream source and retain their original notices,
 including Meta's notices in the transformer modules. Dependencies and pretrained

@@ -17,8 +17,11 @@ from .state import SupervisionState
 
 @torch.no_grad()
 def prototype_radii(centers: Tensor) -> Tensor:
-    if centers.ndim != 2 or len(centers) < 2 or not torch.isfinite(centers).all():
-        raise ValueError('Invalid prototypes for radii')
+    if centers.ndim != 2 or len(centers) < 2 or centers.shape[1] == 0 or not centers.is_floating_point():
+        raise ValueError(f'Invalid prototypes for radii: expected floating [K>=2,D>0], got {tuple(centers.shape)}')
+    if not torch.isfinite(centers).all():
+        invalid = (~torch.isfinite(centers).all(dim=1)).nonzero().flatten().tolist()
+        raise ValueError(f'Invalid prototypes for radii: nonfinite cluster IDs={invalid}')
     distance = torch.cdist(centers, centers)
     return (distance + torch.eye(len(centers), device=centers.device) * distance.max()).min(dim=1)[0] / 2
 

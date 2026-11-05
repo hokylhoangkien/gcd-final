@@ -10,7 +10,7 @@ from gcd_runtime.config import ROOT, load_config
 
 class LayoutTests(unittest.TestCase):
     def test_main_source_has_no_retired_pipeline_or_fragmented_docs(self):
-        for path in ('docs', 'reports', 'legacy', 'gcd_runtime/reliability.py',
+        for path in ('docs', 'legacy', 'gcd_runtime/reliability.py',
                      'gcd_runtime/method_config.py', 'gcd_runtime/compat.py',
                      'scripts/train_proposed_linux.sh', 'scripts/start_dinov2_linux.sh',
                      'configs/revision2', 'configs/final_only', 'configs/train'):

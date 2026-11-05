@@ -2,7 +2,7 @@
 
 Source nghiên cứu GCD với **một pipeline huấn luyện**: CRiSH mặc định, B0 dùng cùng pipeline và tắt sửa phân hoạch để đối chứng. Backbone mặc định: DINOv2 ViT-B/14 reg4; benchmark: Stanford Cars SSB.
 
-Code đã có kiểm thử CPU tổng hợp. **Chưa xác nhận chạy CUDA/dữ liệu thật và chưa có kết quả benchmark CRiSH.** Đây là bản bàn giao source; hiệu quả và tính mới của phương pháp vẫn cần thực nghiệm.
+Code đã có kiểm thử CPU tổng hợp. Log GPU được cung cấp ngày 05/11/2026 cho thấy bản trước chạy hết epoch 0–2 trên A40 rồi lỗi prototype khi dựng hierarchy. Runtime hiện có xử lý cụm rỗng dùng chung cho CRiSH/B0 và thêm kiểm tra HSSK vào preflight. **Bản sửa chưa được xác nhận lại trên CUDA/dữ liệu thật; chưa có kết quả benchmark CRiSH hoàn chỉnh.** Hiệu quả và tính mới của phương pháp vẫn cần thực nghiệm.
 
 ## 1. Cài trên máy train
 
@@ -104,7 +104,7 @@ bash scripts/train_crish.sh
 
 Lệnh này chạy **preflight → smoke 1 epoch/tối đa 2 batch → một run mới 200 epoch**. Mỗi stage chỉ tiếp tục khi stage trước thành công. Preflight kiểm tra split/ảnh/weights/import, forward/backward CUDA thật, backbone và loss/scorer. Smoke không tiếp tục thành checkpoint của run chính.
 
-Preflight giới hạn 180 giây; smoke tối đa 1.800 giây; training đầy đủ tối đa 86.400 giây; final evaluation tối đa 1.800 giây. Đây là giới hạn dừng, không phải dự báo thời gian hoàn thành. Chương trình chạy foreground, in PID và đường dẫn log, lưu resume sau mỗi epoch. Nếu đã có tiến trình GPU, lệnh dừng để người vận hành kiểm tra; không tự dừng tiến trình khác.
+Preflight giới hạn 180 giây; smoke tối đa 1.800 giây; training đầy đủ tối đa 86.400 giây; final evaluation tối đa 1.800 giây. Đây là giới hạn dừng, không phải dự báo thời gian hoàn thành. Chương trình chạy foreground, in PID và đường dẫn log, lưu resume sau mỗi epoch. Nếu đã có tiến trình GPU, lệnh dừng để người vận hành kiểm tra; không tự dừng tiến trình khác. Preflight kiểm tra thêm k-means với embedding trùng nhau trên device thực tế; log `KMEANS ... empty_cluster_repairs=...` ghi số lần xử lý cụm rỗng.
 
 Các lệnh bổ sung:
 
@@ -126,6 +126,8 @@ bash scripts/train_crish.sh evaluate --checkpoint runs/RUN_ID/backbone_final.pt
 ```
 
 Thêm `--baseline` khi resume/evaluate checkpoint B0. Checkpoint resume có optimizer/RNG nên chỉ nạp file tin cậy. Resume đòi đúng config và fingerprint source; checkpoint từ source cũ cần chạy bằng bản source cũ đã lưu.
+
+Sau khi cập nhật bản sửa lỗi prototype ngày 05/11/2026, giữ nguyên thư mục run/checkpoint cũ để đối chiếu. Checkpoint của bản trước bị chặn resume do fingerprint source đã đổi; bản sửa này không bỏ qua kiểm tra đó. Dùng source mới trên máy Linux NVIDIA, chạy `bash scripts/train_crish.sh check`, tiếp theo `bash scripts/train_crish.sh smoke`. Nếu cả hai thành công, `bash scripts/train_crish.sh` tạo một run mới, có preflight và smoke trước training đầy đủ. Chạy lại B0 bằng cùng bản sửa khi so sánh.
 
 ## 4. Cấu hình và kết quả
 
