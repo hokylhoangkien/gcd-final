@@ -1,7 +1,7 @@
 """One training path for strict matched B0 and executable CRiSH v2.1.
 
-No benchmark labels or test metrics are consumed here. Oracle evaluation runs
-in a separate worker after the final checkpoint is locked by the launcher.
+No benchmark labels or evaluation metrics are consumed here. Periodic and final
+evaluation run in separate workers on locked backbone snapshots.
 """
 import json
 import time
@@ -17,11 +17,15 @@ from .loss import hypselex_loss
 
 def train_strict(head, model, train_loader, merge_loader, args, runtime):
     from gcd_runtime import trainer
+    args.use_target_normalization = runtime.config.get('use_target_normalization', 'legacy')
     optimizer = torch.optim.SGD(list(head.parameters())+list(model.parameters()),
                                 lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr*1e-3)
     start_epoch = runtime.restore(model, head, optimizer, scheduler)
     if start_epoch >= args.epochs:
+        if runtime.config.get('checkpoint_selection') == 'best_old_test_v2':
+            print('TRAIN already complete; restored final checkpoint and recovered selection; no SGD steps', flush=True)
+            return
         raise ValueError('Checkpoint reached final epoch; evaluate instead of resuming')
     engine = CrishEngine(runtime)
     settings = CrishSettings(**runtime.config['crish'])
@@ -82,7 +86,8 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime):
         runtime.last_training_summary = dict(loss=total/steps, steps=steps, seconds=time.monotonic()-start,
                                              repairs=state.version, method=runtime.config['method'],
                                              peak_cuda_allocated_bytes=torch.cuda.max_memory_allocated(device) if device.type == 'cuda' else None)
-        # No test/hidden labels are used for monitoring or checkpoint choice.
+        # Save before monitoring; no metric is read back or used for selection.
         runtime.save(epoch, model, head, optimizer, scheduler)
+        runtime.monitor_epoch(epoch, model)
     print(f'TRAIN complete method={runtime.config["method"]}; final={runtime.run_dir / "backbone_final.pt"}; '
           'oracle evaluation is a separate worker', flush=True)

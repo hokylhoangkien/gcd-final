@@ -40,11 +40,13 @@ def main():
     run_id = 'crish-v21-' + now.strftime('%Y%m%dT%H%M%SZ') + '-' + uuid.uuid4().hex[:8]
     run_dir = ROOT / 'logs' / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
-    input_names = ('AGENTS.md', 'README.md', 'NOTICE', 'presentation/CRISH_GCD.md')
+    input_names = ('AGENTS.md', 'README.md', 'NOTICE', 'reports/04_method_and_research_plan.md',
+                   'paper/manuscript.pdf', 'paper/manuscript.build.json')
     tracked = [ROOT / name for name in input_names if (ROOT / name).is_file()]
     for directory, pattern in [('crish', '*.py'), ('audit', '*.py'), ('gcd_runtime', '*.py'),
                                ('tests', '*.py'), ('configs', '*.json'),
-                               ('scripts', '*.py'), ('scripts', '*.sh'), ('presentation', '*.py')]:
+                               ('scripts', '*.py'), ('scripts', '*.sh'),
+                               ('reports', '*.md'), ('paper', '*.tex'), ('paper', '*.bib')]:
         tracked.extend((ROOT / directory).rglob(pattern))
     tracked.extend([Path(__file__), SOURCE, args.config.resolve()])
     hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(set(tracked))}
@@ -61,7 +63,10 @@ def main():
     (run_dir / 'config.json').write_text(json.dumps(cfg, indent=2) + '\n')
     commands = [[sys.executable, '-m', 'pytest', cfg['tests'], '-q', '--tb=short', '-o', 'cache_dir=.cache/pytest',
                  '--junitxml=' + str(run_dir / 'pytest.xml')],
-                [sys.executable, 'scripts/check_integrity.py']]
+                [sys.executable, 'scripts/check_integrity.py'],
+                [sys.executable, 'scripts/check_integrity.py', '--dataset', 'cub'],
+                [sys.executable, 'scripts/check_protocol.py'],
+                [sys.executable, 'scripts/check_manuscript.py']]
     metadata['commands'] = commands
     try:
         if metadata['upstream_sha'] != cfg['upstream_sha']:
@@ -77,7 +82,7 @@ def main():
                 log.write(output)
                 log.flush()
                 result.check_returncode()
-            for directory in ('gcd_runtime', 'crish', 'audit', 'scripts', 'tests', 'presentation'):
+            for directory in ('gcd_runtime', 'crish', 'audit', 'scripts', 'tests'):
                 for path in (ROOT / directory).rglob('*.py'):
                     ast.parse(path.read_text(), filename=str(path))
             log.write('Static syntax, upstream SHA/source hash: passed\n')

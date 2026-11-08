@@ -1,4 +1,4 @@
-"""Package only the current CRiSH/B0 source and its single presentation."""
+"""Package reproducible CRiSH/B0 source, research notes and manuscript source."""
 import argparse
 from datetime import datetime, timezone
 import io
@@ -18,11 +18,10 @@ SOURCE_DIRS = {
     'gcd_runtime': {'.py'}, 'crish': {'.py'}, 'audit': {'.py'},
     'scripts': {'.py', '.sh'}, 'tests': {'.py'}, 'configs': {'.json'},
     'environments': {'.txt'}, 'LICENSES': {'.txt'},
-    'presentation': {'.py', '.md', '.pdf'},
+    'reports': {'.md'}, 'paper': {'.tex', '.bib', '.pdf', '.json'},
 }
 ROOT_FILES = ('AGENTS.md', 'README.md', 'NOTICE', '.gitignore', '.gitattributes', '.gitmodules')
-RECEIPTS = ('results/local_validation.json', 'results/cleanup_parity.json',
-            'results/workspace_audit.json')
+RECEIPTS = ('results/local_validation.json',)
 
 
 def release_files():

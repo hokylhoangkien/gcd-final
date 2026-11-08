@@ -58,7 +58,8 @@ def state_from(model, dataset, pseudo):
 def training_config(method='crish', enabled=True):
     cfg = load_config(ROOT/'configs/crish_smoke.json')
     cfg.update(method=method, epochs=2, device='cpu', synthetic_fixture=True,
-               max_steps_per_epoch=2, mlp_out_dim=16)
+               max_steps_per_epoch=2, mlp_out_dim=16, checkpoint_selection='final_epoch',
+               test_every_epochs=0, final_ss_evaluation=False)
     cfg['crish'] = asdict(CrishSettings(enabled=enabled, warmup_epochs=0, refresh_every=1,
               evidence_samples=20, evidence_trials=1, k=2, boundaries=1, max_targets=1,
               max_accepted=1, min_support=1, min_edges=1, train_batch=8,
@@ -114,7 +115,7 @@ class CrishTrainConfigTests(unittest.TestCase):
     def test_invalid_or_mixed_config_fails_before_training(self):
         original = json.loads((ROOT/'configs/crish.json').read_text())
         changes = [dict(training_protocol='legacy'), dict(align_cluster_rows=False),
-                   dict(test_every_epochs=1), dict(method='proposed'), dict(reliability={}),
+                   dict(test_every_epochs=0), dict(method='proposed'), dict(reliability={}),
                    dict(crish=dict(warmup_epochs=-1)), dict(max_steps_per_epoch=-2)]
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp)/'invalid.json'

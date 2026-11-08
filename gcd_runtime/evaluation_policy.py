@@ -1,7 +1,11 @@
-"""Final evaluation RNG isolation, independent of benchmark labels."""
+"""Evaluation RNG isolation, independent of benchmark labels."""
 from contextlib import contextmanager
 import random
 import zlib
+
+
+def evaluation_seed(config, epoch, kind='final_ss'):
+    return (config['seed'] * 1000003 + epoch * 97 + zlib.crc32(kind.encode('utf-8'))) % (2**32)
 
 
 @contextmanager
@@ -18,7 +22,7 @@ def evaluation_context(config, epoch, kind, model):
     cuda_rng = torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
     modes = [(module, module.training) for module in model.modules()]
     # No Python hash(): evaluation seed is stable across processes and schedules.
-    seed = (config['seed'] * 1000003 + epoch * 97 + zlib.crc32(kind.encode('utf-8'))) % (2**32)
+    seed = evaluation_seed(config, epoch, kind)
     try:
         random.seed(seed)
         np.random.seed(seed)

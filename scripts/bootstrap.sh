@@ -22,6 +22,11 @@ fi
 .venv/bin/python -m pip install -r environments/requirements-common.txt
 .venv/bin/python -m pip install -r environments/requirements-research-tests.txt
 if [[ "$mode" == cuda ]]; then
+  .venv/bin/python -m pip install -r environments/requirements-selector-cuda.txt
+  # Common requirements installed PyPI 0.3. The Git source can have the same
+  # version, so a satisfied requirement is not evidence of the pinned origin.
+  # Resolve dependencies above, then replace only these packages, never Torch.
+  .venv/bin/python -m pip install --force-reinstall --no-deps -r environments/requirements-selector-cuda.txt
   # Official DINOv2 source imports SwiGLU even with memory-efficient attention
   # disabled. Match the existing torch2.4.1 training profile without upgrading it.
   .venv/bin/python -m pip install --only-binary=:all: --no-deps xformers==0.0.28.post1

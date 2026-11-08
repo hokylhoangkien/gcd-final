@@ -290,6 +290,8 @@ def evaluate(model, test_loader, args):
         mask = np.array([])
         ids = np.array([])
         mask_cls = np.array([])
+        import time
+        started = time.monotonic()
         metrics = dict()
 
         for batch_idx, (images, label, uq_idx, mask_lab_) in enumerate(tqdm(test_loader)):
@@ -336,6 +338,8 @@ def evaluate(model, test_loader, args):
         preds = all_preds.cpu().numpy()[~mask]
         all_acc, old_acc, new_acc = log_accs_from_preds(y_true=u_targets.cpu().numpy(), y_pred=preds, mask=mask_cls, eval_funcs=args.eval_funcs, save_name='SS-K-Means Train ACC Unlabelled Test', print_output=True)
         metrics["all_acc"], metrics["old_acc"], metrics["new_acc"] = all_acc, old_acc, new_acc
+        metrics.update(n_unlabeled=int((~mask).sum()), n_old=int(mask_cls.sum()),
+                       n_new=int((~mask_cls).sum()), seconds=time.monotonic()-started)
         _runtime.evaluation(metrics)
         return metrics
 
@@ -404,6 +408,8 @@ def run(argv, runtime):
     # INIT
     # ----------------------
     args = parser.parse_args(argv)
+    # Runtime-only ablation; the reference loss classes and CLI stay intact.
+    args.use_target_normalization = runtime.config.get('use_target_normalization', 'legacy')
     from .config import choose_device
     device = choose_device(torch, runtime.config.get('device', 'auto'))
     if device.type != 'cuda':
@@ -478,16 +484,24 @@ def run(argv, runtime):
     if args.eval_only:
         if args.eval_model_path is None:
             raise ValueError('Evaluation requires a locked backbone checkpoint')
+        from .selection import load_evaluation_checkpoint
+        model.load_state_dict(load_evaluation_checkpoint(args.eval_model_path, runtime.config, runtime))
+        if runtime.evaluation_kind == 'test':
+            from .disjoint_evaluation import evaluate_disjoint
+            selection_loader = DataLoader(test_dataset, num_workers=args.num_workers,
+                                          batch_size=max(1, int(args.batch_size/2)), shuffle=False)
+            with runtime.evaluation_context(runtime.evaluation_epoch, 'disjoint_test', model):
+                return evaluate_disjoint(model, selection_loader, args, runtime, device)
         train_dataset.labelled_dataset.transform = test_transform
         train_dataset.unlabelled_dataset.transform = test_transform
         evaluation_loader = DataLoader(train_dataset, num_workers=args.num_workers,
                                        batch_size=args.batch_size, shuffle=False)
-        model.load_state_dict(torch.load(args.eval_model_path, map_location='cpu', weights_only=True))
-        with torch.no_grad(), runtime.evaluation_context(args.epochs-1, 'final_ss', model):
+        eval_epoch = args.epochs-1 if runtime.evaluation_epoch is None else runtime.evaluation_epoch
+        with torch.no_grad(), runtime.evaluation_context(eval_epoch, 'final_ss', model):
             return evaluate(model, evaluation_loader, args)
 
-    from .training_data import sanitize_cars_training
-    train_dataset = sanitize_cars_training(train_dataset)
+    from .training_data import sanitize_training
+    train_dataset = sanitize_training(train_dataset, args.dataset_name)
     # Release all annotation-bearing evaluation objects before training.
     test_dataset = unlabelled_train_examples_test = datasets = None
 

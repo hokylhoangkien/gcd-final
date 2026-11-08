@@ -12,8 +12,11 @@ if __name__ == '__main__':
         raise RuntimeError('Remote baseline requires CUDA; CPU/MPS are smoke-only')
     result = inspect_inputs(cfg)
     result['probe'] = tensor_probe('cuda', baseline=True)
-    result['data_counts'] = audit_dataset()
+    result['data_counts'] = audit_dataset(cfg)
     result['backbone_probe'] = backbone_probe(cfg)
     result['method_probe'] = method_probe(cfg, 'cuda')
+    if cfg['checkpoint_selection'] == 'best_old_test_v2':
+        from .disjoint_evaluation import disjoint_probe
+        result['disjoint_selection_probe'] = disjoint_probe('cuda')
     Path(sys.argv[2], 'readiness.json').write_text(json.dumps(result, indent=2))
     print(json.dumps(result, indent=2), flush=True)

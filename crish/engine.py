@@ -21,6 +21,7 @@ from crish.policy import DecisionEvidence, sequential_repair
 from crish.probe import LegalProbe, ProbeWeights
 from crish.rebuild import target_drift
 from crish.reliability import blockwise_euclidean_knn, sparse_evidence
+from crish.sampling import balanced_known_folds, global_neighbor_pool
 from crish.stability import partition_stability
 from .config import CrishSettings
 from .loss import hypselex_loss
@@ -83,23 +84,32 @@ def cached_views(model, dataset, ids, device, deadline, batch_size=16):
     return torch.stack([torch.cat(first), torch.cat(second)], dim=1)
 
 
-def _draw_context(state, settings, generator):
+def _draw_context(state, settings, generator, deadline=None):
     known = state.labeled.nonzero().flatten()
     other = (~state.labeled).nonzero().flatten()
     if len(known) < 2*settings.probe_known or len(other) < 2*settings.probe_unlabeled:
         raise ValueError('Insufficient legal probe support; refresh Keep')
-    known = known[torch.randperm(len(known), generator=generator)]
+    if settings.probe_sampling == 'class_balanced':
+        known_folds = balanced_known_folds(known, state.known_targets, settings.probe_known, generator)
+    else:
+        known = known[torch.randperm(len(known), generator=generator)]
+        known_folds = [known[fold*settings.probe_known:(fold+1)*settings.probe_known] for fold in range(2)]
     other = other[torch.randperm(len(other), generator=generator)]
     folds = []
     for fold in range(2):
-        k = known[fold*settings.probe_known:(fold+1)*settings.probe_known]
+        k = known_folds[fold]
         u = other[fold*settings.probe_unlabeled:(fold+1)*settings.probe_unlabeled]
         folds.append((k, u))
-    reserved = set(known[:2*settings.probe_known].tolist()+other[:2*settings.probe_unlabeled].tolist())
+    reserved = set(torch.cat(known_folds).tolist()+other[:2*settings.probe_unlabeled].tolist())
     available = torch.tensor([i for i in range(len(state.ids)) if i not in reserved], dtype=torch.long)
     if len(available) <= settings.k:
         raise ValueError('Insufficient disjoint evidence support; refresh Keep')
-    pool = available[torch.randperm(len(available), generator=generator)[:settings.evidence_samples]]
+    if settings.evidence_sampling == 'global_neighbors':
+        pool = global_neighbor_pool(state, available, settings.evidence_samples, settings.k,
+                                    generator, reference_block=settings.neighbor_reference_block,
+                                    deadline=deadline)
+    else:
+        pool = available[torch.randperm(len(available), generator=generator)[:settings.evidence_samples]]
     return folds, pool
 
 
@@ -185,13 +195,21 @@ class CrishEngine:
         deadline = start+settings.max_refresh_seconds
         seed = (self.runtime.config['seed']*1000003+epoch*103+7) % (2**32)
         record = dict(epoch=epoch, lookahead_scope='projector', evidence_space='normalized_backbone_euclidean',
-                      seed=seed, accepted=0, decisions=[], gains=[], status='keep')
+                      seed=seed, accepted=0, decisions=[], gains=[], status='keep',
+                      evidence_sampling=settings.evidence_sampling, probe_sampling=settings.probe_sampling,
+                      use_target_normalization=getattr(args, 'use_target_normalization', 'legacy'))
         try:
             with preserve_rng(), fixed_modes(model):
                 random.seed(seed)
                 np.random.seed(seed)
                 torch.manual_seed(seed)
-                folds, pool = _draw_context(state, settings, torch.Generator().manual_seed(seed))
+                folds, pool = _draw_context(state, settings, torch.Generator().manual_seed(seed), deadline)
+                record['evidence_cache_rows'] = len(pool)
+                record['evidence_reference_rows'] = (len(state.ids)-sum(len(k)+len(u) for k, u in folds)
+                                                     if settings.evidence_sampling == 'global_neighbors' else len(pool))
+                record['view_neighbor_scope'] = 'local_cached_two_views'
+                record['probe_folds'] = [dict(known_rows=len(k), unlabeled_rows=len(u),
+                    known_classes=len(state.labels[0][k].unique())) for k, u in folds]
                 device = next(head.parameters()).device
                 trial_neighbors = []
                 first_cache = None
@@ -260,7 +278,8 @@ class CrishEngine:
                                                                          current, args, epoch)['loss'])
                     keep_gradient = cache[current.version]
                     drift = target_drift(current, proposed, batch_ids, flat,
-                                         smoothing=args.unsupervised_smoothing, strategy=args.strategy)
+                                         smoothing=args.unsupervised_smoothing, strategy=args.strategy,
+                                         normalization=getattr(args, 'use_target_normalization', 'legacy'))
                     if max(x['protected_coefficient_shift_max'] for x in drift['sse_levels']) > settings.max_protected_shift:
                         raise ValueError('Move exceeds predeclared protected-coefficient shift cap')
                     mass = sum(x['coefficient_half_l1_mean']/2**(x['level']+1) for x in drift['sse_levels'])

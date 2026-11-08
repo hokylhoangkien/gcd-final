@@ -109,14 +109,15 @@ def backbone_probe(cfg):
                                ToPoincare(c=cfg['c'], clip_r=cfg['cr'], riemannian=False)).cuda()
     torch.cuda.reset_peak_memory_stats()
     optimizer = torch.optim.SGD(list(model.parameters()) + list(head.parameters()), lr=cfg['lr'])
-    # Exercise actual Cars decoding and the same two-view train transforms.
+    # Exercise the selected dataset's decoding and two-view train transforms.
     from data.get_datasets import get_class_splits, get_datasets
     from data.augmentations import get_transform
-    image_args = SimpleNamespace(dataset_name='scars', use_ssb_splits=True, prop_train_labels=.5, interpolation=3, crop_pct=.875)
+    name = cfg.get('dataset_name', 'scars')
+    image_args = SimpleNamespace(dataset_name=name, use_ssb_splits=True, prop_train_labels=.5, interpolation=3, crop_pct=.875)
     image_args = get_class_splits(image_args)
     transform, test_transform = get_transform('imagenet', image_size=224, args=image_args)
     view_transform = scope['ContrastiveLearningViewGenerator'](transform, n_views=2)
-    merged, _, _, _ = get_datasets('scars', view_transform, test_transform, image_args)
+    merged, _, _, _ = get_datasets(name, view_transform, test_transform, image_args)
     views = [merged[0][0], merged[len(merged.labelled_dataset)][0]]
     images = torch.cat([torch.stack([sample[view] for sample in views]) for view in range(2)]).cuda()
     features = head(model(images))

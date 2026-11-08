@@ -1,0 +1,355 @@
+% Implementation-aligned research draft. No benchmark gains are claimed.
+% Config table and source digest: python scripts/check_manuscript.py --write
+% PDF build: python scripts/build_paper.py --compiler PATH_TO_TECTONIC
+\documentclass[conference]{IEEEtran}
+\usepackage[T1]{fontenc}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts,mathtools}
+\usepackage{newtxtext,newtxmath}
+\usepackage{textcomp,booktabs,tabularx,array}
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+\usepackage{url}
+\usepackage[hidelinks,breaklinks]{hyperref}
+\hypersetup{pdftitle={CRiSH-GCD: Counterfactual Reliability-Guided Structural Correction of Multilevel Pseudo-Supervision for Generalized Category Discovery},pdfauthor={Authors to be supplied}}
+\Urlmuskip=0mu plus 2mu
+\emergencystretch=2em
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\Dl}{\mathcal D_{\mathrm L}}
+\newcommand{\Du}{\mathcal D_{\mathrm U}}
+\newcommand{\Ccal}{\mathcal C}
+\newcommand{\Lcal}{\mathcal L}
+\newcommand{\Jcal}{\mathcal J}
+\newcommand{\ind}{\mathbf{1}}
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\SetKwInput{KwIn}{Input}
+\SetKwInput{KwOut}{Output}
+\SetAlgoNlRelativeSize{-1}
+\begin{document}
+\title{CRiSH-GCD: Counterfactual Reliability-Guided Structural Correction of Multilevel Pseudo-Supervision for Generalized Category Discovery}
+\author{\IEEEauthorblockN{First Author}
+\IEEEauthorblockA{Department, Institution\\City, Country\\first.author@example.com}
+\and
+\IEEEauthorblockN{Second Author}
+\IEEEauthorblockA{Department, Institution\\City, Country\\second.author@example.com}}
+\maketitle
+
+\begin{abstract}
+Generalized Category Discovery (GCD) combines recognition of known categories with discovery of novel categories from partially labeled data. We study whether constrained changes to multilevel pseudo-supervision can reduce unreliable training relations in Hyp-SelEx. CRiSH-GCD implements reciprocal cross-view neighborhood evidence, admissible Keep/Abstain/Move actions, coherent target reconstruction, and projector-only counterfactual scoring. Candidates are ranked by one exact cloned SGD step on a discovery probe; only the highest-ranked eligible candidate is checked on an independent confirmation probe. A partition-stability option is implemented but disabled in the shipped profiles. We distinguish label-safe repair from the default evaluation-label-dependent checkpoint selector and document both reference and experimental normalization profiles. The implementation supports Stanford Cars and CUB; broader datasets and controlled ablations remain planned. CPU regression checks establish implementation properties, while matched GPU benchmarks, effectiveness and novelty remain unvalidated.
+\end{abstract}
+\begin{IEEEkeywords}
+Generalized category discovery, pseudo-supervision, hyperbolic representation learning, constrained correction, counterfactual scoring.
+\end{IEEEkeywords}
+
+\section{Introduction}
+Generalized Category Discovery learns from labeled known-category examples and unlabeled examples drawn from both known and novel categories. SelEx constructs multilevel pseudo-supervision, and HypCD extends representation learning with hyperbolic geometry through its Hyp-SelEx variant \cite{selex,hypcd}. Ambiguous assignments can introduce unreliable pseudo-positive relations. We investigate a conservative intervention: retain, abstain from, or change one unlabeled assignment, and evaluate its effect on a separate learning probe before using the revised supervision.
+
+The implementation treats HSSK output as a stack of level-wise partitions rather than a guaranteed nested tree. Reciprocal cross-view evidence shortlists candidate boundaries. Each candidate is reconstructed and compared with Keep on frozen backbone features using a cloned projector and its actual SGD state. Repair uses legally available labels only. This statement does \emph{not} extend to the shipped checkpoint selector: it explicitly selects on test Old accuracy, a limitation described in Section~\ref{sec:evaluation}.
+
+The research questions are whether pair evidence identifies unreliable relations, whether discrete correction adds value over simple weighting or heuristics, and whether independent confirmation controls harmful interventions. Optional partition stability must demonstrate incremental value before it becomes a main component. These are hypotheses, not established contributions or performance claims. The implementation and the planned empirical tests are separated throughout this manuscript.
+
+\section{Setting and Baseline Contract}
+\subsection{Data and Label Boundaries}
+Let $\Dl=\{(x_i,y_i)\}$ contain legally labeled known examples and let $\Du=\{x_j\}$ contain unlabeled known and novel examples. Labeled membership is distinct from old/novel identity. The runtime assumes the total category count $K$ is known, matching the chosen baseline; estimated-$K$ evaluation is not implemented here. Training adapters retain image paths, stable IDs, labeled membership and legal targets, replacing every unlabeled target by $-1$. Hidden annotations are unavailable to the training loss and repair probe. Separate evaluators access ground truth for Hungarian matching and, in the default profile, checkpoint selection.
+
+\subsection{Pinned Baseline and Shared Runtime}
+The upstream HypCD checkout is pinned to commit \code{ffc895b7ff38be8502bb7e3bd851f1d2a55dff73}. Its training-source SHA256 is checked by the runtime. The local B0 control and CRiSH share a trainer, source-derived losses, split handling, ID/cluster-order correction, finite-input checks and empty-cluster handling. Upstream itself remains unchanged. Thus B0 is a \emph{matched runtime control}; this is not evidence of exact reproduction of every published result. The reference CLI settings are checked against the pinned upstream commands. The experimental upgraded profile changes USE normalization for both B0 and CRiSH.
+
+The SelEx authors have acknowledged an ordering bug in coarse pseudo-label assignment and warned that affected results require revision.\footnote{\url{https://github.com/SarahRastegar/SelEx/issues/11}} The pinned HypCD hierarchy code contains the same grouped-output consumption pattern. Our adapter restores each level to sample order, with an interleaved predicted-membership regression. This checks ID alignment, not full permutation invariance of stochastic clustering. Comparisons must use the same correction in B0 and CRiSH; published scores and corrected-runtime scores cannot be treated as interchangeable controls.
+
+\subsection{Representation and Partition Stack}
+Write $f_\theta$ for the backbone and $H_\phi=\mathcal M_c\circ\rho_\phi$ for the DINO projection head followed by the baseline ToPoincare mapping, with curvature $c$ and clipping radius $r_c$. HSSK uses frozen normalized backbone features $u_i=f_\theta(x_i)/\|f_\theta(x_i)\|$. The training loss instead receives projected outputs $h_i=H_\phi(f_\theta(x_i))$ for the two augmented views. Its branch named ``angle'' in code uses Euclidean distances on these head outputs; the other branch uses the existing hyperbolic distance. No extra hyperbolic nearest-neighbor graph is introduced for repair.
+
+At the start of every epoch, HSSK produces labels $c_i^{(\ell)}$, prototypes $\mu_g^{(\ell)}$ and radii at levels $\ell=0,\ldots,L-1$. Known prototypes are regrouped and samples are reclustered at coarser levels, so nestedness is not guaranteed. The logged diagnostic is
+\begin{equation}\label{eq:nested}
+V_{\ell\to\ell+1}=1-\frac1N\sum_g\max_h
+|C_g^{(\ell)}\cap C_h^{(\ell+1)}|.
+\end{equation}
+This quantifies partition geometry, not semantic correctness. Repairs do not require a tree. Explicit sample-ID lookups align batches, labels and prototypes independently of DataLoader order.
+
+\section{Implemented Objective and Reconstruction}
+\subsection{USE Factors and Two Normalization Profiles}
+For a training minibatch of $B$ images, index its $A=2B$ views by $a,b$, and let $p(a)$ be the other view of the same image. Let $v_a=f_\theta(x_a)$ be the raw backbone output used for USE distance calculations. The default zero-one strategy uses
+\begin{align}
+R_g^{(\ell)}&=\tfrac12\min_{h\ne g}\|\mu_g^{(\ell)}-\mu_h^{(\ell)}\|_2,\\
+F_{ab}&=\sum_{\ell=0}^{L-1}2^{-\ell}
+\ind[\|v_a-v_b\|_2>2R_{c_b^{(\ell)}}^{(\ell)}],\\
+\widehat F&=(F-\min F)/(\max F-\min F+10^{-7}).
+\end{align}
+The reference profile preserves the released one-dimensional PyTorch broadcast:
+\begin{equation}\label{eq:legacy}
+S^{\mathrm{legacy}}_{ab}=\widehat F_{ab}\big/\sum_j\widehat F_{bj}.
+\end{equation}
+The denominator is the row sum indexed by \emph{column} $b$; this is not row normalization. A zero/nonfinite row sum triggers an error in the reference path. The diagonal is discarded before contrastive logits and smoothing coefficients are consumed, without further normalization.
+
+The upgraded profile zeros the diagonal first and uses
+\begin{equation}\label{eq:row}
+S^{\mathrm{row}}_{ab}=\begin{cases}
+\widehat F_{ab}/\sum_{j\ne a}\widehat F_{aj},&\text{positive support},\\
+\ind[b=p(a)],&\text{otherwise},
+\end{cases}\quad b\ne a.
+\end{equation}
+With smoothing $\alpha$, the target coefficients are
+$q_{ab}=(1-\alpha)\ind[b=p(a)]+\alpha S_{ab}$. They sum to one in row mode; legacy targets need not. Changing normalization therefore changes the objective and its scale. Both upgraded arms receive the same correction, preventing its effect from being attributed solely to repair. Other supported factor strategies, \code{pair\_dist} and \code{pair\_cluster}, are not the shipped default.
+
+\subsection{USE/SSE Loss with Exact Level Indexing}
+Let $\gamma\in\{0,c\}$ select Euclidean or hyperbolic distance. USE applies the source LabelSmoothingLoss to logits $-d_\gamma(h_a,h_b)/\tau_U$, with $\tau_U=1$ by default. Let $\Lcal_{\mathrm{true}}^\gamma$ be source SupCon over legally labeled examples, and $\Lcal_{\ell}^\gamma$ be pseudo-SupCon over the first $\lfloor D/2^{\ell+1}\rfloor$ coordinates of the $D$-dimensional head output. The implemented branch objective is
+\begin{equation}\label{eq:branch}
+\Lcal^\gamma=(1-\beta)\Lcal_{\mathrm{USE}}^\gamma+
+\frac\beta2\left(\Lcal_{\mathrm{true}}^\gamma+
+\sum_{\ell=0}^{L-1}2^{-(\ell+1)}\Lcal_\ell^\gamma\right).
+\end{equation}
+Source SupCon uses temperature and base temperature $0.07$. For zero-based epoch $e$, training optimizes
+\begin{align}
+\Lcal_e&=(1-w_e)\Lcal^0+w_e\Lcal^c,\\
+w_e&=w_{\max}\operatorname{clip}_{[0,1]}
+\left(\frac{e-h_s+1}{h_f-h_s}\right),
+\end{align}
+where the shipped ramp has $h_s=0,h_f=200$. Neither this schedule nor the true-label loss is modified by CRiSH. Main SGD updates the trainable backbone blocks and projector; only \emph{counterfactual} scoring freezes the backbone.
+
+\subsection{Admissible Actions and Coherent Move}
+For an unlabeled sample $i$ at level $\ell$, the candidates are Keep, Abstain and up to $b$ valid Move destinations. Destinations are ordered by Euclidean prototype distance, then filtered by measured neighbor support. A Move requires at least the configured number of edges with $r_{ij}\ge r_{\min}$ into the destination. The source after removal and the destination before insertion must each have at least $s_{\min}$ members. Known labeled assignments are protected at every level, even when coarse HSSK groups several known classes.
+
+Keep returns the original state and centers. Move changes one unlabeled assignment, recomputes the source/destination means on frozen $u_i$, and recomputes all radii at that level. Other levels and centers remain unchanged. USE factors and pseudo-SSE masks are then reconstructed from that same version of the state. This is an explicit intervention on supervision, not a claim that the new assignment is correct. The current contract requires two views, Euclidean prototypes and cluster momentum one.
+
+\subsection{Abstain with Protected Positive Coefficients}
+For each view-anchor $a$, let $P_a^{(\ell)}$ be its original non-self pseudo-positive views and let $K_a^{(\ell)}\subseteq P_a^{(\ell)}$ retain all same-image positives and labeled--labeled positives, excluding eligible cross-ID pairs incident to an abstained unlabeled sample. Abstain uses
+\begin{equation}\label{eq:abstain}
+\Lcal_\ell^\gamma=-\frac1A\frac{\tau_S}{\tau_{\mathrm{base}}}
+\sum_a\frac{\sum_{b\in K_a^{(\ell)}}\log p_{ab}^{\gamma,\ell}}
+{|P_a^{(\ell)}|}.
+\end{equation}
+Here $p^{\gamma,\ell}$ uses all non-self views in its contrastive denominator. The \emph{original} positive count and anchor mean remain unchanged. Labels, centers, radii, USE and the genuine supervised loss remain unchanged under Abstain. It does not remove an entire example or its instance-positive learning. Move can change positive counts and hence pseudo-term coefficients; the runtime measures and caps that shift rather than claiming the stronger Abstain guarantee for Move.
+
+\section{Evidence and Counterfactual Decision Policy}
+\subsection{M1: Bounded Reciprocal Cross-View Evidence}
+Reserve two disjoint probe folds before selecting an evidence cache $\mathcal I_E$. On each of $T$ independent two-view augmentation trials, compute Euclidean top-$k$ neighbors of normalized backbone outputs within this same cache, excluding self:
+\begin{align}
+R_{ij}^{(t,v)}&=\ind[j\in N_k^{(t,v)}(i)]\ind[i\in N_k^{(t,v)}(j)],\\
+r_{ij}&=\frac1T\sum_tR_{ij}^{(t,1)}R_{ij}^{(t,2)}.
+\end{align}
+Only the union of measured kNN edges is stored. Unmeasured pairs are unknown; measured zero scores are not treated as supervised negative labels. Reliability is detached, symmetric, bounded in $[0,1]$ and not calibrated class confidence. RN-only and cross-view-only summaries are computed by the evidence module, but the integrated action policy uses their joint score above; its refresh log does not export separate RN/CVS distributions.
+
+The reference cache is a uniform sample of non-probe training rows. The upgraded cache first samples unlabeled anchors and searches their frozen normalized backbone neighbors across all eligible reference rows, in streamed blocks. It reserves the anchors, adds neighbors within the cache budget, then random-fills remaining slots. The maximum number of query anchors is $\max(1,\lfloor |\mathcal I_E|/(k+1)\rfloor)$, also capped by available unlabeled rows. Augmented-view verification still occurs \emph{within the cache}; this is neither global cross-view kNN nor hyperbolic kNN.
+
+For positive measured joint-score neighbors $\mathcal N_i^+$, boundary priority is
+\begin{equation}
+D_{i\ell}=\frac{\sum_{j\in\mathcal N_i^+}r_{ij}
+\left(\ind[c_j^{(\ell)}\ne c_i^{(\ell)}]-\ind[c_j^{(\ell)}=c_i^{(\ell)}]\right)}{|\mathcal N_i^+|}.
+\end{equation}
+Rows with no such neighbors are not shortlisted. Boundaries are sorted by decreasing priority, then sample ID and level; at most one level per sample is selected, subject to the boundary budget. Abstain is scored as an alternative rather than applied automatically to uncertain examples.
+
+\subsection{M2: Optional Subset Stability, Disabled by Default}
+When \code{stability\_trials}$=M>0$, the code perturbs the frozen cache features with Gaussian noise (default standard deviation $0.005$), runs sklearn KMeans with \code{n\_init=1}, \code{max\_iter=10}, and matches clusters to the reference partition by maximum-total-IoU Hungarian assignment with explicit dummy matches. It computes
+\begin{equation}
+B_{g\ell}=\frac1M\sum_m\operatorname{IoU}
+(C_g^{(\ell)}\cap\mathcal I_E,C_{\pi_m(g)}^{(\ell,m)}).
+\end{equation}
+Unmatched clusters receive zero IoU; cluster/sample coverage and the observed global fraction are recorded. Levels with $K_\ell\ge|\mathcal I_E|$ report insufficient coverage. This option is unconstrained subset KMeans, not repeated full HSSK. When available, $1-B_{c_i^{(\ell)},\ell}$ is added to boundary priority; a missing cluster score adds zero. ARI/NMI and evidence of complementary semantic information are future diagnostics. All shipped profiles have $M=0$, so M2 is absent from their active decision path.
+
+\subsection{A Separate, Legal Learning Probe}
+Let $Q^d$ and $Q^c$ be ID-disjoint discovery and confirmation folds, also disjoint from the evidence cache and scoring minibatch. Each contains legal labeled examples $Q_k$ and unlabeled examples $Q_u$. Cached backbone features and a frozen copy of the current head define the teacher for this refresh; no EMA teacher is maintained.
+
+For normalized known head outputs $z_a$, define $\ell_a^K$ as the mean negative log probability over non-self same-known-label positives under logits $-\|z_a-z_b\|_2$. The known probe averages per class over classes \emph{present in that fold}:
+\begin{equation}
+\Jcal_K=\frac1{|\mathcal Y_Q|}\sum_{y\in\mathcal Y_Q}
+\frac1{|I_y|}\sum_{a\in I_y}\ell_a^K.
+\end{equation}
+The reference samples known rows uniformly; upgraded sampling cycles through randomized legal classes without replacement. Class-balanced reduction does not imply full class coverage in a small fold.
+
+For student head outputs $s_{iv}$ and detached teacher outputs $t_{iv}$, write $n(\cdot)$ for vector normalization. The other components are
+\begin{align}
+\Jcal_V&=\frac1{2|Q_u|D}\sum_{i,v}\|n(s_{iv})-n(t_{i,1-v})\|_2^2,\\
+\Jcal_{\mathrm{var}}&=\frac1D\sum_{j=1}^D
+\left[\sigma_0-\sqrt{\operatorname{Var}_{i,v}(s_{iv,j})+10^{-4}}\right]_+,\\
+\Jcal&=\lambda_K\Jcal_K+\lambda_V\Jcal_V+
+\lambda_{\mathrm{var}}\Jcal_{\mathrm{var}}.
+\end{align}
+Variance is the population variance of the unnormalized head outputs. Defaults are $(\lambda_K,\lambda_V,\lambda_{\mathrm{var}},\sigma_0)=(1,1,0.1,0.1)$. This is embedding MSE plus a variance floor, not neighborhood-distribution matching, soft-assignment consistency or a uniform class-prior constraint.
+
+\subsection{Projector-Only Exact SGD Scoring}
+At a fixed refresh snapshot let $g_a=\nabla_\phi\Lcal_e(\phi;\mathcal H_a)$ and $g_0=\nabla_\phi\Lcal_e(\phi;\mathcal H)$, computed on a fixed proposal minibatch with detached backbone features. The diagnostic $q^\top(g_a-g_0)$, where $q=\nabla_\phi\Jcal(\phi;Q^d)$, is logged with cosine and changed-mass normalization. It is \emph{not} the acceptance ranking.
+
+For each alternative, clone the same projector and its current SGD state (including momentum, learning rate and weight decay) and apply one optimizer step:
+\begin{align}
+\phi_0'&=\operatorname{SGDStep}(\phi,\Omega,g_0),\qquad
+\phi_a'=\operatorname{SGDStep}(\phi,\Omega,g_a),\\
+G_d(a)&=\Jcal(\phi_0';Q^d)-\Jcal(\phi_a';Q^d),\\
+\Delta K_d(a)&=\Jcal_K(\phi_a';Q^d)-\Jcal_K(\phi_0';Q^d).
+\end{align}
+The optimizer-state snapshot $\Omega$ is shared across comparisons. No live parameters, buffers, gradients, modes or RNG state are changed by virtual steps. The trainable backbone is not part of the virtual parameter set, and no 5/10-step rollout is implemented.
+
+Let $C_{ab}^{(\ell)}$ be the effective pseudo-SSE positive coefficients, including the retained original-count denominator under Abstain. Define
+\begin{equation}
+m(a)=\sum_\ell2^{-(\ell+1)}\frac1{2A}
+\sum_{a',b}|C_{a'b}^{(\ell)}(\mathcal H_a)-C_{a'b}^{(\ell)}(\mathcal H)|.
+\end{equation}
+The scorer rejects zero changed mass, invalid/nonfinite values, and a maximal coefficient shift above the configured cap on same-ID or labeled--labeled pairs. USE and SSE drift are logged separately; they are not combined into an invented semantic error probability.
+
+\subsection{Discovery Ranking and Independent Confirmation}\label{sec:acceptance}
+The eligible set contains valid candidates with $m(a)>0$, protected shift within its cap, $G_d(a)>\delta$ and $\Delta K_d(a)\le\epsilon_K$. Rank them by \emph{exact discovery gain} and choose its maximum $a^\star$. Only this winner is evaluated on $Q^c$, with the same cloned-step comparison:
+\begin{equation}\label{eq:accept}
+\operatorname{Accept}(a^\star)=
+\ind[G_c(a^\star)>\delta]\ind[\Delta K_c(a^\star)\le\epsilon_K].
+\end{equation}
+No mean-over-fold ranking or configurable $R$-fold majority vote is used in the integrated engine. If independent confirmation fails, stop the refresh without trying runners-up on that fold. An eligible Abstain competes using the same rule as Move; rejected Move is not automatically converted to Abstain. On acceptance, atomically commit only the supervision state. For budgets exceeding one accepted action, rebuild and rescore all remaining candidates relative to the new state while the model/optimizer snapshot remains frozen. The shipped budget is one accepted action.
+
+\subsection{Epoch Integration and Failure Behavior}
+All epochs start from fresh HSSK supervision. With zero-based epoch $e$, CRiSH attempts a repair refresh only when $e\ge W$ and $(e-W)\bmod R=0$. B0 never invokes repair. Accepted corrections last until the next epoch's HSSK refresh, not for all $R$ epochs between repair attempts. Remaining training minibatches use the corrected state and Equation~\eqref{eq:branch}.
+
+Insufficient support, invalid IDs, nonfinite scores, unsupported operations or a refresh deadline return the original snapshot (Keep); a whole-refresh exception also discards provisional accepted edits. Candidate-specific failures can be rejected individually by the policy. Baseline loss/gradient failures remain explicit training errors, not successful fallbacks. Refresh time is checked between operations, with a finite outer worker timeout; an individual tensor kernel is not immediately preempted.
+
+\begin{algorithm*}[!t]
+\caption{Implemented CRiSH repair refresh; default M2 trials are zero.}\label{alg:crish}
+\small
+\KwIn{Fresh HSSK state $\mathcal H_0$; legal-ID registry; frozen backbone; live projector/SGD snapshot; settings.}
+\KwOut{Revised supervision or original $\mathcal H_0$; diagnostics.}
+\If{B0, disabled, warmup, or refresh not due}{\Return{$\mathcal H_0$}}
+Reserve ID-disjoint discovery/confirmation folds; select non-probe evidence cache\;
+Cache independent augmented backbone views; compute reciprocal joint scores\;
+\If{$M>0$}{Compute optional subset stability with explicit coverage checks\;}
+Shortlist bounded distinct-sample boundaries; propose Abstain and valid Move actions\;
+Choose a fixed proposal minibatch from cache; clone projector and current SGD state\;
+Freeze teachers and both probes; $\mathcal H\leftarrow\mathcal H_0$\;
+\For{at most the accepted-action budget}{
+ Rebuild and score each remaining valid candidate relative to $\mathcal H$\;
+ Filter by finite values, support, changed mass, protected shift, $G_d>\delta$, and known guard\;
+ \If{no eligible candidates}{\textbf{break}\;}
+ Select $a^\star=\argmax G_d(a)$; evaluate only $a^\star$ on confirmation fold\;
+ \If{$G_c(a^\star)\le\delta$ or confirmation known guard fails}{\textbf{break}\;}
+ Atomically commit its rebuilt state; remove actions for that sample; invalidate old scores\;
+}
+\Return{$\mathcal H$}; on a whole-refresh exception return $\mathcal H_0$\;
+\end{algorithm*}
+
+\section{Profiles and Evaluation Protocol}\label{sec:evaluation}
+\subsection{Implemented Datasets and Exposure}
+The runtime supports Stanford Cars and CUB-200-2011 through official SSB split files. Cars has 98 known and 98 novel classes; CUB has 100 and 100. The loader labels half of the known-category training rows, leaving the remainder and all novel rows unlabeled. Per-class image counts need not be identical. Ground truth remains evaluation-only outside the legal labeled subset. Input size is 224, backbone dimension 768, projector dimension 8192, and default pretraining is DINOv2 ViT-B/14 with four register tokens. Blocks 10--11 are trainable in the shipped configurations; this follows the pinned CLI, not an assertion that every paper-level setting is identical.
+
+Cars is the project's primary exploratory comparison benchmark. Previous logs and old/novel curves from a retired method have already been examined, so Cars must not be described as pristine held-out evidence. CUB is an additional implemented dataset, with no completed CRiSH benchmark recorded. CIFAR-100, Aircraft, Herbarium19 and ImageNet-100 are future extensions requiring dataset adapters, validated protocols and an exposure audit. They are not current runtime capabilities or completed generalization experiments.
+
+\subsection{Source-Derived Settings}
+Table~\ref{tab:settings} is generated from the loaded full configurations, including dataclass defaults. Smoke configurations use one epoch and at most two SGD steps with repair warmup zero; they are separate from benchmark runs. B0 and CRiSH settings match within each dataset/profile except for the method toggle. SGD uses cosine decay with minimum learning rate $10^{-3}$ times its initial value. Dataset-specific hyperbolic/smoothing settings follow the pinned command examples and are checked locally.
+% BEGIN IMPLEMENTATION_SETTINGS
+% Generated by scripts/check_manuscript.py --write.
+% implementation-sha256: ad2631256fb7543f7db56ad140c4725f6b000d41c910bbf807c4d4cc02107315
+\begin{table*}[!t]\footnotesize\centering
+\caption{Actual full-profile settings, generated from source configs. All four profiles use projector-only lookahead and normalized-backbone Euclidean evidence.}
+\begin{tabularx}{\textwidth}{@{}Xcccc@{}}\toprule
+Setting & Cars ref. & Cars upgraded & CUB ref. & CUB upgraded\\\midrule
+Epochs / batch & 200 / 128 & 200 / 128 & 200 / 128 & 200 / 128\\
+SGD learning rate / momentum & 0.1 / 0.9 & 0.1 / 0.9 & 0.1 / 0.9 & 0.1 / 0.9\\
+Weight decay & 5e-05 & 5e-05 & 5e-05 & 5e-05\\
+Trainable blocks start at & 10 & 10 & 10 & 10\\
+USE normalization & legacy & row & legacy & row\\
+USE smoothing $\alpha$ & 0.5 & 0.5 & 1 & 1\\
+Hyperbolic maximum weight & 0.5 & 0.5 & 1 & 1\\
+Curvature / clipping radius & 0.1 / 2 & 0.1 / 2 & 0.1 / 1.5 & 0.1 / 1.5\\
+Repair warmup / interval & 10 / 5 & 10 / 5 & 10 / 5 & 10 / 5\\
+Evidence cache / trials / $k$ & 128 / 2 / 5 & 128 / 2 / 5 & 128 / 2 / 5 & 128 / 2 / 5\\
+Evidence sampling & random & global shortlist & random & global shortlist\\
+Proposal scoring batch & 32 & 32 & 32 & 32\\
+Known / unlabeled per probe fold & 4 / 8 & 16 / 32 & 4 / 8 & 16 / 32\\
+Known probe sampling & random & class balanced & random & class balanced\\
+M2 trials (zero means disabled) & 0 & 0 & 0 & 0\\
+Boundaries / destinations / accepted & 2 / 1 / 1 & 2 / 1 / 1 & 2 / 1 / 1 & 2 / 1 / 1\\
+Minimum support / edges & 2 / 1 & 2 / 1 & 2 / 1 & 2 / 1\\
+Minimum joint reliability & 0.5 & 0.5 & 0.5 & 0.5\\
+Gain threshold / known tolerance & 0 / 0 & 0 / 0 & 0 / 0 & 0 / 0\\
+Protected coefficient shift cap & 0.25 & 0.25 & 0.25 & 0.25\\
+Refresh budget (seconds) & 120 & 120 & 120 & 120\\
+Probe weights: known / view / variance & 1 / 1 / 0.1 & 1 / 1 / 0.1 & 1 / 1 / 0.1 & 1 / 1 / 0.1\\
+Probe standard-deviation floor & 0.1 & 0.1 & 0.1 & 0.1\\
+Checkpoint selection & Old-test-v2 & Old-test-v2 & Old-test-v2 & Old-test-v2\\
+\bottomrule\end{tabularx}\label{tab:settings}
+\end{table*}
+% END IMPLEMENTATION_SETTINGS
+
+\subsection{Test-Selected Best and Fixed Last Are Distinct}
+The shipped \code{best\_old\_test\_v2} protocol evaluates each epoch's backbone on the original disjoint test split using \emph{plain} Euclidean k-means and global Hungarian-v2 matching. It saves a new best only when Old accuracy strictly improves, retaining the earliest epoch on ties; the first finite result is an initial fallback. Because Hungarian matching is global, test labels from both known and novel groups affect the mapping used for Old accuracy. This is explicitly \emph{evaluation-label-dependent selection}, even though no score or hidden label enters SGD or repair. Its best score is not an unbiased held-out estimate or a validation-selected result.
+
+After training, the final evaluator applies balanced semi-supervised k-means to normalized backbone features from the original training pool, with legal labeled anchors. Accuracy is reported on its unlabeled rows for both selected best and fixed last checkpoints, in \code{evaluation.json} and \code{evaluation\_last.json}, respectively. It does not use the plain-test k-means score as a substitute for this final GCD evaluation. Extra SS monitoring is disabled by default and, when enabled, is reported under its own protocol. Evaluation RNG is isolated from training RNG.
+
+This final Hyp-SelEx path uses one initialization and a maximum of ten iterations per source phase. The reviewed SelEx standalone final-clustering script instead defaults to ten initializations, and its default training helper selects Old-v1 rather than Hyp-SelEx's Old-v2. These are released-code differences, not proof of the settings producing every published table row. A standardized comparison must lock the same clustering budget and selector within a matched pair. Report metadata separately records Hungarian-label use, whether the run maintains a test-dependent selector, and whether the particular checkpoint was actually selected by that rule; fixed-last reports do not inherit the best-checkpoint selection flag.
+
+For all metrics, one global Hungarian mapping is shared by All, Old and New:
+\begin{equation}
+\operatorname{ACC}_{\mathrm{All}}=\max_{\pi}\frac1{|E|}
+\sum_{i\in E}\ind[\pi(\hat y_i)=y_i],
+\end{equation}
+with Old/New restricted after the mapping. Therefore
+\begin{equation}
+\operatorname{All}=\frac{n_{\mathrm{old}}\operatorname{Old}+n_{\mathrm{new}}\operatorname{New}}
+{n_{\mathrm{old}}+n_{\mathrm{new}}}.
+\end{equation}
+JSON stores fractions and reports display percentages. All is the primary comparison metric, although the historical selector maximizes Old. Both best and last must be labeled explicitly. The runtime also supports \code{final\_epoch} with \code{test\_every\_epochs=0}; using it requires a matched configuration change in both arms and is not the shipped default. A genuinely independent confirmation study must lock the method and checkpoint rule before evaluating unexposed data, not relabel a test-selected run as label-safe.
+
+\section{Implementation Evidence and Planned Experiments}
+\subsection{What Has Been Verified}
+The repository's local validation receipt records CPU synthetic tests of sample-ID alignment, known-label protection, sparse evidence, finite gradients, coherent rebuild, protected Abstain coefficients, exact cloned SGD state, no-op/disabled baseline parity, checkpoint/resume, selector behavior, dataset wiring and source-archive execution. Numerical loss oracles use pinned source definitions. These checks are implementation evidence, not real-data clustering accuracy, a reproduced paper table, CUDA readiness for the current revision, or proof of useful repairs.
+
+There is no completed matched CRiSH/B0 benchmark in the current evidence. Old-method checkpoints and supplied short remote smokes remain separately identified; they cannot populate a CRiSH main-results table. Performance cells below deliberately remain unfilled.
+\begin{table}[!t]\small\centering
+\caption{Pending matched evaluation. No accuracy values are inferred from synthetic tests.}
+\begin{tabular}{lccc}\toprule
+Dataset / arm & All & Old & New\\\midrule
+Cars / B0 reference & -- & -- & --\\
+Cars / CRiSH reference & -- & -- & --\\
+CUB / B0 reference & -- & -- & --\\
+CUB / CRiSH reference & -- & -- & --\\\bottomrule
+\end{tabular}\label{tab:pending}
+\end{table}
+
+\subsection{Controls Required Before an Effectiveness Claim}
+Only the B0/CRiSH runtime and reference/upgraded profiles are currently executable configurations. The following are \emph{planned controls}, not completed variants or results: RN-only/cross-view-only weighting (B1); stability alone (B2); combined fixed-target evidence without repair (B3); random/support-distance local interventions with matched accepted count and cost (B4); probe-based meta-reweighting without assignment changes (B5); and drop-one controls including probe/confirmation/M2 (B7). The executable reference CRiSH path is the intervention arm, with M2 off; calling it full M1+M2 would be inaccurate. A budget-matched baseline B0+ is also needed if overhead is meaningful.
+
+Before comparing final accuracy, assess evidence error ranking with post-hoc labels only after design lock; conditional value of M2; stable-but-wrong relations; known/novel and tail harm; and predicted versus realized probe changes. Independent 1/5/10-step full-state trajectory diagnostics are future experiments: only one-step projector scoring is implemented now. Report at least three matched seeds when compute permits, exact per-seed values, mean and standard deviation, and paired differences; do not select only the best seed.
+
+\subsection{Cost and Reproducibility}
+Cache kNN stores sparse edges but still performs exact quadratic work in cache size. Upgraded frozen-feature shortlisting scans the eligible reference set in blocks, without allocating a dense full-dataset pair matrix. Each scored action adds backward passes and two cloned one-step alternatives on discovery; confirmation is queried only for its winner. Optional M2 adds bounded clustering work. Log action/edge/cache counts, actual elapsed time, accepted repairs, fallback reasons and peak memory. No GPU-hour or speedup claim is available.
+
+Runs save unique IDs, config snapshots, source fingerprints, seed/RNG state, environment, commands, logs and checkpoints. Resume requires the matching source/config and selection history. Verification of a source-derived manuscript table cannot establish semantic correctness by itself; source changes require renewed equation/pseudocode review as well as regeneration.
+
+\begin{table*}[!t]\footnotesize\centering
+\caption{Implemented source responsibilities. Paths are relative to the repository root.}
+\begin{tabularx}{\textwidth}{@{}p{5.2cm}X@{}}\toprule
+Source & Implemented responsibility\\\midrule
+\code{crish/training.py}, \code{crish/loss.py} & Per-epoch HSSK, repair timing, true/pseudo USE/SSE branches and ramp.\\
+\code{crish/reliability.py}, \code{crish/sampling.py} & Sparse joint evidence, streamed frozen-feature shortlist, legal fold sampling.\\
+\code{crish/partition\_audit.py}, \code{crish/stability.py} & Nesting violations and optional subset IoU/coverage; no implemented ARI/NMI claim.\\
+\code{crish/candidates.py}, \code{crish/rebuild.py} & Valid actions, coherent Move, protected positive masks and changed-target mass.\\
+\code{crish/probe.py}, \code{crish/lookahead.py} & Class-averaged known loss, cross-view embedding MSE, variance floor and exact cloned SGD.\\
+\code{crish/engine.py}, \code{crish/policy.py} & Discovery shortlist/ranking, winner-only confirmation, sequential state commits and Keep fallback.\\
+\code{gcd\_runtime/selection.py} & Explicit test-label-based Old-v2 selector and best/last provenance.\\
+\code{gcd\_runtime/disjoint\_evaluation.py} & Plain k-means test evaluator; separate from final anchored SS evaluation.\\
+\code{scripts/check\_manuscript.py} & Config-table/source-digest drift check and PDF-source provenance verification.\\\bottomrule
+\end{tabularx}\label{tab:implementation_map}
+\end{table*}
+
+\section{Related Work and Novelty Limits}
+SelEx supplies hierarchical pseudo-supervision \cite{selex}; HypCD supplies the hyperbolic framework \cite{hypcd}. CRiSH does not claim either component. Gradient-based learning-to-reweight \cite{ren} motivates a strong reweighting-only control, while cluster stability has established precedents such as pvclust \cite{pvclust}. Recent GCD overlap leads include SEAL \cite{seal}, RCA \cite{rca}, CURE \cite{cure}, and TAR \cite{tar}. Their method-level distinctions and additional leads in the repository novelty report require a completed comparative audit before a novelty claim. We do not claim the first use of reciprocal neighborhoods, cluster stability, gradient alignment or counterfactual reasoning.
+
+The intended research object is the constrained choice of discrete multilevel-supervision interventions with coherent target reconstruction and independent probe confirmation. Whether that combination adds value over B4/B5 at matched cost is an empirical question. Optional M2 should be removed if it adds no incremental information; it is not retained merely to make the method more complex.
+
+\section{Limitations and Conclusion}
+Internally stable or teacher-consistent assignments can remain semantically wrong. A projector-only one-step proxy can favor the probe without improving backbone discovery, and small known probes may miss classes or favor known over novel examples. Local evidence can miss useful neighbors, coarse M2 coverage can be insufficient, and independent confirmation can still be overfit by repeated queries across refreshes. Moves preserve true-label loss terms but need not preserve all pseudo-positive coefficients. The default test-dependent selector and prior Cars exposure limit claims of independent generalization.
+
+CRiSH-GCD is an implemented, testable research hypothesis. Its current source and this manuscript describe a bounded cache-based evidence and discrete-action policy with optional stability, exact projector SGD scoring and explicit evaluation limitations. Matched real-data baselines, controls, multiple seeds and additional datasets remain necessary before claiming accuracy gains, generalization or publication readiness.
+
+\appendix
+\section{Implementation Map and Verification}
+
+
+Table~\ref{tab:implementation_map} maps the reviewed source responsibilities. The source digest embedded with Table~\ref{tab:settings} binds this review to the implementation/config snapshot, including changes that are not yet committed. It is not a substitute for recording a clean release commit and actual run manifests. The companion PDF build receipt hashes the LaTeX and PDF so an old rendered manuscript is not silently reused. Synthetic verification and benchmark evidence remain distinct.
+
+\begin{thebibliography}{8}
+\bibitem{selex} S. Rastegar, M. Salehi, Y. M. Asano, H. Doughty, and C. G. M. Snoek, ``SelEx: Self-expertise in fine-grained generalized category discovery,'' in \emph{Proc. ECCV}, 2024. [Online]. Available: \url{https://www.ecva.net/papers/eccv_2024/papers_ECCV/papers/08926.pdf}
+\bibitem{hypcd} Y. Liu, Z. He, and K. Han, ``Hyperbolic category discovery,'' in \emph{Proc. CVPR}, 2025, pp. 9891--9900. [Online]. Available: \url{https://arxiv.org/abs/2504.06120}
+\bibitem{ren} M. Ren, W. Zeng, B. Yang, and R. Urtasun, ``Learning to reweight examples for robust deep learning,'' in \emph{Proc. ICML}, 2018. [Online]. Available: \url{https://proceedings.mlr.press/v80/ren18a.html}
+\bibitem{pvclust} R. Suzuki and H. Shimodaira, ``Pvclust: An R package for assessing the uncertainty in hierarchical clustering,'' \emph{Bioinformatics}, 2006. [Online]. Available: \url{https://doi.org/10.1093/bioinformatics/btl117}
+\bibitem{seal} Z. He, Y. Liu, and K. Han, ``SEAL: Semantic-aware hierarchical learning for generalized category discovery,'' in \emph{Advances in Neural Information Processing Systems}, 2025. [Online]. Available: \url{https://proceedings.neurips.cc/paper_files/paper/2025/hash/eb3c42ddfa16d8421fdba13528107cc1-Abstract-Conference.html}
+\bibitem{rca} J. Yu, Z. Gao, T. Wan, X. Liu, C. Yang, and K. Xu, ``Reliable confidence alignment for generalized category discovery,'' in \emph{Proc. ICML}, 2026. [Online]. Available: \url{https://proceedings.mlr.press/v306/yu26l.html}
+\bibitem{cure} Y. Bian, S. Wang, and H. Zhang, ``CURE: Consistency-under-Unified Semantic Regularization for Generalized Category Discovery,'' in \emph{Proc. ICML}, 2026. [Online]. Available: \url{https://proceedings.mlr.press/v306/bian26d.html}
+\bibitem{tar} X. Yang, Y. Zhang, S. Mi, and X.-S. Wei, ``TAR: Token-aware refinement for fine-grained generalized category discovery,'' in \emph{Proc. CVPR}, 2026. [Online]. Available: \url{https://openaccess.thecvf.com/content/CVPR2026/html/Yang_TAR_Token-Aware_Refinement_for_Fine-grained_Generalized_Category_Discovery_CVPR_2026_paper.html}
+\end{thebibliography}
+\end{document}

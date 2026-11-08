@@ -12,6 +12,8 @@ class CrishSettings:
     refresh_every: int = 5
     evidence_samples: int = 128
     evidence_trials: int = 2
+    evidence_sampling: str = 'random'
+    neighbor_reference_block: int = 1024
     k: int = 5
     boundaries: int = 2
     max_targets: int = 1
@@ -22,6 +24,7 @@ class CrishSettings:
     train_batch: int = 32
     probe_known: int = 4
     probe_unlabeled: int = 8
+    probe_sampling: str = 'random'
     probe_known_weight: float = 1.0
     probe_view_weight: float = 1.0
     probe_variance_weight: float = 0.1
@@ -37,6 +40,10 @@ class CrishSettings:
     def __post_init__(self):
         if self.lookahead_scope != 'projector' or self.evidence_space != 'normalized_backbone_euclidean':
             raise ValueError('Only the explicitly tested projector lookahead/backbone evidence path is implemented')
+        if self.evidence_sampling not in ('random', 'global_neighbors'):
+            raise ValueError('crish.evidence_sampling must be random or global_neighbors')
+        if self.probe_sampling not in ('random', 'class_balanced'):
+            raise ValueError('crish.probe_sampling must be random or class_balanced')
         for name in ('enabled', 'save_partitions'):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f'crish.{name} must be bool')
@@ -45,7 +52,7 @@ class CrishSettings:
                 raise ValueError(f'crish.{name} must be a nonnegative integer')
         for name in ('refresh_every', 'evidence_samples', 'evidence_trials', 'k', 'boundaries',
                      'max_targets', 'max_accepted', 'min_support', 'min_edges', 'train_batch',
-                     'probe_known', 'probe_unlabeled', 'max_refresh_seconds'):
+                     'probe_known', 'probe_unlabeled', 'max_refresh_seconds', 'neighbor_reference_block'):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f'crish.{name} must be a positive integer')
         if self.probe_unlabeled < 2 or self.train_batch < 2 or self.evidence_samples <= self.k:

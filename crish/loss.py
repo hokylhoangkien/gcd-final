@@ -1,7 +1,8 @@
 """Full Hyp-SelEx USE/SSE objective with explicit ID-aligned supervision.
 
 The original loss classes/logit routine remain in trainer.py, unchanged. Both
-strict B0 and CRiSH use this function and the same fail-on-zero USE contract.
+strict B0 and CRiSH use this function. Legacy USE is unchanged; the selectable
+row mode normalizes non-self smoothing support with a positive-view fallback.
 """
 import torch
 
@@ -30,7 +31,9 @@ def hypselex_loss(head, backbone_views, batch_ids, labeled, legal_targets, state
         raise ValueError('Verified CRiSH objective requires two views and full-batch USE')
     flat = head(backbone_views)
     paired = torch.stack(flat.chunk(2), dim=1)
-    cf = confusion_factor(state, batch_ids, backbone_views.detach(), args.strategy)
+    normalization = getattr(args, 'use_target_normalization', 'legacy')
+    cf = confusion_factor(state, batch_ids, backbone_views.detach(), args.strategy,
+                          normalization=normalization)
     mask = membership.to(flat.device)
     branches, protected = [], []
     for curvature in (0., args.c):

@@ -49,6 +49,7 @@ def crish_method_probe(cfg, requested='cuda', *, backbone_dim=768, hidden_dim=20
                            strategy='zero_one', unsupervised_smoothing=cfg['unsupervised_smoothing'],
                            sup_con_weight=cfg['sup_con_weight'], hyper_start_epoch=0, hyper_end_epoch=200,
                            hyper_max_weight=cfg['hyper_max_weight'])
+    args.use_target_normalization = cfg.get('use_target_normalization', 'legacy')
     prior_args, prior_device = getattr(trainer, 'args', None), getattr(trainer, 'device', None)
     try:
         with preserve_rng():
@@ -70,10 +71,12 @@ def crish_method_probe(cfg, requested='cuda', *, backbone_dim=768, hidden_dim=20
                                                 bottleneck_dim=min(256, hidden_dim)),
                                        ToPoincare(c=cfg['c'], clip_r=cfg['cr'] or None, riemannian=False)).to(device)
             optimizer = torch.optim.SGD(head.parameters(), lr=.001, momentum=.9, weight_decay=cfg['weight_decay'])
-            test_cfg = dict(cfg, crish=asdict(CrishSettings(warmup_epochs=0, refresh_every=1,
+            scaled_settings = dict(cfg['crish'])
+            scaled_settings.update(warmup_epochs=0, refresh_every=1,
                             evidence_samples=16, evidence_trials=1, k=2, boundaries=1, max_targets=1,
                             max_accepted=1, min_support=1, train_batch=8, probe_known=1, probe_unlabeled=2,
-                            max_protected_shift=1., max_refresh_seconds=60, save_partitions=False)))
+                            max_protected_shift=1., max_refresh_seconds=60, save_partitions=False)
+            test_cfg = dict(cfg, crish=asdict(CrishSettings(**scaled_settings)))
             with tempfile.TemporaryDirectory(prefix='crish-runtime-probe-') as temp:
                 runtime = EpochRuntime(temp, test_cfg)
                 repaired = CrishEngine(runtime).prepare(state, torch.nn.Identity().to(device), head, optimizer,
@@ -92,6 +95,10 @@ def crish_method_probe(cfg, requested='cuda', *, backbone_dim=768, hidden_dim=20
             return dict(status='synthetic_strict_training_probe_passed', method=cfg['method'], device=str(device),
                         backbone_dim=backbone_dim, projector_dim=cfg['mlp_out_dim'], loss=float(loss.detach()),
                         scoring_attempts=len(record['gains']) if record else 0,
-                        accepted=record['accepted'] if record else 0, trained_epochs=0)
+                        accepted=record['accepted'] if record else 0, trained_epochs=0,
+                        use_target_normalization=args.use_target_normalization,
+                        evidence_sampling=test_cfg['crish']['evidence_sampling'],
+                        probe_sampling=test_cfg['crish']['probe_sampling'],
+                        scaled_synthetic_probe=True)
     finally:
         trainer.args, trainer.device = prior_args, prior_device

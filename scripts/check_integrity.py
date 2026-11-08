@@ -4,8 +4,11 @@ import hashlib
 import json
 import pickle
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+from gcd_runtime.datasets import DATASETS, dataset_spec
 SPLIT_SHA = '28d471f0fb9e2c773e1255b8b447e542974f6617952203056a0635c638513d39'
 
 
@@ -14,9 +17,10 @@ class DataOnlyUnpickler(pickle.Unpickler):
         raise ValueError('Split must contain only primitive data')
 
 
-def check_split(path):
+def check_split(path, dataset_name='scars'):
+    spec = dataset_spec(dataset_name)
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    if digest != SPLIT_SHA:
+    if digest != spec.split_sha256:
         raise ValueError('Official pinned split checksum mismatch')
     with path.open('rb') as handle:
         split = DataOnlyUnpickler(handle).load()
@@ -25,13 +29,13 @@ def check_split(path):
     novel = groups['Hard'] + groups['Medium'] + groups['Easy']
     if len(known) != len(set(known)) or len(novel) != len(set(novel)):
         raise ValueError('Duplicate classes')
-    if set(known) & set(novel) or set(known + novel) != set(range(196)):
+    if set(known) & set(novel) or set(known + novel) != set(range(spec.num_classes)):
         raise ValueError('Invalid class partition')
     return {'sha256': digest, 'known_count': len(known), 'novel_count': len(novel),
             'novel_groups': {k: len(v) for k, v in groups.items()}}
 
 
-def check_membership(rows, known_classes, root):
+def check_membership(rows, known_classes, root, num_classes=196):
     """Audit-only manifest: id, path, partition, label (zero based).
 
     Labels are used for integrity checks only. Never load this manifest for training.
@@ -53,8 +57,8 @@ def check_membership(rows, known_classes, root):
         if path in paths:
             raise ValueError('Duplicate image path')
         label = row['label']
-        if type(label) is not int or not 0 <= label < 196:
-            raise ValueError('Invalid zero-based Cars label')
+        if type(label) is not int or not 0 <= label < num_classes:
+            raise ValueError('Invalid zero-based dataset label')
         if partition == 'labeled' and label not in known_classes:
             raise ValueError('Novel label in supervised partition')
         ids.add(row['id'])
@@ -69,16 +73,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--manifest', type=Path)
     parser.add_argument('--data-root', type=Path)
+    parser.add_argument('--dataset', default='scars', choices=tuple(DATASETS))
     args = parser.parse_args()
-    path = ROOT / 'upstream/HypCD/data/ssb_splits/scars_osr_splits.pkl'
-    report = {'split': check_split(path), 'image_integrity': 'not_checked_no_manifest'}
+    path = ROOT / 'upstream/HypCD/data/ssb_splits' / dataset_spec(args.dataset).split_file
+    report = {'dataset_name': args.dataset, 'split': check_split(path, args.dataset), 'image_integrity': 'not_checked_no_manifest'}
     if args.manifest:
         if not args.data_root:
             parser.error('--data-root is required with --manifest')
         with path.open('rb') as handle:
             known = DataOnlyUnpickler(handle).load()['known_classes']
         report['image_integrity'] = check_membership(
-            json.loads(args.manifest.read_text()), set(known), args.data_root)
+            json.loads(args.manifest.read_text()), set(known), args.data_root,
+            num_classes=dataset_spec(args.dataset).num_classes)
     print(json.dumps(report, indent=2))
 
 

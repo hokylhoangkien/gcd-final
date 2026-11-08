@@ -9,14 +9,16 @@ from gcd_runtime.config import ROOT, load_config
 
 
 class LayoutTests(unittest.TestCase):
-    def test_main_source_has_no_retired_pipeline_or_fragmented_docs(self):
+    def test_source_and_research_documents_have_one_canonical_location(self):
         for path in ('docs', 'legacy', 'gcd_runtime/reliability.py',
                      'gcd_runtime/method_config.py', 'gcd_runtime/compat.py',
                      'scripts/train_proposed_linux.sh', 'scripts/start_dinov2_linux.sh',
                      'configs/revision2', 'configs/final_only', 'configs/train'):
             self.assertFalse((ROOT/path).exists(), path)
         self.assertEqual({p.name for p in ROOT.glob('*.md')}, {'README.md', 'AGENTS.md'})
-        self.assertEqual({p.name for p in (ROOT/'presentation').glob('*.md')}, {'CRISH_GCD.md'})
+        self.assertFalse((ROOT/'presentation').exists())
+        self.assertTrue((ROOT/'reports/04_method_and_research_plan.md').is_file())
+        self.assertTrue((ROOT/'paper/manuscript.tex').is_file())
         profiles = set()
         for path in (ROOT/'configs').glob('*.json'):
             cfg = json.loads(path.read_text())

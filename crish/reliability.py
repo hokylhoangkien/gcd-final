@@ -1,5 +1,6 @@
 """Sparse M1 from measured kNN rows; absent edges are unknown, never negatives."""
 from dataclasses import dataclass
+import time
 from typing import Dict, Optional, Sequence, Tuple
 
 import torch
@@ -83,3 +84,45 @@ def blockwise_euclidean_knn(features: Tensor, k: int, block_size: int = 64) -> T
         distances[torch.arange(stop-start, device=features.device), torch.arange(start, stop, device=features.device)] = torch.inf
         chunks.append(distances.topk(k, largest=False).indices)
     return torch.cat(chunks).cpu()
+
+
+@torch.no_grad()
+def blockwise_query_knn(features: Tensor, query_rows: Tensor, k: int, *,
+                        query_block: int = 32, reference_block: int = 1024,
+                        deadline: Optional[float] = None) -> Tensor:
+    """Exact frozen-feature query neighbors across all supplied reference rows.
+
+    Return indices into features. Self is excluded, ties follow torch.topk.
+    Distance workspace is O(query_block * (reference_block + k)); no N-by-N.
+    The deadline is checked between blocks, not inside a tensor operation.
+    """
+    if (features.ndim != 2 or not features.is_floating_point() or
+            features.shape[1] == 0 or not torch.isfinite(features).all()):
+        raise ValueError('Expected finite nonempty-dimensional reference features')
+    if (query_rows.ndim != 1 or query_rows.dtype != torch.long or not len(query_rows)
+            or ((query_rows < 0) | (query_rows >= len(features))).any()
+            or len(query_rows.unique()) != len(query_rows)):
+        raise ValueError('Expected unique valid query row indices')
+    if (type(k) is not int or not 1 <= k < len(features) or
+            type(query_block) is not int or query_block < 1 or
+            type(reference_block) is not int or reference_block < 1):
+        raise ValueError('Invalid neighbor count or block sizes')
+    output = []
+    for start in range(0, len(query_rows), query_block):
+        rows = query_rows[start:start+query_block].to(features.device)
+        best_dist = features.new_empty((len(rows), 0))
+        best_rows = torch.empty((len(rows), 0), dtype=torch.long, device=features.device)
+        for ref_start in range(0, len(features), reference_block):
+            if deadline is not None and time.monotonic() >= deadline:
+                raise RuntimeError('CRiSH neighbor shortlist deadline exceeded')
+            refs = torch.arange(ref_start, min(ref_start+reference_block, len(features)), device=features.device)
+            distances = torch.cdist(features[rows], features[refs])
+            distances.masked_fill_(rows[:, None] == refs[None, :], torch.inf)
+            distances = torch.cat((best_dist, distances), dim=1)
+            candidates = torch.cat((best_rows, refs.expand(len(rows), -1)), dim=1)
+            best_dist, indices = distances.topk(min(k, distances.shape[1]), largest=False, dim=1)
+            best_rows = candidates.gather(1, indices)
+        if not torch.isfinite(best_dist).all():
+            raise ValueError('Nonfinite frozen-feature neighbor distances')
+        output.append(best_rows.cpu())
+    return torch.cat(output)

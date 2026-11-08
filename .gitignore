@@ -4,6 +4,7 @@ __pycache__/
 .env
 .DS_Store
 logs/
+crish_share/
 checkpoints/
 datasets/
 weights/
@@ -23,3 +24,15 @@ dist/
 !.env.example
 
 .pytest_cache/
+
+# LaTeX build intermediates; keep manuscript source and the reviewed PDF.
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.fdb_latexmk
+paper/*.fls
+paper/*.log
+paper/*.out
+paper/*.synctex.gz
+paper/*.toc
+paper/*.xdv

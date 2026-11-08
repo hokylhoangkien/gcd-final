@@ -66,14 +66,17 @@ def rebuild(state: SupervisionState, action: Action, *, min_support: int = 1,
 
 @torch.no_grad()
 def confusion_factor(state: SupervisionState, batch_ids: Tensor, backbone_views: Tensor,
-                     strategy: str = 'zero_one') -> Tensor:
+                     strategy: str = 'zero_one', *, normalization: str = 'legacy') -> Tensor:
     """Default source geometry; two-view order [view0 batch, view1 batch].
 
-    Output is normalized BEFORE diagonal removal, exactly as the source. A
-    degenerate baseline is rejected rather than silently normalized differently.
+    Legacy preserves the source's column broadcasting and zero-row rejection.
+    Row mode excludes self before normalization; empty support falls back only
+    to the other augmented view of the same image, without consulting labels.
     """
     if strategy not in ('zero_one', 'pair_dist', 'pair_cluster'):
         raise ValueError('Unsupported USE strategy')
+    if normalization not in ('legacy', 'row'):
+        raise ValueError('Unsupported USE target normalization')
     rows = rows_for_ids(state.ids, batch_ids)
     n = len(rows)
     if not n or backbone_views.ndim != 2 or len(backbone_views) != 2 * n or backbone_views.shape[1] != state.features.shape[1]:
@@ -92,6 +95,16 @@ def confusion_factor(state: SupervisionState, batch_ids: Tensor, backbone_views:
             term = torch.cdist(backbone_views, proto.to(backbone_views.device).float())[:, repeated]
         factor = factor + term / 2 ** ell
     factor = (factor - factor.min()) / (factor.max() - factor.min() + 0.0000001)
+    if normalization == 'row':
+        if not torch.isfinite(factor).all() or (factor < 0).any():
+            raise ValueError('Nonfinite/negative USE smoothing support')
+        factor.fill_diagonal_(0)
+        total = factor.sum(dim=1, keepdim=True)
+        empty = total.squeeze(1) == 0
+        factor = factor / torch.where(total > 0, total, torch.ones_like(total))
+        empty_rows = empty.nonzero().flatten()
+        factor[empty_rows, (empty_rows + n) % (2*n)] = 1
+        return factor
     total = factor.sum(dim=1)
     if not torch.isfinite(factor).all() or (total <= 0).any():
         raise ValueError('Baseline USE has a zero/nonfinite row; shared numerical policy required')
@@ -112,18 +125,19 @@ def pseudo_masks(state: SupervisionState, batch_ids: Tensor, level: int):
 
 @torch.no_grad()
 def target_drift(before: SupervisionState, after: SupervisionState, batch_ids: Tensor,
-                 backbone_views: Tensor, *, smoothing: float, strategy: str = 'zero_one') -> dict:
+                 backbone_views: Tensor, *, smoothing: float, strategy: str = 'zero_one',
+                 normalization: str = 'legacy') -> dict:
     """Actual batch target-coefficient changes, not semantic error estimates.
 
-    USE targets need not be probabilities in the source; report half-L1, not
-    probability total variation. Keep SSE and USE masses separate.
+    Legacy USE targets need not be probabilities; row mode has unit mass.
+    Report half-L1 consistently and keep SSE and USE masses separate.
     """
     if not 0 <= smoothing <= 1 or not torch.equal(before.ids, after.ids):
         raise ValueError('Need matched snapshots and smoothing in [0,1]')
     n = len(batch_ids)
     offdiag = ~torch.eye(2 * n, dtype=torch.bool)
-    cf0 = confusion_factor(before, batch_ids, backbone_views, strategy).cpu()
-    cf1 = confusion_factor(after, batch_ids, backbone_views, strategy).cpu()
+    cf0 = confusion_factor(before, batch_ids, backbone_views, strategy, normalization=normalization).cpu()
+    cf1 = confusion_factor(after, batch_ids, backbone_views, strategy, normalization=normalization).cpu()
     delta = smoothing * (cf1 - cf0) * offdiag
     same_id = before.ids[rows_for_ids(before.ids, batch_ids)].repeat(2)
     identity = (same_id[:, None] == same_id[None, :]) & offdiag

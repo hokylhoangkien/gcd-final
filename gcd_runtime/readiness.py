@@ -2,6 +2,7 @@
 import hashlib
 import subprocess
 from .config import ROOT, UPSTREAM_SHA, paths
+from .datasets import dataset_spec, image_paths, raw_targets, whole_training_dataset
 from scripts.check_integrity import check_split, check_membership
 
 
@@ -40,48 +41,64 @@ def inspect_inputs(cfg=None):
     upstream = ROOT / 'upstream/HypCD'
     provenance = verify_upstream()
     sha = provenance['sha']
-    split = check_split(upstream / 'data/ssb_splits/scars_osr_splits.pkl')
+    name = (cfg or {}).get('dataset_name', 'scars')
+    spec = dataset_spec(name)
+    split = check_split(upstream / 'data/ssb_splits'/spec.split_file, name)
     data, weights, _ = paths()
     variant = (cfg or {}).get('dino', 'v1')
     weight = weights / ('dinov2_vitb14_reg4_pretrain.pth' if variant == 'v2' else 'dino_vitb16_pretrain.pth')
-    required = [data / 'cars/devkit/cars_train_annos.mat',
-                data / 'cars/devkit/cars_test_annos_withlabels.mat', weight]
+    root = data/spec.folder
+    annotations = [root/relative for relative in spec.metadata]
+    required = annotations+[weight]
     missing = [str(p) for p in required if not p.is_file()]
     if missing:
         raise RuntimeError('Missing required files: ' + ', '.join(missing))
-    return dict(upstream_sha=sha, upstream_kind=provenance['kind'], split=split, weight_sha256=sha256(weight),
-                annotation_sha256={p.name: sha256(p) for p in required[:2]})
+    result = dict(dataset_name=name, upstream_sha=sha, upstream_kind=provenance['kind'], split=split,
+                  weight_sha256=sha256(weight),
+                  annotation_sha256={str(p.relative_to(root)): sha256(p) for p in annotations})
+    if cfg and 'method' in cfg:
+        from audit.protocol import compare_worker
+        result['reference_protocol'] = compare_worker(cfg, smoke=bool(cfg.get('max_steps_per_epoch')))
+    return result
 
 
-def audit_dataset():
+def audit_dataset(cfg=None):
     # Instantiate the actual pinned loader. Ground truth is restricted to this audit.
     import argparse
     from .worker import configure_environment
     configure_environment(ROOT / 'runs/probe-placeholder')
     from data.get_datasets import get_class_splits, get_datasets
-    args = get_class_splits(argparse.Namespace(dataset_name='scars', use_ssb_splits=True,
+    name = (cfg or {}).get('dataset_name', 'scars')
+    spec = dataset_spec(name)
+    args = get_class_splits(argparse.Namespace(dataset_name=name, use_ssb_splits=True,
                                               prop_train_labels=0.5))
-    merged, test, _, _ = get_datasets('scars', None, None, args)
+    merged, test, _, _ = get_datasets(name, None, None, args)
     rows = []
     for partition, dataset in [('labeled', merged.labelled_dataset),
                                ('unlabeled', merged.unlabelled_dataset)]:
-        for sample_id, path, label in zip(dataset.uq_idxs, dataset.data, dataset.target):
+        for sample_id, path, label in zip(dataset.uq_idxs, image_paths(dataset, name), raw_targets(dataset, name)):
             rows.append(dict(id=int(sample_id), path=path, label=int(label) - 1, partition=partition))
     data, _, _ = paths()
-    counts = check_membership(rows, set(args.train_classes), data / 'cars')
+    root = data/spec.folder
+    counts = check_membership(rows, set(args.train_classes), root, num_classes=spec.num_classes)
     # Whole train IDs must be covered once. Derive expected count from annotations,
     # independently of the two returned subsets.
-    from data.stanford_cars import CarsDataset
-    whole = CarsDataset(train=True)
+    whole = whole_training_dataset(name, root)
     if {r['id'] for r in rows} != set(map(int, whole.uq_idxs)):
         raise RuntimeError('Train pool coverage mismatch')
-    known_count = sum(label - 1 in args.train_classes for label in whole.target)
+    targets = raw_targets(whole, name)
+    if {int(label)-1 for label in targets} != set(args.train_classes) | set(args.unlabeled_classes):
+        raise RuntimeError('Train class coverage differs from the official split')
+    known_count = sum(label - 1 in args.train_classes for label in targets)
     if counts['labeled'] != int(known_count * 0.5):
         raise RuntimeError('Label fraction differs from baseline')
     from pathlib import Path
-    if not all(Path(p).is_file() for p in test.data):
+    test_paths, train_paths = image_paths(test, name), image_paths(whole, name)
+    if not all(Path(p).is_file() for p in test_paths):
         raise RuntimeError('Missing disjoint test images')
-    if set(map(str, whole.data)) & set(map(str, test.data)):
+    if set(train_paths) & set(test_paths):
         raise RuntimeError('Train/test path overlap')
     counts['disjoint_test'] = len(test)
+    counts['known_classes'] = len(args.train_classes)
+    counts['novel_classes'] = len(args.unlabeled_classes)
     return counts

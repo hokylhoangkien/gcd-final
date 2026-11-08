@@ -29,7 +29,7 @@ class RuntimeTests(unittest.TestCase):
                                ('training_diagnostics_every', -1), ('training_diagnostics_every', True),
                                ('test_every_epochs', -1), ('plain_train_eval_every', True),
                                ('evaluation_rng', 'bad'), ('final_ss_evaluation', 'yes'),
-                               ('test_every_epochs', 1), ('early_stopping', True)]:
+                               ('test_every_epochs', 0), ('early_stopping', True)]:
                 changed = dict(cfg, **{key: value})
                 path.write_text(json.dumps(changed))
                 with self.subTest(key=key), self.assertRaises(ValueError):
