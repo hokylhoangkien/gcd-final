@@ -157,14 +157,17 @@ def upgraded_fixture_config(method='crish'):
 
 class UpgradeIntegrationTests(unittest.TestCase):
     def test_actual_dino_head_preflight_exercises_all_three_upgrade_modes(self):
-        cfg = upgraded_fixture_config()
-        result = crish_method_probe(cfg, 'cpu', backbone_dim=8, hidden_dim=32)
-        self.assertGreater(result['scoring_attempts'], 0)
-        self.assertEqual(result['use_target_normalization'], 'row')
-        self.assertEqual(result['evidence_sampling'], 'global_neighbors')
-        self.assertEqual(result['probe_sampling'], 'class_balanced')
-        self.assertTrue(result['scaled_synthetic_probe'])
-        self.assertEqual(result['trained_epochs'], 0)
+        for normalization in ('legacy', 'row'):
+            with self.subTest(normalization=normalization):
+                cfg = upgraded_fixture_config()
+                cfg['use_target_normalization'] = normalization
+                result = crish_method_probe(cfg, 'cpu', backbone_dim=8, hidden_dim=32)
+                self.assertGreater(result['scoring_attempts'], 0)
+                self.assertEqual(result['use_target_normalization'], normalization)
+                self.assertEqual(result['evidence_sampling'], 'global_neighbors')
+                self.assertEqual(result['probe_sampling'], 'class_balanced')
+                self.assertTrue(result['scaled_synthetic_probe'])
+                self.assertEqual(result['trained_epochs'], 0)
 
     def test_upgraded_training_is_label_invariant_logs_context_and_changes_finite_weights(self):
         with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
@@ -220,6 +223,37 @@ class UpgradeIntegrationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('configs/cub_baseline_upgraded.json', result.stdout)
         self.assertIn('"selected_profile": "upgraded"', result.stdout)
+
+    def test_final_cli_and_prepared_pair_preserve_reference_loss_for_both_datasets(self):
+        from contextlib import redirect_stdout
+        import io
+        from scripts.prepare_retraining import prepare
+        for dataset, prefix in (('scars', ''), ('cub', 'cub_')):
+            with self.subTest(dataset=dataset), tempfile.TemporaryDirectory() as tmp:
+                with redirect_stdout(io.StringIO()):
+                    directory = prepare(dataset, 'final', [1], output=Path(tmp)/'plan')
+                pair = [load_config(directory/f'{method}-seed-1.json') for method in ('baseline', 'crish')]
+                self.assertEqual({k for k in pair[0] if pair[0][k] != pair[1][k]}, {'method'})
+                for cfg in pair:
+                    reference = load_config(ROOT/f'configs/{prefix}{cfg["method"]}.json')
+                    self.assertEqual({k for k in reference if reference[k] != cfg[k]}, {'crish'})
+                    self.assertEqual({k for k in reference['crish'] if reference['crish'][k] != cfg['crish'][k]},
+                                     {'evidence_sampling', 'probe_sampling', 'probe_known', 'probe_unlabeled'})
+                    self.assertEqual((cfg['crish']['probe_known'], cfg['crish']['probe_unlabeled']), (16, 32))
+                    report = compare_worker(cfg)
+                    self.assertTrue(report['cli_hyperparameters_match'])
+                    self.assertTrue(report['reference_use_arithmetic_preserved'])
+                for profile in ('final', 'reference'):
+                    result = subprocess.run([sys.executable, '-m', 'gcd_runtime.train_cli', 'check', '--dataset', dataset,
+                                             '--baseline', '--profile', profile, '--dry-run'],
+                                            cwd=ROOT, capture_output=True, text=True, timeout=10)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    entrypoint = json.JSONDecoder().raw_decode(result.stdout)[0]
+                    suffix = '_final' if profile == 'final' else ''
+                    self.assertEqual(entrypoint['stages'][0]['config'], f'configs/{prefix}baseline{suffix}.json')
+                manifest = json.loads((directory/'manifest.json').read_text())
+                self.assertEqual(manifest['status'], 'prepared_not_executed')
+                self.assertEqual(manifest['profile'], 'final')
 
     def test_invalid_modes_and_block_sizes_fail_before_training(self):
         for values in (dict(evidence_sampling='bad'), dict(probe_sampling='bad'),

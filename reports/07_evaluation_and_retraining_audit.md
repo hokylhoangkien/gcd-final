@@ -173,3 +173,18 @@ Không có xác nhận remote readiness hay training mới từ lần audit này
   một benchmark thất bại hay bằng chứng remote đã sẵn sàng.
 - Log audit/test/source snapshots: `logs/evaluation-audit-20261108T100159Z/`;
   biên nhận full smoke: `results/local_validation.json`.
+
+## 9. Bản chốt cấu hình sau audit
+
+Theo yêu cầu chốt source ngày 08/11/2026, entrypoint và script prepare mặc định
+chọn `--profile final`: USE legacy, evidence global frozen-feature shortlist,
+probe legal class-balanced 16 labeled / 32 unlabeled mỗi fold. Profile reference
+cũ và upgraded dùng row USE vẫn được giữ. Các quy tắc đánh giá/chọn checkpoint,
+thông số loss, điều kiện repair và giới hạn full run không đổi. Đây là quyết
+định cấu hình trước thực nghiệm, chưa có kết quả hiệu quả của final.
+
+Tạo lại plan trên checkout Linux khớp source:
+`.venv/bin/python scripts/prepare_retraining.py --profile final --seeds 1`.
+Chỉ xem plan rồi chạy từng stage sau khi kiểm tra tài nguyên; không tự động
+chạy sweep. Các kết quả 126-test phía trên thuộc lần audit trước; biên nhận
+`results/local_validation.json` của bản đóng gói ghi lần kiểm tra hiện hành.

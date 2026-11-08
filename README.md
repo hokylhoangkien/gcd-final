@@ -2,6 +2,8 @@
 
 Source nghiên cứu GCD với **một pipeline huấn luyện**: CRiSH mặc định, B0 dùng cùng pipeline và tắt sửa phân hoạch để đối chứng. Backbone mặc định: DINOv2 ViT-B/14 reg4. Hỗ trợ Stanford Cars SSB (mặc định) và CUB SSB (`--dataset cub`); Cars vẫn là benchmark chính.
 
+**Bản chốt cấu hình ngày 08/11/2026:** entrypoint mặc định dùng `--profile final`: USE `legacy`, evidence shortlist bằng hàng xóm trên toàn bộ frozen features, probe mỗi fold 16 labeled / 32 unlabeled và lấy labeled cân bằng theo lớp. Loss, lịch train và điều kiện chấp nhận repair giữ nguyên. `final` là tên bản cấu hình đã chốt để thử nghiệm; chưa có bằng chứng tăng accuracy. Profile `reference` và `upgraded` vẫn giữ để đối chứng.
+
 Code đã có kiểm thử CPU tổng hợp. Log GPU được cung cấp ngày 05/11/2026 cho thấy bản trước chạy hết epoch 0–2 trên A40 rồi lỗi prototype khi dựng hierarchy. Runtime hiện có xử lý cụm rỗng dùng chung cho CRiSH/B0 và thêm kiểm tra HSSK vào preflight. **Bản sửa chưa được xác nhận lại trên CUDA/dữ liệu thật; chưa có kết quả benchmark CRiSH hoàn chỉnh.** Hiệu quả và tính mới của phương pháp vẫn cần thực nghiệm.
 
 ## 1. Cài trên máy train
@@ -150,7 +152,7 @@ Sau khi cập nhật bản sửa lỗi prototype ngày 05/11/2026, giữ nguyên
 
 ## 4. Cấu hình và kết quả
 
-`configs/crish.json` là cấu hình mặc định; `configs/baseline.json` chỉ khác trường `method`. Hai file `_smoke.json` dùng riêng cho kiểm tra ngắn. Các siêu tham số CRiSH hiện là lựa chọn kỹ thuật chưa được xác nhận bằng benchmark. M2 stability mặc định tắt; lookahead chỉ cập nhật bản sao projector trong một bước SGD.
+`configs/crish_final.json` là cấu hình mặc định; `configs/baseline_final.json` chỉ khác trường `method`. Hai file `_final_smoke.json` dùng riêng cho kiểm tra ngắn. `configs/crish.json` / `baseline.json` giữ cấu hình reference cũ, chọn bằng `--profile reference`; `_upgraded.json` là ablation đổi USE sang `row`. CUB có các file tương ứng với tiền tố `cub_`. Các siêu tham số CRiSH hiện là lựa chọn kỹ thuật chưa được xác nhận bằng benchmark. M2 stability mặc định tắt; lookahead chỉ cập nhật bản sao projector trong một bước SGD.
 
 **Cấu hình Cars/DINOv2 đã chốt theo script upstream:** `unsupervised_smoothing=0.5`, **`hyper_max_weight=0.5`**, `c=0.1`, `cr=2.0`, `grad_from_block=10`, batch 128, 200 epoch, SGD lr 0.1, weight decay 5e-5, supervised weight 0.35, projector 8192, seed 1, official SSB split/labeled fraction 0.5. B0 và CRiSH dùng cùng các giá trị này; smoke chỉ rút epoch/step. Mốc đối chiếu là lệnh `scars v2 0.5 0.5 0.1 2.0` trong [script Hyp-SelEx được ghim](upstream/HypCD/scripts/train_HypSelEx.cmd), không lấy default 1.0 của parser thay cho lệnh Cars-v2.
 
@@ -244,7 +246,7 @@ khác nhau, và không dùng plain-test score thay final SS train-unlabeled.
 Chuẩn bị snapshot ghép cặp cho nhiều seed, **chỉ sinh plan, không chạy GPU**:
 
 ```bash
-.venv/bin/python scripts/prepare_retraining.py --dataset scars --profile reference --seeds 1 2 3
+.venv/bin/python scripts/prepare_retraining.py --dataset scars --profile final --seeds 1 2 3
 ```
 
 Plan nằm ở `runs/plans/`, có `manifest.json` và `commands.txt`; trên máy Linux
@@ -287,22 +289,31 @@ bash scripts/train_crish.sh --dataset cub
 bash scripts/train_crish.sh --dataset cub --baseline
 ```
 
-CUB dùng official SSB 100 known/100 novel, labeled fraction 0.5; không chia lại lớp theo ID liên tiếp. Theo lệnh `cub v2 1.0 1.0 0.1 1.5` trong script upstream, CUB dùng smoothing 1.0, hyper weight 1.0, `c=0.1`, `cr=1.5`. Cars giữ smoothing/hyper weight 0.5 và `cr=2.0`. Các giá trị này nằm trong `configs/cub_*.json` và `configs/*.json`; `scripts/check_protocol.py` đối chiếu cả tám profile với source được ghim. Chưa tuning CRiSH riêng cho CUB.
+CUB dùng official SSB 100 known/100 novel, labeled fraction 0.5; không chia lại lớp theo ID liên tiếp. Theo lệnh `cub v2 1.0 1.0 0.1 1.5` trong script upstream, CUB dùng smoothing 1.0, hyper weight 1.0, `c=0.1`, `cr=1.5`. Cars giữ smoothing/hyper weight 0.5 và `cr=2.0`. Các giá trị này nằm trong `configs/cub_*.json` và `configs/*.json`; `scripts/check_protocol.py` đối chiếu mọi profile full/smoke với source được ghim. Chưa tuning CRiSH riêng cho CUB.
 
 Không chuyển checkpoint Cars sang CUB bằng `--resume`; resume phải giữ nguyên dataset, source và config của run. Cơ chế lưu lịch sử từng epoch, chọn best theo Old-test-v2 và báo SS-kmeans best/last giữ nguyên giữa hai dataset. CPU tests với ảnh giả lập xác nhận wiring/split và cách ly nhãn; chưa có kết quả benchmark CUB thật hoặc xác nhận khớp bảng paper.
 
-## Profile nâng cấp thử nghiệm (06/11/2026)
+## Các profile và bản chốt để train (08/11/2026)
 
-`--profile upgraded` chọn cấu hình mới cho cả Cars/CUB và CRiSH/B0. Mặc định
-`--profile reference` vẫn dùng các cấu hình hiện tại. Đây là các thay đổi có thể
-đối chứng, chưa có bằng chứng tăng accuracy hoặc đạt novelty gate.
+`--profile final` là mặc định cho cả Cars/CUB và CRiSH/B0, chốt riêng thay đổi
+evidence/probe và giữ loss reference. `--profile reference` chọn cấu hình cũ;
+`--profile upgraded` thêm thay đổi USE normalization. Đây là các lựa chọn có thể
+đối chứng, chưa có bằng chứng tăng accuracy hoặc đạt novelty gate. CUB dùng
+cùng lựa chọn CRiSH để kiểm tra khả năng tổng quát khi có compute.
 
-| Thành phần | Reference | Upgraded |
-|---|---|---|
-| `use_target_normalization` | `legacy`: giữ broadcast của source | `row`: bỏ self rồi chuẩn hóa mỗi hàng |
-| `crish.evidence_sampling` | `random`: kNN trong pool ngẫu nhiên | `global_neighbors`: shortlist từ toàn bộ feature hợp lệ, kiểm tra hai view trong cache |
-| `crish.probe_sampling` | `random` | `class_balanced` trên labeled hợp lệ |
-| Probe mỗi fold | 4 labeled / 8 unlabeled | 16 labeled / 32 unlabeled |
+| Thành phần | Reference | Final (mặc định) | Upgraded (ablation) |
+|---|---|---|---|
+| `use_target_normalization` | `legacy` | `legacy` | `row` |
+| `crish.evidence_sampling` | `random` | `global_neighbors` | `global_neighbors` |
+| `crish.probe_sampling` | `random` | `class_balanced` | `class_balanced` |
+| Probe mỗi fold | 4 labeled / 8 unlabeled | 16 labeled / 32 unlabeled | 16 labeled / 32 unlabeled |
+
+`global_neighbors` chỉ shortlist từ frozen features hợp lệ; kiểm tra hai view
+vẫn diễn ra trong cache 128 mẫu. Nó không dùng hidden labels hay global
+augmented-view kNN. Probe lớn hơn và tìm hàng xóm có thể tốn thời gian hơn;
+giữ ngân sách refresh 120 giây và đo fallback/acceptance trong smoke thật.
+Đối chứng reference/final giúp tách thay đổi evidence/probe khỏi objective;
+để gán tác dụng cho từng thành phần vẫn cần ablation riêng.
 
 USE ở chế độ `row` có fallback về view còn lại của cùng ảnh khi không có
 smoothing support; không cần nhãn ẩn. Các loss class upstream và true-label

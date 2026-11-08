@@ -13,8 +13,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('mode', nargs='?', default='train', choices=['train', 'smoke', 'check', 'evaluate'])
     parser.add_argument('--baseline', action='store_true', help='Matched B0, with CRiSH repairs disabled')
-    parser.add_argument('--profile', default='reference', choices=['reference', 'upgraded'],
-                        help='reference preserves existing behavior; upgraded enables the three experimental changes')
+    parser.add_argument('--profile', default='final', choices=['final', 'reference', 'upgraded'],
+                        help='final: legacy USE with neighbor evidence and larger probes; reference: earlier settings; upgraded: row USE ablation')
     parser.add_argument('--dataset', default='scars', choices=['scars', 'cub'], help='scars=Stanford Cars (default), cub=CUB-200-2011')
     parser.add_argument('--resume', type=Path, help='Trusted resume.pt from the same source/config')
     parser.add_argument('--checkpoint', type=Path, help='Locked backbone checkpoint for evaluate')
@@ -29,7 +29,7 @@ def main():
         parser.error('evaluate requires --checkpoint')
     name = 'baseline' if args.baseline else 'crish'
     prefix = '' if args.dataset == 'scars' else args.dataset+'_'
-    suffix = '_upgraded' if args.profile == 'upgraded' else ''
+    suffix = '' if args.profile == 'reference' else '_'+args.profile
     full, trial = (ROOT/'configs'/f'{prefix}{name}{suffix}.json', ROOT/'configs'/f'{prefix}{name}{suffix}_smoke.json')
     stages = []
     if args.mode == 'train':

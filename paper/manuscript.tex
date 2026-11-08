@@ -53,7 +53,7 @@ The research questions are whether pair evidence identifies unreliable relations
 Let $\Dl=\{(x_i,y_i)\}$ contain legally labeled known examples and let $\Du=\{x_j\}$ contain unlabeled known and novel examples. Labeled membership is distinct from old/novel identity. The runtime assumes the total category count $K$ is known, matching the chosen baseline; estimated-$K$ evaluation is not implemented here. Training adapters retain image paths, stable IDs, labeled membership and legal targets, replacing every unlabeled target by $-1$. Hidden annotations are unavailable to the training loss and repair probe. Separate evaluators access ground truth for Hungarian matching and, in the default profile, checkpoint selection.
 
 \subsection{Pinned Baseline and Shared Runtime}
-The upstream HypCD checkout is pinned to commit \code{ffc895b7ff38be8502bb7e3bd851f1d2a55dff73}. Its training-source SHA256 is checked by the runtime. The local B0 control and CRiSH share a trainer, source-derived losses, split handling, ID/cluster-order correction, finite-input checks and empty-cluster handling. Upstream itself remains unchanged. Thus B0 is a \emph{matched runtime control}; this is not evidence of exact reproduction of every published result. The reference CLI settings are checked against the pinned upstream commands. The experimental upgraded profile changes USE normalization for both B0 and CRiSH.
+The upstream HypCD checkout is pinned to commit \code{ffc895b7ff38be8502bb7e3bd851f1d2a55dff73}. Its training-source SHA256 is checked by the runtime. The local B0 control and CRiSH share a trainer, source-derived losses, split handling, ID/cluster-order correction, finite-input checks and empty-cluster handling. Upstream itself remains unchanged. Thus B0 is a \emph{matched runtime control}; this is not evidence of exact reproduction of every published result. The reference CLI settings are checked against the pinned upstream commands. The default \code{final} profile retains legacy USE and changes evidence/probe sampling and probe sizes; the optional \code{upgraded} ablation additionally changes USE normalization for both B0 and CRiSH. The name \code{final} identifies a frozen training configuration, not validated effectiveness.
 
 The SelEx authors have acknowledged an ordering bug in coarse pseudo-label assignment and warned that affected results require revision.\footnote{\url{https://github.com/SarahRastegar/SelEx/issues/11}} The pinned HypCD hierarchy code contains the same grouped-output consumption pattern. Our adapter restores each level to sample order, with an interleaved predicted-membership regression. This checks ID alignment, not full permutation invariance of stochastic clustering. Comparisons must use the same correction in B0 and CRiSH; published scores and corrected-runtime scores cannot be treated as interchangeable controls.
 
@@ -76,11 +76,11 @@ F_{ab}&=\sum_{\ell=0}^{L-1}2^{-\ell}
 \ind[\|v_a-v_b\|_2>2R_{c_b^{(\ell)}}^{(\ell)}],\\
 \widehat F&=(F-\min F)/(\max F-\min F+10^{-7}).
 \end{align}
-The reference profile preserves the released one-dimensional PyTorch broadcast:
+The reference and final profiles preserve the released one-dimensional PyTorch broadcast:
 \begin{equation}\label{eq:legacy}
 S^{\mathrm{legacy}}_{ab}=\widehat F_{ab}\big/\sum_j\widehat F_{bj}.
 \end{equation}
-The denominator is the row sum indexed by \emph{column} $b$; this is not row normalization. A zero/nonfinite row sum triggers an error in the reference path. The diagonal is discarded before contrastive logits and smoothing coefficients are consumed, without further normalization.
+The denominator is the row sum indexed by \emph{column} $b$; this is not row normalization. A zero/nonfinite row sum triggers an error in the legacy path. The diagonal is discarded before contrastive logits and smoothing coefficients are consumed, without further normalization.
 
 The upgraded profile zeros the diagonal first and uses
 \begin{equation}\label{eq:row}
@@ -130,7 +130,7 @@ r_{ij}&=\frac1T\sum_tR_{ij}^{(t,1)}R_{ij}^{(t,2)}.
 \end{align}
 Only the union of measured kNN edges is stored. Unmeasured pairs are unknown; measured zero scores are not treated as supervised negative labels. Reliability is detached, symmetric, bounded in $[0,1]$ and not calibrated class confidence. RN-only and cross-view-only summaries are computed by the evidence module, but the integrated action policy uses their joint score above; its refresh log does not export separate RN/CVS distributions.
 
-The reference cache is a uniform sample of non-probe training rows. The upgraded cache first samples unlabeled anchors and searches their frozen normalized backbone neighbors across all eligible reference rows, in streamed blocks. It reserves the anchors, adds neighbors within the cache budget, then random-fills remaining slots. The maximum number of query anchors is $\max(1,\lfloor |\mathcal I_E|/(k+1)\rfloor)$, also capped by available unlabeled rows. Augmented-view verification still occurs \emph{within the cache}; this is neither global cross-view kNN nor hyperbolic kNN.
+The reference cache is a uniform sample of non-probe training rows. The final and upgraded caches first sample unlabeled anchors and search their frozen normalized backbone neighbors across all eligible reference rows, in streamed blocks. They reserve the anchors, add neighbors within the cache budget, then random-fill remaining slots. The maximum number of query anchors is $\max(1,\lfloor |\mathcal I_E|/(k+1)\rfloor)$, also capped by available unlabeled rows. Augmented-view verification still occurs \emph{within the cache}; this is neither global cross-view kNN nor hyperbolic kNN.
 
 For positive measured joint-score neighbors $\mathcal N_i^+$, boundary priority is
 \begin{equation}
@@ -155,7 +155,7 @@ For normalized known head outputs $z_a$, define $\ell_a^K$ as the mean negative 
 \Jcal_K=\frac1{|\mathcal Y_Q|}\sum_{y\in\mathcal Y_Q}
 \frac1{|I_y|}\sum_{a\in I_y}\ell_a^K.
 \end{equation}
-The reference samples known rows uniformly; upgraded sampling cycles through randomized legal classes without replacement. Class-balanced reduction does not imply full class coverage in a small fold.
+The reference samples known rows uniformly; final and upgraded sampling cycle through randomized legal classes without replacement. Their folds contain 16 legally labeled and 32 unlabeled rows, versus 4 and 8 in reference. Class-balanced reduction does not imply full class coverage in a small fold. Unlabeled sampling does not use known/novel identity.
 
 For student head outputs $s_{iv}$ and detached teacher outputs $t_{iv}$, write $n(\cdot)$ for vector normalization. The other components are
 \begin{align}
@@ -229,19 +229,19 @@ The runtime supports Stanford Cars and CUB-200-2011 through official SSB split f
 Cars is the project's primary exploratory comparison benchmark. Previous logs and old/novel curves from a retired method have already been examined, so Cars must not be described as pristine held-out evidence. CUB is an additional implemented dataset, with no completed CRiSH benchmark recorded. CIFAR-100, Aircraft, Herbarium19 and ImageNet-100 are future extensions requiring dataset adapters, validated protocols and an exposure audit. They are not current runtime capabilities or completed generalization experiments.
 
 \subsection{Source-Derived Settings}
-Table~\ref{tab:settings} is generated from the loaded full configurations, including dataclass defaults. Smoke configurations use one epoch and at most two SGD steps with repair warmup zero; they are separate from benchmark runs. B0 and CRiSH settings match within each dataset/profile except for the method toggle. SGD uses cosine decay with minimum learning rate $10^{-3}$ times its initial value. Dataset-specific hyperbolic/smoothing settings follow the pinned command examples and are checked locally.
+Table~\ref{tab:settings} is generated from the loaded reference and final full configurations, including dataclass defaults. The default entrypoint selects final for both datasets; upgraded remains an optional row-normalized objective ablation with the same evidence/probe settings as final. Smoke configurations use one epoch and at most two SGD steps with repair warmup zero; they are separate from benchmark runs. B0 and CRiSH settings match within each dataset/profile except for the method toggle. SGD uses cosine decay with minimum learning rate $10^{-3}$ times its initial value. Dataset-specific hyperbolic/smoothing settings follow the pinned command examples and are checked locally. Larger probes and global shortlisting are unvalidated design choices; their cost and failure behavior require real-data measurement within the unchanged refresh budget.
 % BEGIN IMPLEMENTATION_SETTINGS
 % Generated by scripts/check_manuscript.py --write.
-% implementation-sha256: ad2631256fb7543f7db56ad140c4725f6b000d41c910bbf807c4d4cc02107315
+% implementation-sha256: 8cec7c9c752c495eca7221fbf98a8eacf2af9c0d8a9a9bccf1f9ba69679d3afd
 \begin{table*}[!t]\footnotesize\centering
-\caption{Actual full-profile settings, generated from source configs. All four profiles use projector-only lookahead and normalized-backbone Euclidean evidence.}
+\caption{Reference and final full-profile settings, generated from source configs. Final is the default training profile, not an empirical performance claim. All four use projector-only lookahead and normalized-backbone Euclidean evidence.}
 \begin{tabularx}{\textwidth}{@{}Xcccc@{}}\toprule
-Setting & Cars ref. & Cars upgraded & CUB ref. & CUB upgraded\\\midrule
+Setting & Cars ref. & Cars final & CUB ref. & CUB final\\\midrule
 Epochs / batch & 200 / 128 & 200 / 128 & 200 / 128 & 200 / 128\\
 SGD learning rate / momentum & 0.1 / 0.9 & 0.1 / 0.9 & 0.1 / 0.9 & 0.1 / 0.9\\
 Weight decay & 5e-05 & 5e-05 & 5e-05 & 5e-05\\
 Trainable blocks start at & 10 & 10 & 10 & 10\\
-USE normalization & legacy & row & legacy & row\\
+USE normalization & legacy & legacy & legacy & legacy\\
 USE smoothing $\alpha$ & 0.5 & 0.5 & 1 & 1\\
 Hyperbolic maximum weight & 0.5 & 0.5 & 1 & 1\\
 Curvature / clipping radius & 0.1 / 2 & 0.1 / 2 & 0.1 / 1.5 & 0.1 / 1.5\\

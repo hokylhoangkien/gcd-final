@@ -1,11 +1,13 @@
 # Code–paper alignment — 2026-11-08
 
-The current `paper/manuscript.tex` describes the existing reference/upgraded
+The current `paper/manuscript.tex` describes the reference/final/upgraded
 runtime. It no longer presents the original blueprint as implemented behavior.
 The original manuscript and earlier comparison report are preserved under the
 session's `logs/paper-sync-20261108T093957Z/before/` for provenance.
-This revision changes documentation and verification tools, not the method,
-training settings, runtime source fingerprint or benchmark results.
+The initial alignment changed documentation and verification tools. The later
+final handoff promotes existing evidence/probe options into the default profile
+and changes the runtime source fingerprint through CLI wiring; it adds no
+benchmark results. Reference/upgraded configurations remain available.
 
 ## Reviewed implementation contract
 
@@ -13,12 +15,12 @@ training settings, runtime source fingerprint or benchmark results.
 |---|---|---|
 | Representation and partitions | `gcd_runtime/trainer.py`, `crish/partition_audit.py` | Frozen normalized backbone HSSK; raw backbone inputs for training head; level-wise partitions, not a guaranteed tree |
 | Objective and level indexing | `crish/loss.py`, `gcd_runtime/trainer.py` | USE/SSE branch weights, prefix widths and pseudo weights `2^(-(ell+1))`; actual zero-based hyperbolic ramp |
-| USE targets | `crish/rebuild.py:confusion_factor` | Legacy column-broadcast denominator retained in reference; non-self row normalization and positive-view fallback only in upgraded |
-| M1 | `crish/reliability.py`, `crish/sampling.py`, `crish/engine.py` | Joint reciprocal cross-view score; Euclidean backbone evidence in a bounded cache; global frozen-feature shortlist is an upgraded option, not global augmented-view kNN |
+| USE targets | `crish/rebuild.py:confusion_factor` | Legacy column-broadcast denominator retained in reference/final; non-self row normalization and positive-view fallback only in upgraded |
+| M1 | `crish/reliability.py`, `crish/sampling.py`, `crish/engine.py` | Joint reciprocal cross-view score; Euclidean backbone evidence in a bounded cache; final/upgraded use a global frozen-feature shortlist, not global augmented-view kNN |
 | M2 | `crish/stability.py`, `crish/engine.py:_optional_stability` | Optional noisy subset KMeans/IoU/coverage; all shipped profiles set zero trials; ARI/NMI not claimed |
 | Actions and rebuild | `crish/candidates.py`, `crish/rebuild.py` | Legal unlabeled Keep/Abstain/Move, minimum support, coherent centers/radii/masks; unchanged other levels |
 | Abstain | `crish/rebuild.py:pseudo_sse_loss` | Remove only eligible pseudo-positive numerators; preserve original positive denominator, same-image/genuine supervised positives and USE |
-| Probe | `crish/probe.py`, `crish/engine.py` | Two reserved ID-disjoint folds; class-averaged known loss, frozen teacher cross-view embedding MSE and population-variance floor; no EMA/classifier confidence |
+| Probe | `crish/probe.py`, `crish/engine.py` | Two reserved ID-disjoint folds; final/upgraded use 16 legal labeled / 32 unlabeled rows per fold and balanced labeled sampling; class-averaged known loss, frozen teacher cross-view embedding MSE and population-variance floor; no EMA/classifier confidence |
 | Lookahead | `crish/lookahead.py`, `crish/engine.py` | One cloned projector SGD step with actual momentum/weight decay; first-order alignment is diagnostic only |
 | Acceptance | `crish/policy.py`, `crish/engine.py` | Rank exact discovery gain, confirm only its winner; failed confirmation stops the refresh without searching runners-up; no averaged multi-fold vote |
 | Integration | `crish/training.py`, `crish/config.py` | Fresh HSSK each epoch; repair after warmup on its interval; accepted edits expire at the next epoch's extraction |

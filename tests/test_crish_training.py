@@ -129,8 +129,9 @@ class CrishTrainConfigTests(unittest.TestCase):
                                 capture_output=True, text=True, timeout=10)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('"selected_method": "crish"', result.stdout)
-        self.assertIn('configs/crish_smoke.json', result.stdout)
-        self.assertIn('configs/crish.json', result.stdout)
+        self.assertIn('"selected_profile": "final"', result.stdout)
+        self.assertIn('configs/crish_final_smoke.json', result.stdout)
+        self.assertIn('configs/crish_final.json', result.stdout)
         self.assertNotIn('"method": "proposed"', result.stdout)
 
 

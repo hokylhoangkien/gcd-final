@@ -109,3 +109,57 @@ term preservation, exact nearest-neighbor support, disjoint legal probes,
 hidden-label invariance, disabled-repair parity and resume. Test receipts/logs
 identify actual runs. CUDA, full-data accuracy, multi-seed gains and CUB
 generalization for the upgraded profiles are **not yet run**.
+
+## Evidence/probe-only trial decision — 2026-11-08
+
+Prioritize an isolated trial of the existing evidence/probe options before
+changing the objective or loosening acceptance guards. A random 128-row cache
+may miss relevant neighbors; the small reference probes (4 legally labeled /
+8 unlabeled rows per fold) may yield noisy repair decisions. Neither limitation
+has yet been established as the dominant cause of benchmark error. Global
+frozen-feature shortlisting and larger probes are plausible interventions,
+not an empirical ranking of the changes most likely to improve accuracy.
+
+Prepared local plan:
+`runs/plans/evidence-probe-only-20261108T110242Z-fe28609c/`.
+It compares seed-1 reference CRiSH against CRiSH with
+`evidence_sampling=global_neighbors`, `probe_sampling=class_balanced`,
+`probe_known=16`, `probe_unlabeled=32`. Both retain legacy USE normalization,
+the same loss, repair limits and checkpoint protocol. All other loaded config
+fields match. Separate smoke and full configs, config hashes, source/split
+provenance and sequential reviewable commands are saved there. This is a
+joint evidence/probe trial; a positive result would still need separate
+ablations to attribute any improvement. It does not replace the matched B0
+comparison or establish a novel contribution.
+
+Four launcher dry runs passed. A 60-second-bounded CPU synthetic DINOHead
+forward/backward and repair-scoring check passed for the combined options
+with legacy USE (one scored proposal, zero accepted). This fixture scales
+dimensions, sample counts and some guards; it verifies execution and finite
+gradients, not the 16/32 real-data budgets or repair quality. No training epochs
+or accuracy measurements were produced. Larger probes and full-pool neighbor
+search may cost more and can still reinforce wrong neighborhoods or favor
+known classes. Inspect acceptance/fallback reasons and runtime in real-data
+bounded smoke before spending on a full run; the 120-second refresh budget
+remains unchanged. CPU tests do not establish GPU readiness.
+
+First remote stage, after transferring/recreating the ignored plan on the
+matching Linux checkout and checking GPU/data/weights:
+`.venv/bin/python -m gcd_runtime.launch preflight --config runs/plans/evidence-probe-only-20261108T110242Z-fe28609c/reference.json`.
+The prepared `commands.txt` is not an automatic sweep; no command was executed
+on a remote GPU during this decision.
+
+## Final profile handoff — 2026-11-08
+
+At the owner's subsequent request to finalize the source, this same
+evidence/probe combination is promoted to portable `*_final*.json` profiles
+for Cars/CUB, B0/CRiSH and full/smoke. The default user entrypoint and matched
+plan preparer select `final`. Reference and upgraded settings are preserved.
+Final uses legacy USE, global frozen-feature shortlisting and legal
+class-balanced 16/32 probes. It changes no objective coefficients, repair
+acceptance guard, warmup or full-run budget. CUB receives the same method
+choices, not dataset-specific tuning. The manuscript's generated table now
+compares reference/final; upgraded remains an explicitly separate row-USE
+ablation. No new algorithm, empirical benefit or novelty claim is implied by
+the profile name. Fresh runs are required after the CLI source fingerprint
+change; historical checkpoints keep their original source/config.

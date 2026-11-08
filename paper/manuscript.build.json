@@ -1,7 +1,7 @@
 {
-  "tex_sha256": "3cfffdfc8ac9f13b37d136df94148e398c2b76e69872ebb529b70a75dfb0eb47",
-  "pdf_sha256": "4d570b55f0c646baa2f1f7ef13d5df0808c60ae80f7a5a1e0e7efadb36b16c2a",
-  "implementation_sha256": "ad2631256fb7543f7db56ad140c4725f6b000d41c910bbf807c4d4cc02107315",
+  "tex_sha256": "5683f4cdec9099576ce5e856563f6e741b0c916c7de441b9085e37de02e749fe",
+  "pdf_sha256": "697a85588b099685c10e8bf7d0fe74b26e9a5515c110632fcd802e0656fb4161",
+  "implementation_sha256": "8cec7c9c752c495eca7221fbf98a8eacf2af9c0d8a9a9bccf1f9ba69679d3afd",
   "compiler": "tectonic 0.15.0Tectonic 0.15.0",
-  "built_utc": "2026-11-08T10:09:37.486758+00:00"
+  "built_utc": "2026-11-08T11:08:41.064466+00:00"
 }

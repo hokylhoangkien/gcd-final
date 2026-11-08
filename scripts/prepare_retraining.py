@@ -23,7 +23,9 @@ def prepare(dataset, profile, seeds, selection=None, output=None):
     if not seeds or any(seed < 0 for seed in seeds) or len(set(seeds)) != len(seeds):
         raise ValueError('Seeds must be unique nonnegative integers')
     prefix = '' if dataset == 'scars' else dataset+'_'
-    suffix = '' if profile == 'reference' else '_upgraded'
+    if profile not in ('final', 'reference', 'upgraded'):
+        raise ValueError('Unknown training profile')
+    suffix = '' if profile == 'reference' else '_'+profile
     templates = {(method, smoke): load_config(ROOT/'configs'/
                  f'{prefix}{method}{suffix}{"_smoke" if smoke else ""}.json')
                  for method in ('baseline', 'crish') for smoke in (False, True)}
@@ -85,7 +87,7 @@ def prepare(dataset, profile, seeds, selection=None, output=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--dataset', choices=['scars', 'cub'], default='scars')
-    parser.add_argument('--profile', choices=['reference', 'upgraded'], default='reference')
+    parser.add_argument('--profile', choices=['final', 'reference', 'upgraded'], default='final')
     parser.add_argument('--seeds', nargs='+', type=int, default=[1, 2, 3])
     parser.add_argument('--selection', choices=['best_old_test_v2', 'final_epoch'],
                         help='Default inherits the shipped protocol; do not change after seeing scores')

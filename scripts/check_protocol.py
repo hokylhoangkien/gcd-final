@@ -14,7 +14,7 @@ if __name__ == '__main__':
     reports = {}
     for prefix in ('', 'cub_'):
         for method in ('baseline', 'crish'):
-            for upgrade in ('', '_upgraded'):
+            for upgrade in ('', '_final', '_upgraded'):
                 for smoke in ('', '_smoke'):
                     name = prefix+method+upgrade+smoke
                     report = compare_worker(load_config(ROOT/f'configs/{name}.json'), smoke=bool(smoke))

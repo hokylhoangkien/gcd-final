@@ -826,3 +826,89 @@ connected API has read-only access to this repository; local Git credentials
 will be used for an ordinary push. Stage a bounded path list and inspect it
 before committing. Do not force-push, rewrite history, alter repository
 visibility, or modify any training process.
+
+## Evidence/probe experiment preparation — 2026-11-08
+
+The owner asks which change is worth testing before paying for another run.
+Initial working tree is clean at `1cfe181`. A fresh read-only process inspection
+shows IDE/Codex services and no Python training job. Local architecture is
+arm64; the previously audited Mac has no NVIDIA CUDA and benchmark inputs are
+still unverified locally. A restricted `sysctl hw.memsize` read was denied;
+the earlier hardware audit remains the source for the 16 GB memory inventory.
+
+The reference CRiSH profile samples a random 128-row evidence cache and uses
+4 labeled / 8 unlabeled probe rows per fold. Existing optional code supports
+global frozen-feature neighbor shortlisting and 16 / 32 probes with legal
+class-balanced labeled sampling. Prepare an isolated seed-1 comparison using
+these options while preserving legacy USE normalization, loss coefficients,
+checkpoint selection and repair limits. This tests evidence/probe changes
+separately from the upgraded profile's row normalization. It is a hypothesis,
+not an estimate of accuracy gain or a new contribution. Main configs, upstream,
+manuscript and historical artifacts remain unchanged. Only bounded synthetic
+CPU validation is authorized here; no GPU job or sweep is started.
+
+Prepared four ignored configs under
+`runs/plans/evidence-probe-only-20261108T110242Z-fe28609c/`, with checksummed
+manifest and reviewable sequential commands. Verified that only evidence
+sampling, labeled-probe sampling and the two probe sizes differ within each
+reference/candidate pair. Four launcher dry runs and the bounded scaled
+synthetic CPU forward/backward + repair scorer passed. The fixture scored one
+proposal and accepted zero; no benchmark gain is inferred. Recorded the
+decision and limits in `reports/02_novelty_and_method.md`. No source algorithm,
+shipped config, manuscript, checkpoint or environment was changed. Real-data
+smoke must still establish runtime/probe readiness before any full GPU run.
+
+## Final training handoff preparation — 2026-11-08
+
+The owner requests the final version after the evidence/probe decision. Initial
+changes are limited to the two preceding audit/method reports; HEAD remains
+`1cfe181`. Fresh process inspection again shows no local training process.
+The baseline source and prior CPU validation are available, but real-data
+CUDA readiness and benchmark gains remain unverified on this Mac.
+
+Promote the tested combination into explicit portable `final` profiles for
+Cars/CUB and both methods; preserve reference and row-normalized upgraded
+profiles. The default user entrypoint will select final, with an explicit
+reference option for the earlier settings. Final preserves legacy USE, the
+official dataset loss/optimizer parameters, acceptance guards and budgets;
+it enables global frozen-feature shortlisting and larger legal probes.
+Update the manuscript/config table, commands and release provenance together.
+Run bounded CPU checks, rebuild the PDF with the existing temporary compiler,
+then package and verify a fresh source archive. No full training, downloads of
+large inputs, checkpoint mutation or remote publication is part of this step.
+
+Final handoff checks passed in CPU run
+`crish-v21-20261108T110851Z-869972ef`: 127 tests, zero failures/errors/skips;
+Cars/CUB source and split checks; all 24 full/smoke config CLI comparisons;
+static syntax; archive extraction/execution without Git; manuscript/PDF hashes.
+The existing temporary Tectonic compiler rebuilt the PDF (7 pages, no overfull
+boxes or undefined references; compiler font/underfull warnings remain).
+Matched seed-1 plan `runs/plans/matched-scars-final-20261108T110832Z-9818ccfa/`
+has six successful launcher dry runs and remains `prepared_not_executed`.
+All 109 recorded executable/config/test/paper input hashes still match the
+validation receipt. Only these completion notes are added after the run.
+
+Shipped changes: eight final configs; default CLI and plan profile; protocol
+and source-archive metadata; matching README, manuscript/PDF and research
+notes; default-profile and final/legacy synthetic regressions. Reference and
+upgraded configs, upstream, environments, logs and historical weights remain
+preserved. CUDA, actual images/weights, full-size probe runtime and benchmark
+accuracy remain unverified here. Next remote command after extracting the
+handoff and preparing data/weights/environment:
+`bash scripts/train_crish.sh check`, followed by `bash scripts/train_crish.sh smoke`.
+Full training is finite but is not started by this handoff.
+
+## Final profile GitHub publication — 2026-11-08
+
+The owner explicitly requests pushing the final source. Current branch is
+`main`, remote `hokylhoangkien/gcd-final` is public, and a fresh remote read
+matches local parent `1cfe18133dadbc08dee36c5a9b5bd7ac729b9ff0`. No training
+process is visible locally. The 25 reviewed candidate paths contain source,
+eight final configs, tests, research notes, manuscript/PDF and the CPU receipt;
+all 109 recorded executable/config/test/paper input hashes still match the
+127-test passing receipt. Manuscript/PDF consistency and diff whitespace checks
+pass; candidate text contains no detected credential/private-key patterns.
+No data, weights, checkpoints, environments, raw logs, generated plans or
+release archives are included. The GitHub connector has read permission only;
+use configured local Git credentials for a normal commit/push to `main`.
+Do not force-push or alter history, visibility, upstream, or running processes.

@@ -51,7 +51,8 @@ def build(output):
     snapshot = dict(commit=UPSTREAM_SHA, files={str(p.relative_to(upstream)): sha256(p) for p in upstream_files})
     manifest = dict(release_id=release_id, upstream_sha=UPSTREAM_SHA,
                     methods=['crish', 'baseline'], cuda_verified=False, benchmark_status='not_run',
-                    entrypoint='bash scripts/train_crish.sh',
+                    entrypoint='bash scripts/train_crish.sh', default_profile='final',
+                    default_config='configs/crish_final.json',
                     files={str(p.relative_to(ROOT)): sha256(p) for p in files})
     with tarfile.open(destination, 'x:gz') as archive:
         for path in files:
