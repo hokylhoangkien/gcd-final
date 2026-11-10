@@ -226,6 +226,47 @@ print('source SelEx head backward; no hyperbolic import')
         self.assertIn('"baseline_family": "selex"',result.stdout)
         self.assertNotIn('hyper_max_weight',result.stdout)
 
+    def test_upstream_monitor_failure_resume_matches_uninterrupted_sgd(self):
+        from unittest.mock import patch
+        from selex_runtime.trainer import SelExRuntime
+        from selex_runtime.rng import rng_digest
+        def monitor(runtime, epoch, model):
+            runtime.plain_rng_pending = True
+            if getattr(runtime, 'fail', False):
+                raise TimeoutError('bounded evaluator fixture timeout')
+            # Simulate native evaluation's global random draws.
+            np.random.choice(40, 4, replace=False)
+            torch.randint(40, (1,))
+            runtime.plain_rng_pending = False
+        def execute(tmp, *, resume=None, fail=False):
+            np.random.seed(77)
+            dataset,state,args,head=fixture()
+            args.epochs=2
+            cfg=load_config(ROOT/'configs/selex_baseline_smoke.json')
+            cfg.update(device='cpu',epochs=2,mlp_out_dim=16,synthetic_fixture=True,
+                       max_steps_per_epoch=1,final_ss_evaluation=False)
+            class Synthetic(SelExRuntime):
+                monitor_epoch=monitor
+            runtime=Synthetic(tmp,cfg,resume)
+            runtime.fail=fail
+            model=torch.nn.Linear(4,4)
+            loader=DataLoader(dataset,batch_size=16,shuffle=False)
+            def extract(model,loader,args): runtime.hierarchy_state=state
+            with patch('selex_runtime.monitoring.monitor_plain', side_effect=monitor):
+                train_strict(head,model,loader,loader,args,runtime,
+                             objective=selex_loss,extractor=extract)
+            return model.state_dict(),head.state_dict(),rng_digest()
+        with tempfile.TemporaryDirectory() as a,tempfile.TemporaryDirectory() as b,\
+             tempfile.TemporaryDirectory() as c:
+            expected=execute(a)
+            with self.assertRaises(TimeoutError): execute(b,fail=True)
+            pending=torch.load(Path(b)/'resume.pt',weights_only=False)
+            self.assertTrue(pending['plain_rng_pending'])
+            actual=execute(c,resume=str(Path(b)/'resume.pt'))
+            for x,y in zip(expected[:2],actual[:2]):
+                self.assertTrue(all(torch.equal(x[k],y[k]) for k in x))
+            self.assertEqual(expected[2],actual[2])
+
 
 if __name__=='__main__':
     unittest.main()

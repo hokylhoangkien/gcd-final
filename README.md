@@ -13,6 +13,8 @@ bash scripts/train_selex.sh
 
 Source SelEx ghim tại `d8107b5`; Cars/DINOv2 dùng 50 epoch, head 65536, các tầng loss vào dần mỗi 10 epoch. Hai arm chỉ khác `method`. Kết quả chính là **SS-v2 của final checkpoint**, theo cách báo last của README SelEx mới; plain-test mỗi epoch chỉ để theo dõi. Không dùng selector Best Old-v2 của nhánh cũ cho nhánh này. **Chưa xác minh CUDA/dữ liệu thật hoặc benchmark của đường SelEx mới.** Hướng dẫn môi trường riêng, resource limits và các khác biệt được ghi tại [SelEx + CRiSH](reports/08_selex_crish_migration.md).
 
+Các config SelEx hiện dùng `evaluation_rng=upstream`: seed train theo source, plain-test tiêu thụ RNG theo thứ tự upstream và SS đặt seed 0 trước khi tạo dataset. Đây là thay đổi cho **run mới**; checkpoint của bản trước cần source/config gốc để resume. Chi tiết và giới hạn kiểm chứng nằm trong báo cáo migration.
+
 **Các mục bên dưới mô tả nhánh Hyp-SelEx cũ**, dùng `scripts/train_crish.sh`, hỗ trợ Cars/CUB và có các profile `reference/final/upgraded`. Chúng không phải cấu hình SelEx mới.
 
 **Bản chốt cấu hình ngày 08/11/2026:** entrypoint mặc định dùng `--profile final`: USE `legacy`, evidence shortlist bằng hàng xóm trên toàn bộ frozen features, probe mỗi fold 16 labeled / 32 unlabeled và lấy labeled cân bằng theo lớp. Loss, lịch train và điều kiện chấp nhận repair giữ nguyên. `final` là tên bản cấu hình đã chốt để thử nghiệm; chưa có bằng chứng tăng accuracy. Profile `reference` và `upgraded` vẫn giữ để đối chứng.

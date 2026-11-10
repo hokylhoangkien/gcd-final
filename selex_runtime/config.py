@@ -41,7 +41,9 @@ def validate_config(cfg, *, eval_every_epochs=None):
     if (cfg['lr'] <= 0 or cfg['temperature'] <= 0 or cfg['momentum'] >= 1
             or cfg['sup_con_weight'] > 1 or cfg['unsupervised_smoothing'] > 1):
         raise ValueError('Invalid SelEx loss/optimizer settings')
-    if cfg.get('strategy') != 'zero_one' or cfg.get('evaluation_rng') != 'isolated':
-        raise ValueError('Only audited zero_one/isolated evaluation is supported')
+    if cfg.get('strategy') != 'zero_one' or cfg.get('evaluation_rng') not in ('isolated', 'upstream'):
+        raise ValueError('Expected zero_one and an explicit SelEx RNG policy')
+    if cfg['evaluation_rng'] == 'upstream' and (cfg['epochs'] >= 200 or cfg.get('train_report_interval', 200) != 200):
+        raise ValueError('Upstream RNG adapter supports the updated sub-200-epoch schedule; extra train-plain evaluation is unsupported')
     cfg['crish'] = asdict(CrishSettings(**cfg['crish']))
     return cfg

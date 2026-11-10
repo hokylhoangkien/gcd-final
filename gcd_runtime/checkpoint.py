@@ -54,6 +54,8 @@ class EpochRuntime:
         torch.set_rng_state(state['torch_rng'])
         if torch.cuda.is_available():
             torch.cuda.set_rng_state_all(state['cuda_rng'])
+        self.restored_epoch = state['epoch']
+        self.restored_plain_rng_pending = state.get('plain_rng_pending', False)
         if enabled(self.config):
             # A failure may have happened after saving SGD but before selecting
             # this epoch. Recover that evaluation before advancing any SGD.
@@ -74,6 +76,7 @@ class EpochRuntime:
             model=model.state_dict(), head=head.state_dict(), optimizer=optimizer.state_dict(),
             scheduler=scheduler.state_dict(), python_rng=random.getstate(), numpy_rng=np.random.get_state(),
             torch_rng=torch.get_rng_state(), cuda_rng=torch.cuda.get_rng_state_all() if torch.cuda.is_available() else [])
+        state.update(getattr(self, 'checkpoint_extra', {}))
         temporary = self.run_dir/'resume.tmp'
         torch.save(state, temporary)
         os.replace(temporary, self.run_dir/'resume.pt')

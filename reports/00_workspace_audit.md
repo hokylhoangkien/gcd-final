@@ -1066,3 +1066,40 @@ all staged SelEx files match the pinned snapshot hashes. The vendor snapshot
 retains upstream trailing whitespace; own-source diff checks pass with that
 unmodified third-party directory excluded. No credential-pattern matches,
 images, weights, checkpoint files, raw logs or release archives were staged.
+
+## Authorized SelEx RNG alignment — 2026-11-10
+
+Owner requests correcting the SelEx RNG differences identified in the review.
+Starting HEAD `38fa14b`; working tree is clean. Fresh read-only process listing
+shows IDE services and no local Python training job. Remote jobs are unknown
+and will not be changed. Local CUDA/data/weights remain absent; use bounded
+CPU fixtures only. Preserve the clean SelEx snapshot and historical HypCD path.
+
+Audit identifies three differences: training uses the stronger seed_torch
+helper instead of source main's NumPy/Torch calls; periodic plain evaluation
+does not consume the parent RNG stream; final SS resets immediately before
+fitting, whereas upstream seeds before rebuilding dataset membership. Fix
+these as a separately recorded RNG policy, including checkpoint/resume across
+an interrupted evaluator. Do not change losses, tune on test labels, kill jobs,
+or resume a previous source/config checkpoint through the new policy.
+
+### Completed RNG alignment verification
+
+- Both SelEx arms now use explicit upstream RNG policy; old Hyp-SelEx configs
+  and upstream snapshots are unchanged.
+- Fixed source training seeding, plain-test batch/iteration settings, bounded
+  metric-free evaluator RNG handoff, pending-evaluation resume, and standalone
+  SS seed placement before dataset setup. Optional SS remains independent.
+- Added source-evaluator RNG parity and target-value invariance fixtures, a
+  fresh-process handoff check, stale/extra-field rejection, and interrupted
+  SGD/resume parity including completed-checkpoint recovery.
+- Final bounded CPU validation: `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+  .venv/bin/python scripts/run_smoke.py` passed 143 tests, zero failures,
+  errors or skips; integrity, protocol, syntax, archive and manuscript checks
+  passed. Run ID: `crish-v21-20261110T083824Z-3c6382ea`.
+- Validation receipt: `results/local_validation.json`; log:
+  `logs/crish-v21-20261110T083824Z-3c6382ea/smoke.log`.
+- No CUDA/data/weights benchmark ran; no existing training was stopped or
+  restarted. Next remote command for a NEW baseline run, after updating source
+  and preparing data/environment: `bash scripts/train_selex.sh check --baseline`.
+  Keep old source/config for any existing checkpoint or active run.

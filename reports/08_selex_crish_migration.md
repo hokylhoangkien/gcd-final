@@ -56,7 +56,42 @@ Final SS fits normalized backbone features on the train pool with legal
 labeled anchors and scores only unlabeled rows. Source fitter: ten restarts,
 ten iterations per phase, clustering seed 0, balanced capacity. Global
 Hungarian-v2 precedes Old/New restriction. Grouped outputs are mapped back to
-sample order explicitly. Evaluation runs in isolated bounded workers.
+sample order explicitly. Evaluation runs in bounded workers, with the RNG
+protocol below. Physical process separation does not imply RNG isolation for
+the mandatory plain-test monitor.
+
+### RNG alignment correction (2026-11-10)
+
+Shipped SelEx configs now declare `evaluation_rng=upstream` for both arms.
+Training uses the source main's `np.random.seed(seed)` and
+`torch.manual_seed(seed)` calls, without adding Python/cudnn seeding. Each
+epoch's mandatory plain-test consumes the training RNG stream as upstream
+does: batch size 128, Git-pinned plain k-means, `iter_limit=1000`. A worker
+receives the training RNG state after SGD, discards setup-only random draws,
+and returns RNG state only. No labels, predictions or metric values are
+returned to training. Snapshot hash, config, epoch and a request nonce bind
+each exchange; stale results and extra fields are rejected. Metric reports
+remain separate and never select the fixed-final checkpoint.
+
+The resume checkpoint is saved after the RNG exchange. A bounded evaluator
+failure instead saves completed SGD with `plain_rng_pending=true`; resume
+replays only that evaluation before proceeding, including at the last epoch.
+Optional extra SS monitoring remains independent of the training RNG stream.
+
+Standalone SS executes the pinned source's `seed_torch(0)` **before dataset
+construction**, preserving the NumPy draws made by source subsampling and
+train/validation bookkeeping. It does not reset the stream immediately before
+fitting. Features are normalized as in source extraction and again as in the
+source feature-cache evaluator. Reports record the RNG policy, seed stage
+and state digest before fitting. The former `isolated` policy remains
+explicitly supported for old config inspection; changing source still
+invalidates old resume fingerprints. Use the original release for old runs.
+
+This adapter supports the updated sub-200-epoch schedule; it rejects schedules
+that would also trigger upstream's extra train-unlabeled plain evaluation at
+epoch 200. CPU fixtures verify source seeding, a fresh-process RNG exchange,
+next-step RNG parity and interrupted/resumed SGD parity. This is not a CUDA
+benchmark or proof of bitwise agreement across hardware/library versions.
 
 Outputs are under `GCD_RUNS_ROOT/RUN_ID` or project `runs/RUN_ID`. Primary
 files: `evaluation.json` and `evaluation_last.json`; plain history:

@@ -11,7 +11,7 @@ from torch.nn import functional as F
 from .config import PLAIN_KMEANS_SHA
 
 
-def plain_kmeans(features, clusters, device):
+def plain_kmeans(features, clusters, device, *, iteration_limit=None):
     from kmeans_pytorch import kmeans
     device = torch.device(device)
     package = distribution('kmeans-pytorch')
@@ -27,6 +27,10 @@ def plain_kmeans(features, clusters, device):
     # a nonexistent option or silently substitute sklearn/SS-k-means.
     if 'tqdm_flag' in inspect.signature(kmeans).parameters:
         keywords['tqdm_flag'] = False
+    if iteration_limit is not None:
+        if 'iter_limit' not in inspect.signature(kmeans).parameters:
+            raise RuntimeError('The requested iteration limit requires the pinned Git kmeans backend')
+        keywords['iter_limit'] = iteration_limit
     predictions, centers = kmeans(**keywords)
     if not torch.isfinite(centers).all() or predictions.shape != (len(features),):
         raise FloatingPointError('Invalid plain k-means result')

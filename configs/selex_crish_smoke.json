@@ -25,7 +25,7 @@
   "test_every_epochs": 0,
   "final_ss_evaluation": true,
   "ss_eval_every_epochs": 0,
-  "evaluation_rng": "isolated",
+  "evaluation_rng": "upstream",
   "ss_n_init": 10,
   "ss_max_iter": 10,
   "max_steps_per_epoch": 2,

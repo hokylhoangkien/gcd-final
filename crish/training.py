@@ -26,7 +26,8 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr*1e-3)
     start_epoch = runtime.restore(model, head, optimizer, scheduler)
     if start_epoch >= args.epochs:
-        if runtime.config.get('checkpoint_selection') == 'best_old_test_v2':
+        if (runtime.config.get('checkpoint_selection') == 'best_old_test_v2'
+                or getattr(runtime, 'allow_completed_resume', False)):
             print('TRAIN already complete; restored final checkpoint and recovered selection; no SGD steps', flush=True)
             return
         raise ValueError('Checkpoint reached final epoch; evaluate instead of resuming')
@@ -90,8 +91,19 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
         runtime.last_training_summary = dict(loss=total/steps, steps=steps, seconds=time.monotonic()-start,
                                              repairs=state.version, method=runtime.config['method'],
                                              peak_cuda_allocated_bytes=torch.cuda.max_memory_allocated(device) if device.type == 'cuda' else None)
-        # Save before monitoring; no metric is read back or used for selection.
-        runtime.save(epoch, model, head, optimizer, scheduler)
-        runtime.monitor_epoch(epoch, model)
+        if getattr(runtime, 'monitor_before_save', False):
+            # Upstream SelEx consumes plain-evaluation RNG before saving. On a
+            # bounded evaluator failure save SGD + the pending RNG phase so
+            # resume can replay evaluation without repeating an SGD epoch.
+            try:
+                runtime.monitor_epoch(epoch, model)
+            except BaseException:
+                runtime.save(epoch, model, head, optimizer, scheduler)
+                raise
+            runtime.save(epoch, model, head, optimizer, scheduler)
+        else:
+            # Historical isolated monitoring keeps the original save order.
+            runtime.save(epoch, model, head, optimizer, scheduler)
+            runtime.monitor_epoch(epoch, model)
     print(f'TRAIN complete method={runtime.config["method"]}; final={runtime.run_dir / "backbone_final.pt"}; '
           'oracle evaluation is a separate worker', flush=True)
