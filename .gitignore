@@ -1,6 +1,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.venv-selex/
 .env
 .DS_Store
 logs/

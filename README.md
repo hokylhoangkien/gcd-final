@@ -1,6 +1,19 @@
 # CRiSH-GCD v2.1
 
-Source nghiên cứu GCD với **một pipeline huấn luyện**: CRiSH mặc định, B0 dùng cùng pipeline và tắt sửa phân hoạch để đối chứng. Backbone mặc định: DINOv2 ViT-B/14 reg4. Hỗ trợ Stanford Cars SSB (mặc định) và CUB SSB (`--dataset cub`); Cars vẫn là benchmark chính.
+Source nghiên cứu GCD với CRiSH và baseline đối chứng. **Hướng mới ngày 10/11/2026: áp dụng CRiSH lên SelEx đã cập nhật**, không dùng hyperbolic learning. Nhánh Hyp-SelEx cũ vẫn được giữ riêng.
+
+**Chạy hướng SelEx mới** trên Linux NVIDIA, sau khi chuẩn bị môi trường/data/weights:
+
+```bash
+# SelEx B0, rồi SelEx + CRiSH: chạy từng lệnh, không chạy đồng thời
+bash scripts/train_selex.sh check --baseline
+bash scripts/train_selex.sh --baseline
+bash scripts/train_selex.sh
+```
+
+Source SelEx ghim tại `d8107b5`; Cars/DINOv2 dùng 50 epoch, head 65536, các tầng loss vào dần mỗi 10 epoch. Hai arm chỉ khác `method`. Kết quả chính là **SS-v2 của final checkpoint**, theo cách báo last của README SelEx mới; plain-test mỗi epoch chỉ để theo dõi. Không dùng selector Best Old-v2 của nhánh cũ cho nhánh này. **Chưa xác minh CUDA/dữ liệu thật hoặc benchmark của đường SelEx mới.** Hướng dẫn môi trường riêng, resource limits và các khác biệt được ghi tại [SelEx + CRiSH](reports/08_selex_crish_migration.md).
+
+**Các mục bên dưới mô tả nhánh Hyp-SelEx cũ**, dùng `scripts/train_crish.sh`, hỗ trợ Cars/CUB và có các profile `reference/final/upgraded`. Chúng không phải cấu hình SelEx mới.
 
 **Bản chốt cấu hình ngày 08/11/2026:** entrypoint mặc định dùng `--profile final`: USE `legacy`, evidence shortlist bằng hàng xóm trên toàn bộ frozen features, probe mỗi fold 16 labeled / 32 unlabeled và lấy labeled cân bằng theo lớp. Loss, lịch train và điều kiện chấp nhận repair giữ nguyên. `final` là tên bản cấu hình đã chốt để thử nghiệm; chưa có bằng chứng tăng accuracy. Profile `reference` và `upgraded` vẫn giữ để đối chứng.
 

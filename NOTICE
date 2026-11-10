@@ -25,3 +25,11 @@ Backbones, manifold operations, dataset loaders and evaluation helpers are
 imported from the pinned upstream source and retain their original notices,
 including Meta's notices in the transformer modules. Dependencies and pretrained
 weights retain their respective licenses. No datasets or weights are distributed.
+
+The separate selex_runtime path derives its Euclidean USE/SSE definitions,
+joint coarse grouping and setup from SarahRastegar/SelEx, MIT licensed,
+commit d8107b5458f3337b2d5342f79345a976037a1265. Unmodified source and split
+metadata are in upstream/SelEx with a SHA256 manifest. See upstream/SelEx/LICENSE.
+CRiSH is applied to that SelEx supervision; no hyperbolic mapping or loss is
+used by this path. Its fixed-final SS-v2 reporting policy and isolated workers
+are runtime choices, not claims of exact reproduction of published tables.

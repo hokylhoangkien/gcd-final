@@ -179,8 +179,9 @@ def _shortlist(state, pool, evidence, settings, stability):
 
 
 class CrishEngine:
-    def __init__(self, runtime):
+    def __init__(self, runtime, *, objective=hypselex_loss):
         self.runtime = runtime
+        self.objective = objective
         self.settings = CrishSettings(**runtime.config['crish'])
 
     def _append(self, record):
@@ -274,7 +275,7 @@ class CrishEngine:
                         if not any(a.kind == 'move' and a.target == action.target for a in refreshed):
                             raise ValueError('Move lost neighborhood support after a prior repair')
                     if current.version not in cache:
-                        cache[current.version] = gradients(hypselex_loss(frozen, flat, batch_ids, membership, targets,
+                        cache[current.version] = gradients(self.objective(frozen, flat, batch_ids, membership, targets,
                                                                          current, args, epoch)['loss'])
                     keep_gradient = cache[current.version]
                     drift = target_drift(current, proposed, batch_ids, flat,
@@ -287,7 +288,7 @@ class CrishEngine:
                     # declared normalization reference, not a fabricated sum.
                     if mass <= 0:
                         raise ValueError('No pseudo-SSE change in the scoring batch')
-                    action_gradient = gradients(hypselex_loss(frozen, flat, batch_ids, membership, targets,
+                    action_gradient = gradients(self.objective(frozen, flat, batch_ids, membership, targets,
                                                                proposed, args, epoch)['loss'])
                     zero = lambda grad, p: torch.zeros_like(p) if grad is None else grad
                     proxy = gradient_gain([zero(q, p) for q, p in zip(query, parameters)],

@@ -39,7 +39,12 @@ def verify_upstream():
 
 def inspect_inputs(cfg=None):
     upstream = ROOT / 'upstream/HypCD'
-    provenance = verify_upstream()
+    is_selex = (cfg or {}).get('baseline_family') == 'selex'
+    if is_selex:
+        from selex_runtime.reference import verify_reference, SOURCE_ROOT
+        provenance, upstream = verify_reference(), SOURCE_ROOT
+    else:
+        provenance = verify_upstream()
     sha = provenance['sha']
     name = (cfg or {}).get('dataset_name', 'scars')
     spec = dataset_spec(name)
@@ -56,7 +61,7 @@ def inspect_inputs(cfg=None):
     result = dict(dataset_name=name, upstream_sha=sha, upstream_kind=provenance['kind'], split=split,
                   weight_sha256=sha256(weight),
                   annotation_sha256={str(p.relative_to(root)): sha256(p) for p in annotations})
-    if cfg and 'method' in cfg:
+    if cfg and 'method' in cfg and not is_selex:
         from audit.protocol import compare_worker
         result['reference_protocol'] = compare_worker(cfg, smoke=bool(cfg.get('max_steps_per_epoch')))
     return result
@@ -66,7 +71,7 @@ def audit_dataset(cfg=None):
     # Instantiate the actual pinned loader. Ground truth is restricted to this audit.
     import argparse
     from .worker import configure_environment
-    configure_environment(ROOT / 'runs/probe-placeholder')
+    configure_environment(ROOT / 'runs/probe-placeholder', cfg)
     from data.get_datasets import get_class_splits, get_datasets
     name = (cfg or {}).get('dataset_name', 'scars')
     spec = dataset_spec(name)

@@ -15,7 +15,7 @@ from gcd_runtime.readiness import verify_upstream, sha256
 
 # Exact extensions prevent caches, temporary reports or artifacts leaking in.
 SOURCE_DIRS = {
-    'gcd_runtime': {'.py'}, 'crish': {'.py'}, 'audit': {'.py'},
+    'gcd_runtime': {'.py'}, 'crish': {'.py'}, 'audit': {'.py'}, 'selex_runtime': {'.py'},
     'scripts': {'.py', '.sh'}, 'tests': {'.py'}, 'configs': {'.json'},
     'environments': {'.txt'}, 'LICENSES': {'.txt'},
     'reports': {'.md'}, 'paper': {'.tex', '.bib', '.pdf', '.json'},
@@ -42,6 +42,11 @@ def build(output):
     else:
         tracked = list(json.loads((ROOT/'upstream/HypCD.SNAPSHOT.json').read_text())['files'])
     upstream_files = [upstream/p for p in tracked if p]
+    from selex_runtime.reference import verify_reference, SOURCE_ROOT
+    verify_reference()
+    selex_manifest = ROOT/'upstream/SelEx.SNAPSHOT.json'
+    selex_files = [SOURCE_ROOT/name for name in json.loads(selex_manifest.read_text())['files']]
+    files += selex_files+[selex_manifest]
     files = sorted(set(files+upstream_files))
     release_id = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')+'-'+uuid.uuid4().hex[:8]
     prefix = 'crish-gcd-v2.1-clean-'+release_id
@@ -50,6 +55,8 @@ def build(output):
     destination = output/(prefix+'.tar.gz')
     snapshot = dict(commit=UPSTREAM_SHA, files={str(p.relative_to(upstream)): sha256(p) for p in upstream_files})
     manifest = dict(release_id=release_id, upstream_sha=UPSTREAM_SHA,
+                    selex_upstream_sha=json.loads(selex_manifest.read_text())['commit'],
+                    baseline_families=['hypselex', 'selex'],
                     methods=['crish', 'baseline'], cuda_verified=False, benchmark_status='not_run',
                     entrypoint='bash scripts/train_crish.sh', default_profile='final',
                     default_config='configs/crish_final.json',

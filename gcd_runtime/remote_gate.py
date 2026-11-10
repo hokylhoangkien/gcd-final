@@ -8,6 +8,12 @@ from .readiness import inspect_inputs, audit_dataset
 
 if __name__ == '__main__':
     cfg = load_config(sys.argv[1])
+    if cfg.get('baseline_family') == 'selex':
+        from selex_runtime.preflight import preflight
+        result = preflight(cfg)
+        Path(sys.argv[2], 'readiness.json').write_text(json.dumps(result, indent=2))
+        print(json.dumps(result, indent=2), flush=True)
+        raise SystemExit(0)
     if cfg['device'] not in ('auto', 'cuda'):
         raise RuntimeError('Remote baseline requires CUDA; CPU/MPS are smoke-only')
     result = inspect_inputs(cfg)

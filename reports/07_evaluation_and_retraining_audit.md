@@ -188,3 +188,136 @@ Tạo lại plan trên checkout Linux khớp source:
 Chỉ xem plan rồi chạy từng stage sau khi kiểm tra tài nguyên; không tự động
 chạy sweep. Các kết quả 126-test phía trên thuộc lần audit trước; biên nhận
 `results/local_validation.json` của bản đóng gói ghi lần kiểm tra hiện hành.
+
+## 10. Số paper và run lịch sử, đối chiếu ngày 10/11/2026
+
+Nguồn trực tiếp đọc được: [arXiv v1, mục 3.5/4.1 và Table 1](https://arxiv.org/html/2504.06120v1).
+CVF HTML/PDF trả HTTP 403 trong lần kiểm tra này; không khẳng định đã kiểm
+trực tiếp bảng của PDF CVPR cuối. Stanford Cars + DINOv2, đơn vị phần trăm:
+
+| Nguồn / trạng thái | All | Old | New |
+|---|---:|---:|---:|
+| Paper-reported SelEx, Table 1 | 82.2 | 93.7 | 76.7 |
+| Paper-reported Hyp-SelEx, Table 1 | 83.8 | 93.3 | 79.2 |
+| Run cũ, đỉnh All SS quan sát trong log | 83.3659 | 92.1539 | 79.1214 |
+| Run cũ, SS của checkpoint cuối | 81.2337 | 86.6567 | 78.6145 |
+| Run cũ, plain disjoint-test cuối log | 56.24 | 65.20 | 47.59 |
+
+Đỉnh SS là nguyên triplet tại epoch index 71 của run
+`20261031T055221Z-03368e3d`, lấy từ
+`logs/final-backup-20261101/history-audit/metrics.csv`. Đây là max-All hậu nghiệm
+trong lịch sử đã lưu, không phải một checkpoint được chọn trước hay multi-seed
+mean. Final SS thuộc run evaluate `20261031T172513Z-881c7f46`; metadata chỉ rõ
+checkpoint cuối của run training trên. Plain-test đọc ở cuối `run.log` của run
+training đó. Không ghép plain và SS vào cùng một phép xếp hạng.
+
+Paper mục 3.5 dùng SS-k-means trên backbone features Euclidean cho phương pháp
+non-parametric; mục 4.1 chấm ACC trên unlabeled pool. Run cũ ghi SS định kỳ
+trước SGD epoch và plain-test ở cuối; bản runtime hiện tại mặc định plain-test
+mỗi epoch để chọn best Old, rồi SS best/last sau training. SS định kỳ là tùy
+chọn `--eval-every N`, mặc định 0. Hai evaluator hiện tại dùng cùng công thức
+Hungarian-v2 nhưng khác clustering inputs, nhãn anchors và pool được chấm.
+Các chênh lệch config/source/selection đã nêu ở trên vẫn ngăn việc gọi bảng
+mô tả này là một so sánh thuật toán đã kiểm soát hoàn toàn. Không đưa số run
+đang chạy vào đối chiếu này; không thay source/config hay thực thi training.
+
+## 11. Kiểm chứng lịch SS và đối chiếu paper — 10/11/2026
+
+Đọc lại mục 3.5 bản arXiv v1: phương pháp non-parametric gán nhãn bằng
+SS-k-means trên backbone features trong Euclidean space. Đối chiếu trực tiếp
+upstream `train/train_HypSelEx.py`: `test_kmeans` dùng normalized backbone
+features + plain Euclidean k-means; vòng train chọn `_best.pt` khi Old-test
+tăng. `test` dùng balanced SS fit_mix, labeled anchors và chấm chỉ unlabeled
+rows. Eval script dùng `--eval_funcs v2 --eval_only` và checkpoint có tên
+`model_test.pt`; chưa có bằng chứng tên đó tương ứng chính xác với `_best.pt`
+hay final của từng hàng công bố.
+
+Runtime hiện tại khớp loại evaluator và Old-test-v2 selector của released code:
+monitor worker mỗi epoch chạy plain-test; launcher sau worker train thành công
+gọi final SS cho last và best. Tuy nhiên lịch chỉ chấm SS cuối mặc định là
+thiết kế runtime này, không phải yêu cầu paper. Upstream
+`extract_labeled_protos` còn tính/in SS ACC khi dựng hierarchy trong training.
+Runtime vẫn dựng hierarchy bằng HSSK; SS ACC monitoring được tách thành worker
+độc lập và mặc định tắt. Không diễn giải "không in SS mỗi epoch" thành
+"không sử dụng semi-supervised clustering trong training".
+
+Verification vừa chạy, mỗi command timeout 60 giây, CPU với OMP/BLAS=1:
+
+- `.venv/bin/python scripts/check_protocol.py`: exit 0; 24 full/smoke profiles
+  khớp CLI reference tương ứng (smoke có epoch override đã khai báo).
+- `.venv/bin/python -m pytest -q tests/test_evaluation_protocol_audit.py tests/test_checkpoint_selection.py tests/test_cluster_alignment.py`:
+  **18 passed** trong 2.54 giây; 10 dependency deprecation warnings, không fail.
+
+Các kiểm tra này không chứng minh kết quả benchmark, remote source/config,
+hay tái lập chính xác bảng paper. CRiSH, fixes ordering/empty-cluster, isolated
+RNG và checkpoint-table mapping chưa xác minh vẫn là khác biệt đã công bố.
+CVF trả 403; lần này đọc trực tiếp được bản arXiv v1. Chỉ bổ sung báo cáo,
+không sửa thuật toán/config, không khởi chạy hay can thiệp job GPU.
+
+## 12. SelEx-only baseline option — kiểm tra ngày 10/11/2026
+
+Owner asks whether to move to a SelEx-only baseline. This is feasible as a
+separate experiment direction, but current `--baseline` is Hyp-SelEx B0,
+not original SelEx. The current trainer constructs ToPoincare and mixes two
+distance branches; disabling repairs alone does not remove hyperbolic learning.
+Setting curvature or a mixing coefficient to zero is insufficient evidence
+of faithful SelEx equivalence. A SelEx control requires auditing its own
+objective, head, hierarchy, configuration, selection and evaluation.
+
+Fresh read of [official SelEx README](https://github.com/SarahRastegar/SelEx)
+shows a November 2026 update beyond the historical pinned source reviewed
+earlier. Authors report a fix for issue 11, changed coarse-level grouping,
+staggered level activation, empty-cluster guards, dataset settings and new
+last-checkpoint seed-1–3 results. Treat these as author-reported results, not
+local measurements. Prior entries about SelEx settings refer to the earlier
+source revision, not the newly read main branch. Do not silently replace a
+pinned dependency or conflate old paper numbers with this updated source.
+
+If CRiSH is retained on SelEx, compare SelEx B0 and SelEx+CRiSH with the same
+pinned corrected hierarchy, settings and evaluator. Preserve existing
+Hyp-SelEx/CRiSH source and artifacts. Hyperbolic-specific method claims would
+no longer apply to that new branch. No migration, dependency update or
+training has been started; the present question does not resolve whether
+the owner wants standalone SelEx or CRiSH adapted onto SelEx.
+
+### Migration impact assessment: updated SelEx as CRiSH foundation
+
+The owner now clarifies replacing the Hyp-SelEx foundation with updated SelEx.
+This turn assesses scope only; no training or algorithm migration is executed.
+Read official current training source and README, alongside local
+`crish/loss.py`, `crish/rebuild.py`, `crish/engine.py`, `crish/training.py`,
+`gcd_runtime/trainer.py` and config validation. Reusable pieces include stable
+IDs/legal-label sanitization, evidence sampling, probe isolation, projector
+clone/SGD machinery and run artifacts. Reuse still requires parity/regression
+tests against the chosen source snapshot.
+
+Required changes exceed disabling hyperbolic weighting: replace ToPoincare
+and two-branch objective with SelEx's normalized projection and Euclidean loss;
+match revised coarse partitions derived directly from grouped level-0
+prototypes; apply the level-activation rule consistently to USE, pseudo-SSE,
+candidate eligibility and changed/protected-mass diagnostics. Inspect whether
+Move should propagate across levels or explicitly define independent-level
+intervention rather than silently breaking the revised construction rule.
+
+Current local engine hardcodes `hypselex_loss` in keep/action gradient scoring,
+and local config requires positive curvature and a hyperbolic ramp. These
+interfaces need explicit baseline-family dispatch. Updated source hardcodes a
+65,536-dimensional head versus 8,192 locally; projector-clone memory and actual
+refresh time must be measured, not assumed unchanged. Match source selection,
+evaluation, sampler and normalization details rather than assuming the existing
+Hyp-SelEx selector covers all updated SelEx defaults.
+
+Browser reads are not a coherent pinned checkout: updated training imports
+`dino_v1`/`dataset_configs`, while the returned raw main `config.py` is an older
+23-line cached copy without them. README reports newer dataset settings. Pin
+one actual Git SHA and verify all files from that SHA before implementation;
+do not assemble a release from mixed browser caches or copy reported settings
+as if a local full checkout had been verified.
+
+Assessment: a moderate-to-substantial core adaptation with reusable runtime,
+not a full rewrite and not a one-flag switch. Next implementation stages are
+pinned standalone SelEx parity, then an isolated matched SelEx+CRiSH path,
+then bounded CPU tests and remote readiness/smoke before matched benchmarks.
+Preserve historical Hyp-SelEx profiles/results; do not resume their optimizer
+checkpoints into the new model/objective. No expected accuracy improvement,
+completion time or measured GPU compatibility is inferred from this review.

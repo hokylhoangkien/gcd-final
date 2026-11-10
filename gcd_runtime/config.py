@@ -14,6 +14,9 @@ PLAIN_KMEANS_SHA = 'f7f36bd1cb4e3a761d73d584866d0a9c6b4d2805'
 def load_config(path, *, eval_every_epochs=None):
     from crish.config import CrishSettings
     cfg = json.loads(Path(path).read_text())
+    if cfg.get('baseline_family') == 'selex':
+        from selex_runtime.config import validate_config
+        return validate_config(cfg, eval_every_epochs=eval_every_epochs)
     if cfg.get('method') not in ('crish', 'baseline'):
         raise ValueError('method must be crish or baseline')
     if 'reliability' in cfg:
@@ -99,4 +102,5 @@ def choose_device(torch, requested='auto'):
 def code_fingerprint():
     import hashlib
     return {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
-            for directory in ('gcd_runtime', 'crish') for p in sorted((ROOT/directory).glob('*.py'))}
+            for directory in ('gcd_runtime', 'crish', 'selex_runtime')
+            for p in sorted((ROOT/directory).glob('*.py'))}

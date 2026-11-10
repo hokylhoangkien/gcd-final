@@ -44,7 +44,7 @@ def main():
                    'paper/manuscript.pdf', 'paper/manuscript.build.json')
     tracked = [ROOT / name for name in input_names if (ROOT / name).is_file()]
     for directory, pattern in [('crish', '*.py'), ('audit', '*.py'), ('gcd_runtime', '*.py'),
-                               ('tests', '*.py'), ('configs', '*.json'),
+                               ('selex_runtime', '*.py'), ('tests', '*.py'), ('configs', '*.json'),
                                ('scripts', '*.py'), ('scripts', '*.sh'),
                                ('reports', '*.md'), ('paper', '*.tex'), ('paper', '*.bib')]:
         tracked.extend((ROOT / directory).rglob(pattern))
@@ -82,7 +82,7 @@ def main():
                 log.write(output)
                 log.flush()
                 result.check_returncode()
-            for directory in ('gcd_runtime', 'crish', 'audit', 'scripts', 'tests'):
+            for directory in ('gcd_runtime', 'crish', 'selex_runtime', 'audit', 'scripts', 'tests'):
                 for path in (ROOT / directory).rglob('*.py'):
                     ast.parse(path.read_text(), filename=str(path))
             log.write('Static syntax, upstream SHA/source hash: passed\n')

@@ -912,3 +912,157 @@ No data, weights, checkpoints, environments, raw logs, generated plans or
 release archives are included. The GitHub connector has read permission only;
 use configured local Git credentials for a normal commit/push to `main`.
 Do not force-push or alter history, visibility, upstream, or running processes.
+
+## Per-epoch metric output inspection — 2026-11-10
+
+Owner asks whether All/Old/New are exported for each epoch. Starting HEAD:
+`722c9bb4c6fb1c7e21fc3eb5e7ca55055b3fefc4`; working tree and pinned HypCD
+submodule were clean. Read-only process inspection required sandbox escalation
+and succeeded: Codex/VS Code services are present, with no visible local Python
+training process. Remote training state was not inspected. Host is macOS arm64;
+`nvidia-smi` is absent, and unprivileged hardware `sysctl` was denied. Prior
+audits record an M5/16 GB development machine. No training was started or stopped.
+
+Current baseline/CRiSH profiles set `test_every_epochs=1`: completed disjoint-test
+evaluations write `test_metrics.jsonl`, per-epoch `test_evaluations/` reports,
+and percentage All/Old/New lines in `run.log`. `ss_eval_every_epochs=0` disables
+intermediate anchored SS monitoring by default; `--eval-every 1` enables it for
+each epoch, writing `epoch_metrics.jsonl`. These are different protocols and
+must remain separate. Final best/last SS evaluation is already supported.
+
+Verification: `.venv/bin/python scripts/show_metrics.py crish_share` exited 0
+and showed three observed epoch losses with `not_evaluated` accuracy cells.
+Those supplied historical files contain no per-epoch All/Old/New; missing
+accuracy cannot be reconstructed from loss alone. Active `runs/` contains plans,
+not completed training runs. Historical backup checkpoints/reports are preserved.
+No runtime/config/test/manuscript changes or benchmark evaluations were needed.
+This audit note is the only edit. Full baseline readiness on Linux NVIDIA still
+requires the existing data/weight/CUDA preflight and bounded real-data smoke.
+
+Next read-only command on the machine holding a real run:
+`.venv/bin/python scripts/show_metrics.py runs/RUN_ID`.
+
+## Epoch 188 versus best epoch 90 inspection — 2026-11-10
+
+Scope: explain a reported accuracy regression; preserve all active training,
+source, configs and pre-existing audit edits. Starting HEAD remains
+`722c9bb4c6fb1c7e21fc3eb5e7ca55055b3fefc4`. Only this audit file was already
+modified at turn start. Read-only escalated process inspection found IDE/Codex
+services and no visible local Python training process. Remote job health and
+source/config identity remain unverified. No process was stopped or started.
+Local checks: macOS arm64, 10 CPUs, torch 2.4.1, CUDA=False, MPS=False,
+`nvidia-smi` absent. Earlier audit records M5/16 GB; this session's unprivileged
+memory query was denied. Active `runs/`, supplied `crish_share/` and
+`logs/remote-audit/` have no checkpoint files. Historical backup artifacts are
+preserved and are not evidence for the current run. Local full-data/CUDA
+baseline readiness is still blocked; no benchmark is run here.
+
+User-reported observations, not locally verified: epoch 188
+All/Old/New = 68.08/75.79/60.64 percent, selected epoch 90 Old = 84.3 percent.
+The Old difference is -8.51 percentage points. No epoch-90 All/New, current
+run history or repair diagnostics are available to establish the All/New
+trend or a causal explanation. Searches found no current artifact matching
+this complete triplet. Do not attribute the regression to overfitting,
+CRiSH repairs, data corruption or k-means randomness without further evidence.
+
+Verified current implementation: `gcd_runtime/selection.py` selects on strict
+Old improvement and preserves the earlier best bundle. `crish/training.py`
+continues SGD on the current model; selection does not restore the best model
+or stop training. Thus best and current scores can diverge. Per-epoch plain
+disjoint-test k-means differs from final anchored SS train-unlabeled evaluation;
+scores from these protocols must not be directly compared. Existing protocol
+and novelty reports remain applicable; no research-method change is justified
+by the supplied two observations. The safest next evidence is the saved
+`selection.json`, `test_metrics.jsonl` and config snapshot for this same run;
+inspect through `scripts/show_metrics.py` without rerunning training. No loss,
+selector, data adapter, schedule or upstream code is changed.
+
+### Clarification: regression against earlier training runs
+
+The owner clarifies that earlier runs were close to paper-reported scores;
+the comparison of interest is across versions, not solely epoch 90 versus 188.
+Historical artifacts substantiate high earlier SS scores: run
+`20261031T055221Z-03368e3d` has SS window means near 82 percent All, and
+its final backbone's separate completed evaluation
+`20261031T172513Z-881c7f46/evaluation.json` records balanced SS train-unlabeled
+All/Old/New = 81.2337/86.6567/78.6145 percent. Evaluation metadata explicitly
+names the earlier run's `backbone_final.pt`. The earlier training log's last
+plain disjoint-test result is 56.24/65.20/47.59 percent. This is direct evidence
+that different evaluation pools/clustering can produce substantially different
+numbers for the historical final model; it does not quantify the effect in
+the current remote run. The current reported epoch-188 protocol is still
+unverified; current shipped defaults print plain disjoint-test each epoch.
+
+Training also differs materially: the archived config uses `method=proposed`
+with reciprocal/cross-view pair reliability, `hyper_max_weight=1.0` and
+`final_epoch` selection. Current final config uses CRiSH partition repairs,
+`hyper_max_weight=0.5`, and Old-test selection. Current runtime also has source
+fixes documented in reports 01/07. Therefore neither "only evaluator changed"
+nor "new method is worse" is established. First compare saved final SS best/last
+reports under matching evaluation; if the regression persists, isolate method,
+loss coefficients and source fixes with matched B0 controls. Do not silently
+restore upstream ordering bugs or tune to historical test labels. This turn
+only reads archives and extends the audit; no code/config/job is changed.
+
+## SelEx + CRiSH implementation — 2026-11-10
+
+Owner clarifies the new objective: apply CRiSH to updated SelEx rather than
+Hyp-SelEx. Preserve the legacy HypCD pin, profiles, manuscript, results and
+existing audit edits. Starting HEAD is `722c9bb`; initial edits are the two
+audit reports from this conversation. Fresh read-only escalated process query
+shows IDE/Codex services, no local Python training job. No process is changed.
+Local CUDA remains unavailable; only bounded synthetic CPU tests are used.
+
+An isolated official checkout in `/private/tmp` verified current SelEx HEAD
+`d8107b5458f3337b2d5342f79345a976037a1265` (2026-11-09). A filtered, unmodified
+source/split snapshot is added under `upstream/SelEx` with a hash manifest;
+no images, weights or environment installation is included. This resolves
+the browser's mixed cached config/training reads noted in report 07. The
+actual pinned Cars config specifies 50 epochs, block 9, smoothing .75 and
+temperature .5. Source head output is 65,536, and final SS defaults to ten
+initializations. These must be tested as a new protocol, not mixed with old
+Hyp-SelEx settings. Data, pretrained files and NVIDIA compute are not available
+locally; full baseline reproduction and benchmark claims remain blocked.
+
+Implemented the separate `selex_runtime` path and `scripts/train_selex.sh`,
+four matched full/smoke configs, immutable SelEx snapshot, documentation and
+ten new CPU regressions. Shared CRiSH gained explicit objective injection;
+historical Hyp-SelEx retains its defaults. SelEx loss/gradient and coarse
+grouping match executed pinned-source statements on synthetic fixtures;
+repair/target-drift see only currently active hierarchy levels. Updated SelEx
+fixed-final SS-v2 is predeclared as primary; per-epoch plain-test is monitoring
+only, not the historical Hyp-SelEx Old-v2 selector.
+
+Full CPU validation `crish-v21-20261110T073222Z-6b4a6807`: 137 passed,
+zero failures/errors/skips, including legacy regression and portable archive
+execution. The historical manuscript now explicitly states its older scope;
+its existing compiler rebuilt the PDF and receipt after provenance updates.
+No real images/weights/CUDA were used by the test suite. Read the resource
+limits, environment instructions and unverified GPU gates in
+`reports/08_selex_crish_migration.md`. No GPU benchmark, long training or sweep
+was launched. Next remote action is `bash scripts/train_selex.sh check --baseline`.
+
+## Authorized GitHub handoff — 2026-11-10
+
+Owner explicitly requests pushing the prepared code so a colleague can train.
+Branch is `main`, origin `hokylhoangkien/gcd-final` is public, and the GitHub
+read-only connector reports remote main at local parent `722c9bb` before push.
+All current runtime hashes match the passing 137-test CPU receipt. SelEx
+snapshot integrity and historical manuscript/PDF provenance pass; diff
+whitespace checks are clean. No algorithm/config changes are made in this
+publication step. CUDA, real data and actual-head repair resource use still
+require remote preflight and bounded smoke.
+
+Publish the bounded reviewed source/config/test/report paths, pinned SelEx
+source/split metadata with MIT notices, and local validation receipt. Exclude
+data images, weights, checkpoints, environments, raw logs, local plans and
+handoff archives. GitHub connector permissions are read-only; use configured
+local Git credentials for a normal commit/push, without force or history rewrite.
+The separate SelEx entrypoint and fixed-final SS policy are documented for the
+colleague. Do not contact the colleague or start remote training automatically.
+
+Staged review contains 73 files. Runtime bytes match the 137-test receipt and
+all staged SelEx files match the pinned snapshot hashes. The vendor snapshot
+retains upstream trailing whitespace; own-source diff checks pass with that
+unmodified third-party directory excluded. No credential-pattern matches,
+images, weights, checkpoint files, raw logs or release archives were staged.

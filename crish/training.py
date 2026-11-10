@@ -15,8 +15,11 @@ from .engine import CrishEngine
 from .loss import hypselex_loss
 
 
-def train_strict(head, model, train_loader, merge_loader, args, runtime):
-    from gcd_runtime import trainer
+def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
+                 objective=hypselex_loss, extractor=None):
+    if extractor is None:
+        from gcd_runtime import trainer
+        extractor = trainer.extract_labeled_protos
     args.use_target_normalization = runtime.config.get('use_target_normalization', 'legacy')
     optimizer = torch.optim.SGD(list(head.parameters())+list(model.parameters()),
                                 lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -27,7 +30,7 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime):
             print('TRAIN already complete; restored final checkpoint and recovered selection; no SGD steps', flush=True)
             return
         raise ValueError('Checkpoint reached final epoch; evaluate instead of resuming')
-    engine = CrishEngine(runtime)
+    engine = CrishEngine(runtime, objective=objective)
     settings = CrishSettings(**runtime.config['crish'])
     device = next(head.parameters()).device
     print(f'TRAIN plan method={runtime.config["method"]} device={device} epochs={args.epochs} '
@@ -35,12 +38,13 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime):
           f'trainable_backbone={sum(p.numel() for p in model.parameters() if p.requires_grad)} '
           f'trainable_projector={sum(p.numel() for p in head.parameters() if p.requires_grad)}', flush=True)
     for epoch in range(start_epoch, args.epochs):
+        runtime.epoch = epoch
         start = time.monotonic()
         if device.type == 'cuda':
             torch.cuda.reset_peak_memory_stats(device)
         runtime.hierarchy_state = None
         with torch.no_grad():
-            trainer.extract_labeled_protos(model, merge_loader, args)
+            extractor(model, merge_loader, args)
         state = runtime.hierarchy_state
         if state is None:
             raise RuntimeError('HSSK extraction failed to capture a sanitized supervision snapshot')
@@ -67,7 +71,7 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime):
             # production dataset stores -1 for every unlabeled row.
             legal = targets[membership].long()
             raw = model(torch.cat(views).to(device))
-            result = hypselex_loss(head, raw, ids, membership, legal, state, args, epoch)
+            result = objective(head, raw, ids, membership, legal, state, args, epoch)
             runtime.log_loss_geometry(result['angle'], result['distance'], result['features'],
                                       membership.to(device), result['distance_weight'])
             optimizer.zero_grad(set_to_none=True)

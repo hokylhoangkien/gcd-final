@@ -75,7 +75,7 @@ def confusion_factor(state: SupervisionState, batch_ids: Tensor, backbone_views:
     """
     if strategy not in ('zero_one', 'pair_dist', 'pair_cluster'):
         raise ValueError('Unsupported USE strategy')
-    if normalization not in ('legacy', 'row'):
+    if normalization not in ('legacy', 'row', 'selex_legacy'):
         raise ValueError('Unsupported USE target normalization')
     rows = rows_for_ids(state.ids, batch_ids)
     n = len(rows)
@@ -106,6 +106,11 @@ def confusion_factor(state: SupervisionState, batch_ids: Tensor, backbone_views:
         factor[empty_rows, (empty_rows + n) % (2*n)] = 1
         return factor
     total = factor.sum(dim=1)
+    if normalization == 'selex_legacy':
+        if not torch.isfinite(factor).all():
+            raise ValueError('Nonfinite SelEx USE factor')
+        # Updated SelEx retains 1D column broadcasting, with a zero-sum clamp.
+        return factor / total.clamp_min(1e-12)
     if not torch.isfinite(factor).all() or (total <= 0).any():
         raise ValueError('Baseline USE has a zero/nonfinite row; shared numerical policy required')
     # Deliberately preserve the original 1D broadcasting (row sum broadcasts by

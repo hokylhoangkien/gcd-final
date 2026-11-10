@@ -8,7 +8,10 @@ from .checkpoint import EpochRuntime
 from .config import ROOT, paths, load_config
 
 
-def configure_environment(run_dir):
+def configure_environment(run_dir, cfg=None):
+    if (cfg or {}).get('baseline_family') == 'selex':
+        from selex_runtime.reference import configure_environment as configure_selex
+        return configure_selex(run_dir, cfg)
     cache = ROOT / '.cache' / 'matplotlib'
     cache.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault('MPLCONFIGDIR', str(cache))
@@ -59,7 +62,10 @@ def main():
     epoch = int(extra[0]) if epoch_mode and len(extra) == 1 else None
     if (epoch_mode and (epoch is None or not 0 <= epoch < cfg['epochs'])) or (not epoch_mode and extra):
         raise ValueError('Monitor requires exactly one valid zero-based epoch')
-    configure_environment(run_dir)
+    configure_environment(run_dir, cfg)
+    if cfg.get('baseline_family') == 'selex':
+        from selex_runtime.trainer import run
+        return run(cfg, run_dir, mode, checkpoint, epoch)
     flags = build_flags(cfg, mode, checkpoint)
     sys.argv = ['train.train_HypSelEx'] + flags
     from . import trainer
