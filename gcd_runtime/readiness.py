@@ -20,9 +20,24 @@ def verify_upstream():
     upstream = ROOT / 'upstream/HypCD'
     if (upstream / '.git').exists():
         sha = subprocess.check_output(['git', '-C', str(upstream), 'rev-parse', 'HEAD'], text=True, timeout=10).strip()
-        dirty = subprocess.check_output(['git', '-C', str(upstream), 'status', '--porcelain'], text=True, timeout=10)
-        if sha != UPSTREAM_SHA or dirty:
-            raise RuntimeError('Upstream must match the pinned, clean commit')
+        # Enumerate files (not collapsed directories) and use NUL separators so
+        # spaces/quoting cannot hide an unexpected source modification.
+        dirty = subprocess.check_output(['git', '-C', str(upstream), 'status',
+            '--porcelain', '-z', '--untracked-files=all'], text=True, timeout=10)
+        unexpected = []
+        from pathlib import PurePosixPath
+        for entry in dirty.split('\0'):
+            if not entry:
+                continue
+            relative = PurePosixPath(entry[3:])
+            generated = (entry.startswith('?? ') and '__pycache__' in relative.parts
+                         and relative.suffix in ('.pyc', '.pyo')
+                         and not (upstream/relative).is_symlink())
+            if not generated:
+                unexpected.append(entry)
+        if sha != UPSTREAM_SHA or unexpected:
+            raise RuntimeError('Upstream must match the pinned, clean commit; '
+                               f'HEAD={sha}; unexpected changes={unexpected!r}')
         return {'sha': sha, 'kind': 'git_submodule'}
     manifest = ROOT / 'upstream/HypCD.SNAPSHOT.json'
     if not manifest.is_file():

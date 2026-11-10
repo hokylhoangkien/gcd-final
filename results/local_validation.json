@@ -1,20 +1,20 @@
 {
-  "run_id": "crish-v21-20261110T083824Z-3c6382ea",
+  "run_id": "crish-v21-20261110T085107Z-d00dffc3",
   "kind": "synthetic_cpu_only_not_benchmark",
   "status": "passed",
-  "git_sha": "38fa14bcab7b8fa337f8ea5d5c16d442a89f8674",
+  "git_sha": "83b0b130ec029f058b08d29ef3f50e96387d90e7",
   "upstream_sha": "ffc895b7ff38be8502bb7e3bd851f1d2a55dff73",
   "pytest": {
-    "tests": 143,
+    "tests": 147,
     "failures": 0,
     "errors": 0,
     "skipped": 0
   },
-  "timestamp_utc": "2026-11-10T08:38:24.101433+00:00",
-  "completed_utc": "2026-11-10T08:38:36.778387+00:00",
+  "timestamp_utc": "2026-11-10T08:51:07.464771+00:00",
+  "completed_utc": "2026-11-10T08:51:21.719100+00:00",
   "benchmark_metrics": null,
-  "metadata_path": "logs/crish-v21-20261110T083824Z-3c6382ea/metadata.json",
-  "log_path": "logs/crish-v21-20261110T083824Z-3c6382ea/smoke.log",
+  "metadata_path": "logs/crish-v21-20261110T085107Z-d00dffc3/metadata.json",
+  "log_path": "logs/crish-v21-20261110T085107Z-d00dffc3/smoke.log",
   "real_data_gate": "not_run_no_dataset_weights_or_local_cuda",
   "config": {
     "kind": "synthetic_cpu_only_not_benchmark",
@@ -39,7 +39,7 @@
       "--tb=short",
       "-o",
       "cache_dir=.cache/pytest",
-      "--junitxml=./logs/crish-v21-20261110T083824Z-3c6382ea/pytest.xml"
+      "--junitxml=./logs/crish-v21-20261110T085107Z-d00dffc3/pytest.xml"
     ],
     [
       "./.venv/bin/python",
@@ -126,7 +126,7 @@
     "gcd_runtime/metrics.py": "9a21b06f98604c89cef1ea8140278cd42bf954b93f664d4cd25f7b4308eabf1e",
     "gcd_runtime/monitoring.py": "425156370f6386680deb58cccbbb9fd1d41e2786105fa03669fbce89f9b64996",
     "gcd_runtime/probe.py": "49eed1eb4c3ba27398999df4a3b1da79c044617907e1381c921eb0daab60ea33",
-    "gcd_runtime/readiness.py": "07a42362639229cf1add6e45e71c2fc5b30c15d1883a00e3fa13fbb1c32fe77c",
+    "gcd_runtime/readiness.py": "ca412be50f11ac74ff477f3d7cf10cf46f843425486f3ce405630c260125ddbc",
     "gcd_runtime/remote_gate.py": "3d37f7b7af06cb3f656c0e2c7d9342c07d8719b3913b2da6412700cf00f4813e",
     "gcd_runtime/selection.py": "76b951ce74f596b784c204b8b1aa01436c7ae29421705362495f7e977a74cd9b",
     "gcd_runtime/train_cli.py": "7411138ecc4bb63d96d826cb49b58f740eea7806116516cfe3f9a3dc550b768f",
@@ -134,10 +134,10 @@
     "gcd_runtime/training_data.py": "e816facad37b7d8806d71333a6c2b62731ff5eafec2f148192bc6b06c2b51d68",
     "gcd_runtime/training_diagnostics.py": "fcf49e5c4628c159f9f239f88de4f89ab1d55b23ab019986dc5ade0bf24afe83",
     "gcd_runtime/worker.py": "cc27e9e1cb2860aebbd913d74bd9a4676a85ce0b2a0b190d8fe264b718877e53",
-    "paper/manuscript.build.json": "ef611bafb358de9cd77ef339011abfd55d970c2742b6cdc14da18baeb533abb6",
-    "paper/manuscript.pdf": "4bd17083a501c055e2bd543c9e663d09b46c5f5733115afb9e761e1bce29538e",
-    "paper/manuscript.tex": "b7796afa66a28650ecb299b432392d0fe92fae01814676f71814067ef3495f99",
-    "reports/00_workspace_audit.md": "d8ac7551c841bfc5ed818c4dfbf798fd68294c457690837456039e9a83048455",
+    "paper/manuscript.build.json": "9beafa676292cd1e574d9f5aee040e5f2aee0e84558a6e2708b6b8443f1dbeb0",
+    "paper/manuscript.pdf": "278f73a07fb418ee1a6339a9edfbf9ef0792212b9b8a2f570f719905285fe829",
+    "paper/manuscript.tex": "4f2e1e0214a97133f5ecd53698329e32ded56c99616ecb235d4cf014e918c9f8",
+    "reports/00_workspace_audit.md": "6e30cca86652920346a1a60c139c5863c5107a79f228581ae7a22fe12b7a6deb",
     "reports/01_baseline_protocol.md": "d08850cb5ee2509b43f2ee2369d165eca806e4417a321b6c8412e1f69ff1cbcc",
     "reports/02_novelty_and_method.md": "48a6acfb46b6bc05f32f367ab5dee47719bb028904582cbe1dbaac7a5f294dd1",
     "reports/04_method_and_research_plan.md": "ab003577e8afa658f56bacf3962d5d987a01d9412209075c3973883043222a7c",
@@ -198,6 +198,7 @@
     "tests/test_selex_rng.py": "59345c1d7753592f56b635da0496e3c7a1e03bfb56dfd89ae89f6868d7dd72f4",
     "tests/test_selex_runtime.py": "9e368e7e726867dc012b32a80792de91553f12d646e44d4dfd38e40a12945f90",
     "tests/test_training_upgrades.py": "415e9f97ac83be176d70be250ae4010a327a213520a85525008da2f96108078c",
+    "tests/test_upstream_pin.py": "d5f078a7ba6710fc8e12bdf5f6573ea4fc3bb15cf11a7d3ab28ca25bd8528ced",
     "upstream/HypCD/train/train_HypSelEx.py": "af872b72e0d0068f0492a032299a59decbbc049f6d45a4934fdb57bb5453a1d5"
   }
 }
