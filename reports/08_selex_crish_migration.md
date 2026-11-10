@@ -3,6 +3,12 @@
 Date: 2026-11-10. This is a new experimental path, not a benchmark result or a
 novelty claim. Legacy Hyp-SelEx/CRiSH commands and profiles remain available.
 
+Current extension: the main launcher now selects matched **200-epoch** profiles
+for Cars, CUB and FGVC-Aircraft, with CIFAR-100 retained as an optional dataset.
+See [the current runbook](09_selex_200epoch_multidataset.md).
+The original 20/50-epoch upstream settings and initial adapter history below
+remain provenance, not the default budget of these new experiments.
+
 ## Pinned foundation
 
 Official SelEx commit `d8107b5458f3337b2d5342f79345a976037a1265`, dated
@@ -48,9 +54,11 @@ checkpoints require their original source; do not resume them into SelEx.
 
 The updated SelEx README reports last-checkpoint SS-v2. This path therefore
 uses fixed-final SS-v2 as its primary endpoint for both arms, not the old
-Hyp-SelEx Old-v2 best selector. It does not claim to implement the standalone
-SelEx Old-v1 selector. Every epoch still records plain disjoint-test-v2 for
-monitoring; those scores do not select a model, stop SGD or feed repairs.
+Hyp-SelEx Old-v2 best selector. The six 200-epoch configs additionally implement
+the source's best-Old-v1 selector as a secondary report: plain disjoint test
+records both v1/v2, Old-v1 alone selects best, and both best/last get final
+SS-v2 evaluation. Selection never stops SGD, feeds repairs or overrides the
+fixed-last primary. Historical 50-epoch configs retain secondary selection off.
 
 Final SS fits normalized backbone features on the train pool with legal
 labeled anchors and scores only unlabeled rows. Source fitter: ten restarts,
@@ -87,9 +95,9 @@ and state digest before fitting. The former `isolated` policy remains
 explicitly supported for old config inspection; changing source still
 invalidates old resume fingerprints. Use the original release for old runs.
 
-This adapter supports the updated sub-200-epoch schedule; it rejects schedules
-that would also trigger upstream's extra train-unlabeled plain evaluation at
-epoch 200. CPU fixtures verify source seeding, a fresh-process RNG exchange,
+The extended adapter also supports upstream's extra train-unlabeled plain
+evaluation every `train_report_interval` (default 200) epochs, before disjoint
+test in the same RNG exchange. CPU fixtures verify source seeding, a fresh-process RNG exchange,
 next-step RNG parity and interrupted/resumed SGD parity. This is not a CUDA
 benchmark or proof of bitwise agreement across hardware/library versions.
 
@@ -98,8 +106,12 @@ files: `evaluation.json` and `evaluation_last.json`; plain history:
 `test_metrics.jsonl`; optional/final SS history: `epoch_metrics.jsonl`;
 training loss/time: `metrics.jsonl`; summary: `results_summary.json`.
 Keep `config.json`, `metadata.json`, `environment.txt`, `readiness.json`,
-`run.log`, `backbone_final.pt` and `resume.pt` for provenance/resume. This
-fixed-final path does not create an Old-test-selected best checkpoint.
+`run.log`, `backbone_final.pt` and `resume.pt` for provenance/resume. The
+200-epoch profiles additionally retain `backbone_best_old_test_v1.pt`,
+`selection.json`, `evaluation_best_old_test.json` and `best_old_ss_metrics.jsonl`.
+Their best bundle is for SS evaluation, not optimizer resume. Resume requires
+the original run's best checkpoint and test-evaluation history as well as
+`resume.pt`; see report 09.
 
 ## Remote commands
 
@@ -136,9 +148,11 @@ For resume use the original run config and original source:
 bash scripts/train_selex.sh --baseline --config runs/RUN_ID/config.json --resume runs/RUN_ID/resume.pt
 ```
 
-Preflight is 180 seconds; smoke training/monitoring is at most 1800 seconds;
-full training/monitoring at most 86400 seconds; each SS/plain evaluator at most
-1800 seconds. These are stop limits, not expected completion times. Head output
+Preflight is 180 seconds; smoke training/monitoring is at most 1800 seconds.
+Historical 50-epoch profiles cap full training/monitoring at 86400 seconds and
+each SS/plain evaluator at 1800 seconds. New 200-epoch profiles instead use
+604800 seconds and 7200 seconds respectively (report 09).
+These are stop limits, not expected completion times. Head output
 is eight times wider than the old profile; cloned-head memory and actual runtime
 must be measured. Do not shrink only one arm's batch/probes after seeing scores.
 
@@ -149,8 +163,9 @@ boundary, finite protected Abstain, hidden-target invariance of real repair
 scoring, disabled-CRiSH parity, resume, source hashes and CLI selection. Fresh
 process imports and an actual source DINOHead CPU backward are checked. These
 do not verify CUDA, full-size head repair costs, real-data clustering behavior,
-benchmark accuracy, multi-seed gains or cross-dataset generalization. The first
-adapter supports Cars only. Use the checksummed run receipt for actual test
+benchmark accuracy, multi-seed gains or cross-dataset generalization. The initial
+adapter supported Cars only; the later three-dataset extension is documented
+in report 09. Use the checksummed run receipt for actual test
 counts/status. The historical manuscript still describes Hyp-SelEx CRiSH;
 it must not be submitted as a description of this new SelEx experiment.
 

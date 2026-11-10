@@ -1126,3 +1126,226 @@ Next remote preflight for the new SelEx path:
 `bash scripts/train_selex.sh check --baseline` (or omit --baseline for CRiSH).
 The user's printed ffc895... SHA identifies historical HypCD validation,
 not the new pinned SelEx d8107b5 snapshot. No remote readiness claim is made.
+
+## Dataset recommendation audit — 2026-11-10, 19:45 (Asia/Ho_Chi_Minh)
+
+Scope: recommend approximately three datasets; no implementation or training
+was requested. Starting HEAD `f6eef65`, clean tracked/untracked Git status.
+Read-only process inspection (after sandbox denied the initial `ps`) found
+Codex/IDE services, with no visible local Python training or pytest process.
+Remote job status remains unknown. Hardware inventory confirms Apple M5,
+16 GB RAM, macOS arm64; `nvidia-smi` is absent. Local `datasets/`, `weights/`
+and `checkpoints/` are absent; no `.pt`/`.pth` files were found under `runs/`.
+Inputs outside these project folders were not assessed.
+
+Current README and report 08 establish updated **Euclidean SelEx + CRiSH** as
+the new experimental path. `selex_runtime/config.py` permits Cars only;
+`selex_runtime/preflight.py` also requests `scars` explicitly. Historical
+`gcd_runtime/datasets.py` supports Cars/CUB, which does not establish CUB
+readiness on the new SelEx path. Pinned upstream SelEx has loaders for CUB,
+CIFAR-100 and Aircraft, but runtime adapters, audits and evaluation still need
+verification before those datasets can run through the new path.
+
+Recommendation: Cars + CUB + CIFAR-100 for three datasets total, retaining the
+group's Cars benchmark, adding another fine-grained domain and a generic
+recognition benchmark. If three *additional* datasets are intended, add CUB,
+CIFAR-100 and FGVC-Aircraft. HypCD paper section 6.1 lists 98/98, 100/100,
+80/20 and 50/50 known/novel class counts respectively, with 50% of known-class
+images labeled. CIFAR-100 must not be assigned an assumed 50/50 class split.
+Reference: https://arxiv.org/html/2504.06120v1#S6.SS1
+
+No source/config/upstream files changed and no tests or benchmark were launched.
+Existing validation receipt `crish-v21-20261110T085107Z-d00dffc3` is historical
+CPU evidence, not a new check or multi-dataset result. Next safe development
+step is to extend the pinned SelEx data/preflight/evaluation adapters for CUB,
+then CIFAR-100, preserving matching B0/CRiSH protocols. For existing Cars only,
+the next remote readiness command remains
+`bash scripts/train_selex.sh check --baseline`, after data/weights preparation.
+
+## Authorized three-dataset 200-epoch SelEx implementation — 2026-11-10
+
+User explicitly requests matched SelEx / SelEx + CRiSH runs on CIFAR-100,
+CUB and Stanford Cars, each for 200 epochs. This supersedes the historical
+Hyp-SelEx research direction. Preserve both pinned upstream trees and existing
+checkpoints/logs; implement in the isolated SelEx runtime and shared adapters.
+Initial HEAD is `f6eef65`; only this audit report has prior uncommitted edits.
+Fresh read-only `ps` finds IDE/Codex services and no local training/pytest job.
+Host is Apple M5 macOS arm64 with 16 GiB, without NVIDIA CUDA. Project-local
+data, weights and model checkpoints are absent; remote job state is unknown.
+Existing CPU validation/logs are historical evidence, not dataset readiness.
+
+Blockers identified: SelEx config/preflight hardcode Cars; shared adapters only
+support file-backed Cars/CUB; CIFAR has zero-based labels and in-memory pixels;
+the source evaluates train-unlabeled plain k-means before disjoint test every
+200 epochs, consuming RNG that the previous adapter explicitly did not support.
+Safest next action: implement all three data/preflight/evaluation paths, keep
+unlabeled targets sanitized, support that ordered epoch-200 RNG exchange and
+resume, and prepare matched 200-epoch DINOv2 configs/commands. CPU tests and
+dry-runs only locally. 200 epochs is a user-requested extended-budget protocol,
+not reproduction of the upstream 20/50-epoch reported results. No automatic
+remote sweep or download is authorized by this source-editing request.
+
+### Completed source changes and bounded verification
+
+- Added six `configs/selex_{scars,cub,cifar100}_{baseline,crish}_200.json`
+  profiles. Each pair differs only in method; DINOv2 is retained. Temperature,
+  smoothing and trainable blocks retain source dataset-specific settings.
+- SelEx CLI now accepts `--dataset`; default is Cars/200 epochs. Smoke is
+  derived from the selected dataset/config, with bounded steps/runtime. New
+  release metadata points to SelEx, and six plans execute outside Git.
+- Added offline CIFAR loading, copied-pixel training rows without hidden
+  targets, official 80/20 split/50% known-label audit, and coverage/alignment
+  checks. CUB's existing safe adapters are exercised against pinned SelEx.
+- Epoch 200 evaluates train-unlabeled plain k-means before disjoint test in one
+  RNG exchange; reports are separated from primary final SS. Pending-evaluation
+  resume replays both pools without repeating completed SGD. Source trees remain
+  unchanged; old checkpoint/source fingerprint restrictions are preserved.
+- Updated README and reports 08/09. Historical manuscript's settings digest/PDF
+  provenance was regenerated; its stated Hyp-SelEx scope and claims did not
+  change. It is not the paper for these new experiments.
+
+Initial targeted run: 18 passed / 6 failed (two new mock-signature mistakes,
+four sandbox OpenMP shared-memory subprocess failures). Corrected the mocks;
+granted bounded CPU execution passed 25 targeted tests. A later packaging
+fixture failed because an extracted archive intentionally has no `.venv`;
+the fixture now sets `SELEX_PYTHON` to its existing interpreter. Failure log:
+`logs/crish-v21-20261110T130224Z-0be564f7/smoke.log`.
+
+Final complete validation: `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+.venv/bin/python scripts/run_smoke.py`; run
+`crish-v21-20261110T130309Z-747ad77d`, **157 passed, zero failures/errors/skips**,
+plus all three split descriptors, protocol/source/syntax/archive/manuscript
+checks. Each child command is limited to 60 seconds. Receipt:
+`results/local_validation.json`; log:
+`logs/crish-v21-20261110T130309Z-747ad77d/smoke.log`.
+No local/remote benchmark or weight download was started. Data, full-size
+memory/runtime and CUDA remain unverified. Next command on the prepared CUDA
+host: `bash scripts/train_selex.sh check --dataset scars --baseline`; follow
+report 09 for other datasets, both arms, bounded smoke and exact-source resume.
+
+## Paper-comparability audit requested — 2026-11-10
+
+Scope: verify the current three-dataset SelEx/CRiSH pipeline against original
+ECCV 2024 paper numbers and the pinned corrected SelEx source. Preserve all
+uncommitted implementation/config/documentation changes from the previous task;
+no training, source rollback or dataset/weight downloads. Fresh process inventory
+finds no local Python training/pytest job; Mac remains arm64/16 GiB without
+NVIDIA CUDA. Remote process/input readiness is unknown. Existing CPU receipt
+`crish-v21-20261110T130309Z-747ad77d` is historical, not numerical reproduction.
+Initial paper reading already distinguishes original Table 1 DINOv2 CUB/Cars
+from Table 3 CIFAR-100, which reports DINOv1 only. Verify original-source history,
+evaluation pool/matching/checkpoint policy and any remaining port differences;
+record evidence and unresolved gates before claiming direct comparability.
+
+Completed: report 10 compares original paper Tables 1/3, 2024 released code
+`62e88d1e76803cfe822ee9e617529368197486cd`, confirmed issue 11 and corrected
+`d8107b5` with the current pipeline. It identifies smoothing/temperature,
+hierarchy, Cars trainable-block and checkpoint-provenance differences; original
+CIFAR-100 paper row is DINOv1, unlike the current DINOv2 runs. Released 2024
+code defaults to 200 epochs; the earlier conversation's 20/50-epoch comparison
+must refer only to the corrected 2026 README, not the original paper. README
+and report 09 now clarify this. No training implementation/config was changed.
+
+Added `tests/test_selex_ss_protocol.py` to compare actual pinned evaluator
+statements with the adapter on CPU, substituting only the CUDA fitter kernel.
+Feature/anchor-input/parameter/RNG/global-v2/row-order parity and invariance to
+unlabeled evaluation-target changes passed. The new mock initially duplicated
+an is_code keyword; fixed before final validation. Fresh targeted prior tests:
+29 passed. Final full bounded CPU suite: **158 passed, zero failures/errors/skips**,
+run `crish-v21-20261110T131403Z-5d2b952b`, receipt
+`results/local_validation.json`, log
+`logs/crish-v21-20261110T131403Z-5d2b952b/smoke.log` (60 seconds per child).
+Source-level evaluation is supported by synthetic evidence; exact original
+paper-score reproduction, actual data/checkpoint SHA and NVIDIA behavior are
+not verified. No benchmark or process interruption occurred. Next action is
+the existing remote preflight, not an unbounded sweep or a rollback to the bug.
+
+## Complete SelEx best/last handoff — 2026-11-10
+
+The user asks whether the source implements the discussed GitHub best/last
+reporting. Current 200-epoch jobs support final SS only. Complete the agreed
+handoff with a secondary checkpoint selected by Old-v1 on plain disjoint test,
+then SS-v2 evaluation of both that best checkpoint and last. Preserve the
+declared primary SS-last, both matched arms, corrected upstream and 200 epochs.
+Prior uncommitted work is retained. Fresh process inspection finds IDE/Codex
+services and no local training/pytest; Mac remains arm64/16 GiB without NVIDIA.
+No data/weights or CUDA run is ready locally; remote job status is unknown.
+Implement selection only in evaluation workers, exact-provenance resume and
+bounded final evaluations; validate CPU fixtures and source package before
+handoff. Do not start training or replace existing checkpoints/processes.
+
+Completed: `selex_runtime/selection.py` implements evaluation-worker-only
+Old-v1 strict-improvement selection with earliest ties, a documented first-zero
+fallback and atomic weights/provenance bundles. Plain scores record v1/v2
+separately; train-unlabeled scores cannot select. All six new configs enable
+secondary best reporting. Final launcher evaluates SS-v2 for last and best;
+`evaluation.json` remains SS-last and best has its own report/history. Parent
+deadlines allow both final evaluators. Historical SelEx 50-epoch profiles keep
+the optional selector off; legacy Hyp-SelEx selection remains unchanged.
+
+Resume restores best-so-far and mandatory test history, fails on missing/ahead
+artifacts or source/config drift, and replays a pending evaluator idempotently.
+The integrated CPU test confirms unchanged SGD/RNG on selection on/off, and
+interrupted/resumed updates match continuous training. No scores feed repairs,
+optimization or early stopping. Source/config fingerprints changed; existing
+checkpoints must retain their original source/config. README/reports 08/09/10
+describe primary/secondary endpoints and disclosure of evaluation-label use.
+Historical manuscript settings digest/PDF provenance was regenerated without
+changing its declared historical-method scope.
+
+Validation: initial targeted 48 tests passed; eight new selector tests passed,
+including integrated SGD/resume parity. Final full CPU runner
+`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/run_smoke.py`
+passed **166 tests, zero failures/errors/skips**, run
+`crish-v21-20261110T132854Z-e0e51225`. Receipt:
+`results/local_validation.json`; log:
+`logs/crish-v21-20261110T132854Z-e0e51225/smoke.log`.
+Every child command is bounded to 60 seconds. Both upstream trees remain
+unchanged; no benchmark/GPU process or download started. Next remote command:
+`bash scripts/train_selex.sh check --dataset cub --baseline`, after preparing
+the Linux NVIDIA environment, data and weights.
+
+## Replace CIFAR-100 with FGVC-Aircraft in the main matrix — 2026-11-10
+
+The user explicitly chooses Cars/CUB/FGVC-Aircraft as the main three datasets.
+Keep DINOv2, 200 epochs and paired SelEx/CRiSH best/last reporting; retain CIFAR
+configs as optional prior work. All prior uncommitted changes/logs/checkpoints
+are preserved. Fresh process inspection finds IDE/Codex services and no local
+Python training/pytest. Host is macOS arm64/16 GiB, no NVIDIA CUDA; project data,
+weights and checkpoints are absent. Remote job readiness remains unknown.
+
+Pinned SelEx Aircraft loader uses `variant` labels, **zero-based targets**,
+`samples` path/target tuples, the `trainval` pool and disjoint `test` pool.
+Its SSB split SHA256 is
+`2a2481307cec7821721d6a73c1a3ca77db7e657649e043d1a83aa7dd81a5a194`:
+50 known / 50 novel (Hard 13, Medium 17, Easy 20), disjoint full coverage.
+Needed work: label-offset-aware shared audit, path-only Aircraft training
+adapter, offline metadata/class-map/image integrity guard, portable root,
+two new matched profiles, CLI/release matrix and docs updates. Validate with
+the actual pinned loader on synthetic images, leakage guards and bounded CPU
+regressions. No dataset/weight download or full training is started locally.
+
+Completed: two Aircraft 200-epoch DINOv2 profiles preserve source temperature
+.5, smoothing .75, grad-from-block 9 and workers 4; their only arm difference
+is `method`. Best plain-test Old-v1 / final SS-v2 best+last remains enabled.
+Shared path-only sample extraction and target-offset-aware audits now support
+the native Aircraft loader; unlabeled targets remain -1 and are never read
+by the training adapter. Offline metadata validation checks both variant maps,
+all image paths, duplicate and cross-pool IDs and consistent native class
+strings. Runtime download/extraction is disabled. Main CLI/release/docs now
+use Cars/CUB/Aircraft; CIFAR is retained as an optional supported dataset.
+
+Bounded validation: 23 targeted tests passed, then full CPU runner
+`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/run_smoke.py`
+passed **171 tests, zero failures/errors/skips**, run
+`crish-v21-20261110T134317Z-52b19aa4` (60 seconds per child). Five new Aircraft
+tests execute pinned loader/split/audit/label sanitization on synthetic JPEGs,
+image transforms and CPU backward, plus corrupt/missing/overlapping metadata
+guards. Existing tests cover all supported CLI profiles, selection/resume and
+source archive execution. Receipt: `results/local_validation.json`; log:
+`logs/crish-v21-20261110T134317Z-52b19aa4/smoke.log`.
+Pinned upstream hashes remain unchanged. Historical manuscript digest/PDF
+provenance was refreshed without adding results or changing its historical
+method scope. Actual dataset/weights/CUDA and benchmark metrics remain absent.
+Next remote command after preparing Aircraft data/environment/weights:
+`bash scripts/train_selex.sh check --dataset aircraft --baseline`.

@@ -98,6 +98,8 @@ class EpochRuntime:
         from .evaluation_policy import evaluation_seed
         from .metrics import atomic_json, summarize_run, write_epoch
         from .selection import TEST_PROTOCOL, enabled, select_checkpoint
+        from selex_runtime.selection import enabled as selex_best_enabled
+        secondary_best = selex_best_enabled(self.config)
         for key in ('all_acc', 'old_acc', 'new_acc'):
             if not math.isfinite(metrics[key]) or not 0 <= metrics[key] <= 1:
                 raise ValueError(f'Invalid evaluation metric: {key}')
@@ -112,11 +114,15 @@ class EpochRuntime:
             purpose=role, checkpoint_selection=self.config.get('checkpoint_selection', 'final_epoch'),
             # A fixed last/monitor snapshot is not chosen by test scores even
             # when this run also maintains a separate test-selected best.
-            selected_using_evaluation_labels=enabled(self.config) and role == 'best_old_test',
-            checkpoint_selection_uses_evaluation_labels=enabled(self.config),
+            selected_using_evaluation_labels=(enabled(self.config) or secondary_best) and role == 'best_old_test',
+            checkpoint_selection_uses_evaluation_labels=enabled(self.config) or (secondary_best and role == 'best_old_test'),
             matching_uses_evaluation_labels=True,
             used_for_checkpoint_selection=is_test,
             timestamp_utc=datetime.now(timezone.utc).isoformat(), **metrics)
+        if secondary_best:
+            record.update(primary='fixed_final_ss_v2',
+                secondary_best_checkpoint_rule='max_old_v1_disjoint_plain_test_strict_improvement',
+                selection_matching=getattr(self, 'selection_matching', None))
         for key in ('all_acc', 'old_acc', 'new_acc'):
             record[key] = float(record[key])
         if self.evaluated_checkpoint:
@@ -137,8 +143,10 @@ class EpochRuntime:
             history = self.run_dir/'epoch_metrics.jsonl'
         elif role == 'best_old_test':
             destination = self.run_dir/'evaluation_best_old_test.json'
-            atomic_json(self.run_dir/'evaluation.json', record)
-            history = self.run_dir/'epoch_metrics.jsonl'
+            if enabled(self.config):
+                atomic_json(self.run_dir/'evaluation.json', record)
+            # Separate best/last histories: they can share the same epoch.
+            history = self.run_dir/('best_old_ss_metrics.jsonl' if secondary_best else 'epoch_metrics.jsonl')
         else:
             destination = self.run_dir/'evaluations'/f'epoch_{epoch+1:04d}.json'
             history = self.run_dir/'epoch_metrics.jsonl'

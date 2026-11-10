@@ -2,18 +2,22 @@
 
 Source nghiên cứu GCD với CRiSH và baseline đối chứng. **Hướng mới ngày 10/11/2026: áp dụng CRiSH lên SelEx đã cập nhật**, không dùng hyperbolic learning. Nhánh Hyp-SelEx cũ vẫn được giữ riêng.
 
-**Chạy hướng SelEx mới** trên Linux NVIDIA, sau khi chuẩn bị môi trường/data/weights:
+**Chạy SelEx / SelEx + CRiSH, 200 epoch, DINOv2** trên Linux NVIDIA, sau khi chuẩn bị môi trường/data/weights:
 
 ```bash
-# SelEx B0, rồi SelEx + CRiSH: chạy từng lệnh, không chạy đồng thời
-bash scripts/train_selex.sh check --baseline
-bash scripts/train_selex.sh --baseline
-bash scripts/train_selex.sh
+# Bộ chính: --dataset scars | cub | aircraft. Chạy từng job, không chạy đồng thời.
+bash scripts/train_selex.sh check --dataset scars --baseline
+bash scripts/train_selex.sh --dataset scars --baseline
+bash scripts/train_selex.sh --dataset scars
 ```
 
-Source SelEx ghim tại `d8107b5`; Cars/DINOv2 dùng 50 epoch, head 65536, các tầng loss vào dần mỗi 10 epoch. Hai arm chỉ khác `method`. Kết quả chính là **SS-v2 của final checkpoint**, theo cách báo last của README SelEx mới; plain-test mỗi epoch chỉ để theo dõi. Không dùng selector Best Old-v2 của nhánh cũ cho nhánh này. **Chưa xác minh CUDA/dữ liệu thật hoặc benchmark của đường SelEx mới.** Hướng dẫn môi trường riêng, resource limits và các khác biệt được ghi tại [SelEx + CRiSH](reports/08_selex_crish_migration.md).
+Source SelEx ghim tại `d8107b5`; bộ thí nghiệm chính là **Stanford Cars + CUB + FGVC-Aircraft**, thay CIFAR-100 theo lựa chọn mới. Sáu cấu hình trong `configs/selex_{scars,cub,aircraft}_{baseline,crish}_200.json` dùng **200 epoch**, DINOv2, batch 128, head 65536; các tầng loss vào dần mỗi 10 epoch. Trong mỗi dataset hai arm chỉ khác `method`, giữ các tham số riêng của dataset theo source. Đây là **thí nghiệm kéo dài cùng ngân sách**, khác lịch 50 epoch cho ba dataset này trong README upstream cập nhật. Config CIFAR-100 và các config 50 epoch cũ vẫn được giữ như tùy chọn.
+
+Kết quả chính là **SS-v2 của final checkpoint**. Cả 6 config mới bật `report_best_old_test=true`: mỗi epoch lấy **Old-v1 trên plain disjoint test** để giữ một checkpoint best, rồi cuối training chấm **SS-v2 cho cả best và last** như luồng GitHub. `evaluation.json` / `evaluation_last.json` là SS-last; `evaluation_best_old_test.json` là SS-best. Plain train-unlabeled tại epoch 200 chỉ để theo dõi. Selector phụ dùng nhãn đánh giá, không điều khiển SGD/CRiSH hoặc đổi kết quả chính. **Chưa xác minh CUDA/dữ liệu thật hoặc benchmark của đường SelEx mới.** Layout dữ liệu, lệnh cho đủ 6 run, seed/resume và điều kiện dừng nằm trong [hướng dẫn 3 dataset × 200 epoch](reports/09_selex_200epoch_multidataset.md); thiết lập môi trường và nền tảng phương pháp nằm trong [SelEx + CRiSH](reports/08_selex_crish_migration.md).
 
 Các config SelEx hiện dùng `evaluation_rng=upstream`: seed train theo source, plain-test tiêu thụ RNG theo thứ tự upstream và SS đặt seed 0 trước khi tạo dataset. Đây là thay đổi cho **run mới**; checkpoint của bản trước cần source/config gốc để resume. Chi tiết và giới hạn kiểm chứng nằm trong báo cáo migration.
+
+**Đối chiếu paper:** code phát hành năm 2024 có mặc định 200 epoch; 50 epoch ở trên là lịch của bản sửa 2026. Bộ chính Cars/CUB/Aircraft có các dòng DINOv2 trong paper; pipeline hiện tại vẫn dùng hierarchy/hyperparameters đã sửa. CIFAR-100 giữ tùy chọn và dòng của nó trong paper dùng DINOv1. Xem [audit paper, metric và checkpoint](reports/10_paper_comparability_audit.md) trước khi so số.
 
 **Các mục bên dưới mô tả nhánh Hyp-SelEx cũ**, dùng `scripts/train_crish.sh`, hỗ trợ Cars/CUB và có các profile `reference/final/upgraded`. Chúng không phải cấu hình SelEx mới.
 

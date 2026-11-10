@@ -63,7 +63,7 @@ def inspect_inputs(cfg=None):
     sha = provenance['sha']
     name = (cfg or {}).get('dataset_name', 'scars')
     spec = dataset_spec(name)
-    split = check_split(upstream / 'data/ssb_splits'/spec.split_file, name)
+    split = check_split(upstream / 'data/ssb_splits'/spec.split_file if spec.split_file else None, name)
     data, weights, _ = paths()
     variant = (cfg or {}).get('dino', 'v1')
     weight = weights / ('dinov2_vitb14_reg4_pretrain.pth' if variant == 'v2' else 'dino_vitb16_pretrain.pth')
@@ -93,11 +93,13 @@ def audit_dataset(cfg=None):
     args = get_class_splits(argparse.Namespace(dataset_name=name, use_ssb_splits=True,
                                               prop_train_labels=0.5))
     merged, test, _, _ = get_datasets(name, None, None, args)
+    if name == 'cifar100':
+        return audit_cifar_membership(merged, test, args, paths()[0]/spec.folder)
     rows = []
     for partition, dataset in [('labeled', merged.labelled_dataset),
                                ('unlabeled', merged.unlabelled_dataset)]:
         for sample_id, path, label in zip(dataset.uq_idxs, image_paths(dataset, name), raw_targets(dataset, name)):
-            rows.append(dict(id=int(sample_id), path=path, label=int(label) - 1, partition=partition))
+            rows.append(dict(id=int(sample_id), path=path, label=int(label)-spec.target_offset, partition=partition))
     data, _, _ = paths()
     root = data/spec.folder
     counts = check_membership(rows, set(args.train_classes), root, num_classes=spec.num_classes)
@@ -107,9 +109,9 @@ def audit_dataset(cfg=None):
     if {r['id'] for r in rows} != set(map(int, whole.uq_idxs)):
         raise RuntimeError('Train pool coverage mismatch')
     targets = raw_targets(whole, name)
-    if {int(label)-1 for label in targets} != set(args.train_classes) | set(args.unlabeled_classes):
+    if {int(label)-spec.target_offset for label in targets} != set(args.train_classes) | set(args.unlabeled_classes):
         raise RuntimeError('Train class coverage differs from the official split')
-    known_count = sum(label - 1 in args.train_classes for label in targets)
+    known_count = sum(int(label)-spec.target_offset in args.train_classes for label in targets)
     if counts['labeled'] != int(known_count * 0.5):
         raise RuntimeError('Label fraction differs from baseline')
     from pathlib import Path
@@ -122,3 +124,52 @@ def audit_dataset(cfg=None):
     counts['known_classes'] = len(args.train_classes)
     counts['novel_classes'] = len(args.unlabeled_classes)
     return counts
+
+
+def audit_cifar_membership(merged, test, args, root):
+    """Audit-only targets; prove ID/pixel/label alignment against the full pool.
+
+    Train and test use separate official files/namespaces, although both native
+    loaders number IDs from zero. No per-image filesystem paths are invented.
+    File integrity is checked by the offline upstream torchvision loader.
+    """
+    import numpy as np
+    whole = whole_training_dataset('cifar100', root)
+    known, novel = set(args.train_classes), set(args.unlabeled_classes)
+    if known != set(range(80)) or novel != set(range(80, 100)):
+        raise RuntimeError('CIFAR-100 requires the pinned 80/20 class partition')
+    if len(whole) != 50000 or len(test) != 10000:
+        raise RuntimeError('CIFAR-100 requires 50000 train / 10000 disjoint test rows')
+    truth, test_truth = np.asarray(whole.targets), np.asarray(test.targets)
+    for dataset, labels, expected in ((whole, truth, 500), (test, test_truth, 100)):
+        pixels = np.asarray(dataset.data)
+        if pixels.shape != (len(labels), 32, 32, 3) or pixels.dtype != np.uint8:
+            raise RuntimeError('Invalid CIFAR-100 RGB pixel layout')
+        if not np.array_equal(np.asarray(dataset.uq_idxs), np.arange(len(labels))):
+            raise RuntimeError('Whole CIFAR-100 pool has unexpected sample IDs')
+        if labels.dtype.kind not in 'iu' or np.any(labels < 0) or np.any(labels >= 100):
+            raise RuntimeError('Invalid CIFAR-100 zero-based targets')
+        if not np.array_equal(np.bincount(labels, minlength=100), np.full(100, expected)):
+            raise RuntimeError('CIFAR-100 class coverage/count mismatch')
+    seen, counts = set(), {}
+    for name, dataset in (('labeled', merged.labelled_dataset), ('unlabeled', merged.unlabelled_dataset)):
+        ids = np.asarray(dataset.uq_idxs)
+        if ids.ndim != 1 or ids.dtype.kind not in 'iu' or np.any(ids < 0) or np.any(ids >= len(whole)):
+            raise RuntimeError('Invalid CIFAR-100 training IDs')
+        unique = set(map(int, ids))
+        if len(unique) != len(ids) or seen & unique:
+            raise RuntimeError('Duplicate CIFAR-100 ID across training membership')
+        if not np.array_equal(np.asarray(dataset.targets), truth[ids]):
+            raise RuntimeError('CIFAR-100 target/ID alignment mismatch')
+        if not np.array_equal(np.asarray(dataset.data), whole.data[ids]):
+            raise RuntimeError('CIFAR-100 pixels/ID alignment mismatch')
+        if name == 'labeled' and not set(map(int, dataset.targets)).issubset(known):
+            raise RuntimeError('Novel label in supervised CIFAR-100 partition')
+        seen.update(unique)
+        counts[name] = len(ids)
+    if seen != set(range(len(whole))) or counts != dict(labeled=20000, unlabeled=30000):
+        raise RuntimeError('CIFAR-100 train coverage or 50% known-label fraction mismatch')
+    if getattr(whole, 'train', None) is not True or getattr(test, 'train', None) is not False:
+        raise RuntimeError('CIFAR-100 train/test namespace mismatch')
+    return dict(counts, disjoint_test=len(test), known_classes=80, novel_classes=20,
+                sample_identity='official_file_namespace_and_zero_based_row_id')

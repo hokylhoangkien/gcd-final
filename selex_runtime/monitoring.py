@@ -1,4 +1,4 @@
-"""Bounded plain-test monitoring without test-dependent checkpoint selection."""
+"""Bounded source plain-test evaluation, with optional secondary best selection."""
 import json
 import os
 import subprocess
@@ -16,7 +16,7 @@ def monitor_plain(runtime, epoch, model):
     cfg_path.write_text(json.dumps(runtime.config, indent=2))
     if next(model.parameters()).device.type == 'cuda':
         torch.cuda.empty_cache()
-    from .rng import upstream_policy, create_request, commit_plain_result
+    from .rng import upstream_policy, create_request, commit_plain_result, train_plain_due
     request = None
     if upstream_policy(runtime.config):
         from gcd_runtime.readiness import sha256
@@ -27,6 +27,12 @@ def monitor_plain(runtime, epoch, model):
         timeout=runtime.config['ss_eval_timeout_seconds'], check=True)
     if not (runtime.run_dir/'test_evaluations'/f'epoch_{epoch+1:04d}.json').is_file():
         raise RuntimeError('SelEx plain monitor produced no report; resume checkpoint preserved')
+    if train_plain_due(runtime.config, epoch) and not (
+            runtime.run_dir/'train_plain_evaluations'/f'epoch_{epoch+1:04d}.json').is_file():
+        raise RuntimeError('SelEx scheduled train-plain monitor produced no report; resume checkpoint preserved')
+    from .selection import enabled, BEST_NAME
+    if enabled(runtime.config) and not (runtime.run_dir/BEST_NAME).is_file():
+        raise RuntimeError('SelEx evaluator produced no secondary best checkpoint; resume preserved')
     if request is not None:
         commit_plain_result(runtime, request)
         runtime.plain_rng_pending = False

@@ -27,7 +27,7 @@ def preflight(cfg):
     model.cuda()
     head = architecture.DINOHead(in_dim=768, out_dim=cfg['mlp_out_dim'], nlayers=3).cuda()
     transform, evaluation = get_transform('imagenet', 224, args)
-    merged, _, _, _ = get_datasets('scars', None, evaluation, args)
+    merged, _, _, _ = get_datasets(cfg['dataset_name'], None, evaluation, args)
     images = [merged[0][0], merged[len(merged.labelled_dataset)][0]]
     views = torch.stack([transform(image) for _ in range(2) for image in images]).cuda()
     raw = head(model(views))

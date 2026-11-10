@@ -13,11 +13,18 @@ def validate_config(cfg, *, eval_every_epochs=None):
         raise ValueError('Expected pinned updated SelEx protocol')
     if cfg.get('method') not in ('baseline', 'crish'):
         raise ValueError('SelEx method must be baseline or crish')
-    if cfg.get('dataset_name') != 'scars' or cfg.get('dino') not in ('v1', 'v2'):
-        raise ValueError('Initial SelEx adapter supports Stanford Cars only')
+    if cfg.get('dataset_name') not in ('scars', 'cub', 'aircraft', 'cifar100') or cfg.get('dino') not in ('v1', 'v2'):
+        raise ValueError('SelEx supports scars, cub, aircraft, cifar100 and DINO v1/v2')
+    cfg.setdefault('train_report_interval', 200)
+    cfg.setdefault('report_best_old_test', False)
+    if type(cfg['report_best_old_test']) is not bool:
+        raise ValueError('report_best_old_test must be boolean')
+    if cfg['report_best_old_test'] and cfg.get('evaluation_rng') != 'upstream':
+        raise ValueError('SelEx best/last reporting requires the upstream evaluation RNG schedule')
     # Standardized, predeclared reporting: final SS is primary, as the updated
     # README table reports last checkpoints. We do not relabel Old-v2 as SelEx's
-    # native Old-v1 selector. Plain-test monitoring remains available every epoch.
+    # native Old-v1 selector. An optional secondary best-Old-v1 report never
+    # overrides this fixed-final primary. Plain test runs every epoch.
     if cfg.get('checkpoint_selection') != 'final_epoch' or not cfg.get('final_ss_evaluation'):
         raise ValueError('SelEx path requires fixed-final primary SS evaluation')
     if cfg.get('use_target_normalization') != 'selex_legacy':
@@ -27,7 +34,8 @@ def validate_config(cfg, *, eval_every_epochs=None):
     if eval_every_epochs is not None:
         cfg['ss_eval_every_epochs'] = eval_every_epochs
     for key in ('epochs', 'batch_size', 'mlp_out_dim', 'level_interval', 'max_runtime_seconds',
-                'final_eval_timeout_seconds', 'ss_eval_timeout_seconds', 'ss_n_init', 'ss_max_iter'):
+                'final_eval_timeout_seconds', 'ss_eval_timeout_seconds', 'ss_n_init', 'ss_max_iter',
+                'train_report_interval'):
         if type(cfg[key]) is not int or cfg[key] < 1:
             raise ValueError(f'Invalid SelEx integer: {key}')
     for key in ('seed', 'num_workers', 'ss_eval_every_epochs', 'max_steps_per_epoch'):
@@ -43,7 +51,5 @@ def validate_config(cfg, *, eval_every_epochs=None):
         raise ValueError('Invalid SelEx loss/optimizer settings')
     if cfg.get('strategy') != 'zero_one' or cfg.get('evaluation_rng') not in ('isolated', 'upstream'):
         raise ValueError('Expected zero_one and an explicit SelEx RNG policy')
-    if cfg['evaluation_rng'] == 'upstream' and (cfg['epochs'] >= 200 or cfg.get('train_report_interval', 200) != 200):
-        raise ValueError('Upstream RNG adapter supports the updated sub-200-epoch schedule; extra train-plain evaluation is unsupported')
     cfg['crish'] = asdict(CrishSettings(**cfg['crish']))
     return cfg

@@ -14,7 +14,7 @@ from gcd_runtime.cluster_alignment import restore_input_order
 from crish.training import train_strict
 from .objective import selex_loss
 from .hierarchy import extract_state
-from .rng import upstream_policy, seed_training, seed_ss_setup, rng_digest
+from .rng import upstream_policy, seed_training, seed_ss_setup, rng_digest, train_plain_due
 
 
 def make_args(cfg):
@@ -58,7 +58,7 @@ def run(cfg, run_dir, mode, checkpoint='', epoch=None):
             return [transform(image), transform(image)]
     if upstream_policy(cfg) and mode not in ('train', 'select'):
         seed_ss_setup()
-    merged, test, _, _ = get_datasets(cfg['dataset_name'], TwoViews(), evaluation_transform, args)
+    merged, test, unlabeled_eval, native_datasets = get_datasets(cfg['dataset_name'], TwoViews(), evaluation_transform, args)
     runtime = SelExRuntime(run_dir, cfg, checkpoint if mode == 'train' and checkpoint else None,
         evaluation_epoch=epoch, evaluated_checkpoint=checkpoint if mode != 'train' else None,
         evaluation_kind='test' if mode == 'select' else 'ss')
@@ -73,7 +73,7 @@ def run(cfg, run_dir, mode, checkpoint='', epoch=None):
             if mode == 'select':
                 from .rng import begin_plain_worker, finish_plain_worker
                 request = begin_plain_worker(runtime) if upstream_policy(cfg) else None
-                result = evaluate_plain(model, test, args, runtime)
+                result = evaluate_plain_schedule(model, test, unlabeled_eval, args, runtime)
                 if request is not None:
                     finish_plain_worker(runtime, request)
                 return result
@@ -81,7 +81,7 @@ def run(cfg, run_dir, mode, checkpoint='', epoch=None):
             return evaluate_ss(model, merged, args, runtime)
     # No annotation-bearing evaluation dataset remains reachable by train/repair.
     merged = sanitize_training(merged, cfg['dataset_name'])
-    test = None
+    test = unlabeled_eval = native_datasets = None
     count = len(merged.labelled_dataset)
     weights = torch.DoubleTensor([1. if i < count else count/len(merged) for i in range(len(merged))])
     sampler = WeightedRandomSampler(weights, num_samples=len(merged))
@@ -107,6 +107,10 @@ class SelExRuntime(EpochRuntime):
 
     def restore(self, model, head, optimizer, scheduler):
         start = super().restore(model, head, optimizer, scheduler)
+        from .selection import enabled, restore_artifacts
+        if self.resume and enabled(self.config):
+            restore_artifacts(Path(self.resume).parent, self.run_dir, self.config,
+                              self.restored_epoch, pending=self.restored_plain_rng_pending)
         if self.resume and self.restored_plain_rng_pending:
             from .monitoring import monitor_plain
             monitor_plain(self, self.restored_epoch, model)
@@ -118,12 +122,15 @@ class SelExRuntime(EpochRuntime):
         return start
 
     def monitor_epoch(self, epoch, model):
-        from gcd_runtime.monitoring import monitor_epoch
+        from gcd_runtime.monitoring import monitor_epoch, monitor_due
         from .monitoring import monitor_plain
         if upstream_policy(self.config):
             self.plain_rng_pending = True
         monitor_plain(self, epoch, model)
-        monitor_epoch(self, epoch, model)
+        # Optional SS monitoring is independent; mandatory source plain-test
+        # evaluation/selection has already completed in monitor_plain.
+        if monitor_due(self.config, epoch):
+            monitor_epoch(self, epoch, model)
 
     def evaluation(self, metrics):
         if self.evaluation_kind != 'test':
@@ -132,22 +139,47 @@ class SelExRuntime(EpochRuntime):
         from gcd_runtime.metrics import atomic_json, write_epoch
         from datetime import datetime, timezone
         from gcd_runtime.readiness import sha256
-        record = dict(status='observed', unit='fraction', protocol='plain_kmeans_disjoint_test',
+        import math
+        for key in ('all_acc', 'old_acc', 'new_acc'):
+            if not math.isfinite(metrics[key]) or not 0 <= metrics[key] <= 1:
+                raise ValueError(f'Invalid evaluation metric: {key}')
+        metrics = dict(metrics)
+        pool = metrics.pop('evaluation_pool', 'test')
+        if pool not in ('test', 'train_unlabeled'):
+            raise ValueError('Invalid plain evaluation pool')
+        is_test = pool == 'test'
+        from .selection import enabled, select_checkpoint
+        selecting = is_test and enabled(self.config)
+        record = dict(status='synthetic_fixture' if self.config.get('synthetic_fixture') else 'observed', unit='fraction',
+            protocol='plain_kmeans_disjoint_test' if is_test else 'plain_kmeans_train_unlabeled',
+            evaluation_pool=pool,
             epoch=self.evaluation_epoch, epoch_number=self.evaluation_epoch+1,
-            seed=self.config['seed'], purpose='monitor_only_not_selection',
+            seed=self.config['seed'], purpose='secondary_best_old_selection' if selecting else 'monitor_only_not_selection',
+            used_for_checkpoint_selection=selecting,
+            selection_matching='hungarian_v1_separate' if selecting else None,
             timestamp_utc=datetime.now(timezone.utc).isoformat(), matching='hungarian_v2_global',
             checkpoint_sha256=sha256(Path(self.evaluated_checkpoint)), **metrics)
-        atomic_json(self.run_dir/'test_evaluations'/f'epoch_{self.evaluation_epoch+1:04d}.json', record)
-        write_epoch(self.run_dir/'test_metrics.jsonl', record)
+        if selecting:
+            select_checkpoint(self.run_dir, self.config, self.evaluated_checkpoint, record)
+        folder, history = ('test_evaluations', 'test_metrics.jsonl') if is_test else ('train_plain_evaluations', 'train_plain_metrics.jsonl')
+        atomic_json(self.run_dir/folder/f'epoch_{self.evaluation_epoch+1:04d}.json', record)
+        write_epoch(self.run_dir/history, record)
         print(f'EVAL epoch={self.evaluation_epoch+1} protocol={record["protocol"]} '
               f'All={100*metrics["all_acc"]:.2f}% Old={100*metrics["old_acc"]:.2f}% '
-              f'New={100*metrics["new_acc"]:.2f}% purpose=monitor_only_not_selection', flush=True)
+              f'New={100*metrics["new_acc"]:.2f}% purpose={record["purpose"]}', flush=True)
 
 
 @torch.no_grad()
-def evaluate_plain(model, dataset, args, runtime):
+def evaluate_plain_schedule(model, test, unlabeled, args, runtime):
+    if train_plain_due(runtime.config, runtime.evaluation_epoch):
+        evaluate_plain(model, unlabeled, args, runtime, pool='train_unlabeled')
+    return evaluate_plain(model, test, args, runtime)
+
+
+@torch.no_grad()
+def evaluate_plain(model, dataset, args, runtime, *, pool='test'):
     from gcd_runtime.disjoint_evaluation import plain_kmeans
-    from project_utils.cluster_and_log_utils import split_cluster_acc_v2
+    from project_utils.cluster_and_log_utils import split_cluster_acc_v1, split_cluster_acc_v2
     features, targets = [], []
     native = upstream_policy(runtime.config)
     before = rng_digest()
@@ -160,7 +192,10 @@ def evaluate_plain(model, dataset, args, runtime):
                                         'cuda', iteration_limit=1000 if native else None)
     known = np.isin(truth, np.arange(args.num_labeled_classes))
     all_acc, old_acc, new_acc = split_cluster_acc_v2(truth, predictions, known)
+    v1 = split_cluster_acc_v1(truth, predictions, known)
     runtime.evaluation(dict(all_acc=float(all_acc), old_acc=float(old_acc), new_acc=float(new_acc),
+        evaluation_pool=pool,
+        metrics_v1=dict(zip(('all_acc', 'old_acc', 'new_acc'), map(float, v1))),
         n_samples=len(truth), n_old=int(known.sum()), n_new=int((~known).sum()),
         rng_before_evaluation_sha256=before, rng_after_evaluation_sha256=rng_digest(),
         evaluation_rng=runtime.config['evaluation_rng'], **backend))

@@ -19,6 +19,9 @@ def final_evaluations(snapshot, run_dir, cfg, env, log_handle):
     candidates = [('last', run_dir/'backbone_final.pt', 'evaluation_last.json')]
     if enabled(cfg):
         candidates.append(('best_old_test', run_dir/BEST_NAME, 'evaluation_best_old_test.json'))
+    from selex_runtime.selection import enabled as selex_best_enabled, BEST_NAME as SELEX_BEST_NAME
+    if selex_best_enabled(cfg):
+        candidates.append(('best_old_test_v1', run_dir/SELEX_BEST_NAME, 'evaluation_best_old_test.json'))
     commands = []
     for role, checkpoint, report in candidates:
         if not checkpoint.is_file():
@@ -120,6 +123,8 @@ def main():
                     from .metrics import atomic_json, print_peaks, summarize_run
                     if not (run_dir/'evaluation.json').is_file() and (run_dir/'evaluation_last.json').is_file():
                         atomic_json(run_dir/'evaluation.json', json.loads((run_dir/'evaluation_last.json').read_text()))
+                    if not (run_dir/'evaluation.json').is_file() and (run_dir/'evaluation_best_old_test.json').is_file():
+                        atomic_json(run_dir/'evaluation.json', json.loads((run_dir/'evaluation_best_old_test.json').read_text()))
                     if not (run_dir/'evaluation.json').is_file():
                         raise RuntimeError('Explicit evaluation produced no metrics file')
                     print_peaks(summarize_run(run_dir, write=True))

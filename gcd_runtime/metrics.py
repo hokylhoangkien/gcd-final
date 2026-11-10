@@ -52,7 +52,7 @@ def peaks(rows):
 def collect(run_dir):
     run_dir = Path(run_dir)
     histories = {}
-    for name in ('test_metrics.jsonl', 'epoch_metrics.jsonl'):
+    for name in ('test_metrics.jsonl', 'epoch_metrics.jsonl', 'train_plain_metrics.jsonl', 'best_old_ss_metrics.jsonl'):
         for row in read_rows(run_dir/name):
             histories.setdefault(row['protocol'], {})[row['epoch']] = row
     finals = {}

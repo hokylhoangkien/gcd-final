@@ -61,6 +61,8 @@ def configure_environment(run_dir, cfg):
             setattr(module, name, value)
     module.car_root = str(data/'cars')
     module.cub_root = str(data/'cub')
+    module.cifar_100_root = str(data/'cifar100')
+    module.aircraft_root = str(data/'aircraft/fgvc-aircraft-2013b')
     module.osr_split_dir = str(SOURCE_ROOT/'data/ssb_splits')
     module.dino_pretrain_path = str(weights/'dino_vitb16_pretrain.pth')
     module.dino_pretrain_path2 = str(weights/'dinov2_vitb14_reg4_pretrain.pth')

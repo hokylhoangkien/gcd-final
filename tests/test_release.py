@@ -1,6 +1,7 @@
 """Check the actual handoff archive, including execution outside the repository."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -34,8 +35,11 @@ class ReleaseTests(unittest.TestCase):
             root = Path(tmp)/names[0].split('/')[0]
             manifest = json.loads((root/'release_manifest.json').read_text())
             self.assertEqual(manifest['methods'], ['crish', 'baseline'])
-            self.assertEqual(manifest['default_profile'], 'final')
-            self.assertEqual(manifest['default_config'], 'configs/crish_final.json')
+            self.assertEqual(manifest['entrypoint'], 'bash scripts/train_selex.sh')
+            self.assertEqual(manifest['default_profile'], 'selex_200')
+            self.assertEqual(manifest['default_config'], 'configs/selex_scars_crish_200.json')
+            self.assertEqual(manifest['datasets'], ['scars', 'cub', 'aircraft'])
+            self.assertEqual(manifest['optional_datasets'], ['cifar100'])
             for path, digest in manifest['files'].items():
                 self.assertEqual(hashlib.sha256((root/path).read_bytes()).hexdigest(), digest, path)
             for path in ('README.md', 'AGENTS.md', 'NOTICE', 'reports/04_method_and_research_plan.md',
@@ -64,3 +68,14 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 method = 'baseline' if flag else 'crish'
                 self.assertIn('"selected_method": "'+method+'"', result.stdout)
+            # The new default entrypoint must run outside Git for all six plans.
+            for dataset in manifest['datasets']:
+                for baseline in (False, True):
+                    command = ['bash', 'scripts/train_selex.sh', '--dataset', dataset, '--dry-run']
+                    if baseline:
+                        command.append('--baseline')
+                    result = subprocess.run(command, cwd=root, capture_output=True, text=True, timeout=10,
+                                            env=dict(os.environ, SELEX_PYTHON=sys.executable))
+                    self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+                    self.assertIn('"dataset_name": "'+dataset+'"', result.stdout)
+                    self.assertIn('"epochs": 200', result.stdout)

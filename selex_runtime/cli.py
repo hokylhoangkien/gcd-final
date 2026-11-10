@@ -14,6 +14,8 @@ def main():
     parser.add_argument('mode', nargs='?', default='train', choices=['train', 'check', 'smoke', 'evaluate'])
     parser.add_argument('--baseline', action='store_true', help='Updated SelEx without CRiSH')
     parser.add_argument('--config', type=Path, help='Exact SelEx config snapshot; also supports other seeds')
+    parser.add_argument('--dataset', choices=['scars', 'cub', 'aircraft', 'cifar100'],
+                        help='Dataset for the matched 200-epoch DINOv2 profiles; default scars')
     parser.add_argument('--resume', type=Path)
     parser.add_argument('--checkpoint', type=Path)
     parser.add_argument('--dry-run', action='store_true')
@@ -29,23 +31,25 @@ def main():
     if args.mode == 'evaluate' and not args.checkpoint:
         parser.error('evaluate requires --checkpoint')
     name = 'baseline' if args.baseline else 'crish'
-    full = args.config or ROOT/f'configs/selex_{name}.json'
+    dataset = args.dataset or 'scars'
+    full = args.config or ROOT/f'configs/selex_{dataset}_{name}_200.json'
     cfg = load_config(full, eval_every_epochs=args.eval_every)
+    if args.dataset is not None and cfg['dataset_name'] != args.dataset:
+        parser.error('--dataset must match the supplied --config')
     if args.seed is not None:
         cfg['seed'] = args.seed
     if cfg.get('baseline_family') != 'selex' or cfg['method'] != name:
         parser.error('Config must match SelEx and the selected baseline/CRiSH arm')
-    smoke = ROOT/f'configs/selex_{name}_smoke.json'
-    if args.config or args.seed is not None or args.eval_every is not None:
-        directory = ROOT/'runs/plans'/('selex-config-'+uuid.uuid4().hex[:12])
-        directory.mkdir(parents=True, exist_ok=False)
-        full = directory/'full.json'
-        full.write_text(json.dumps(cfg, indent=2)+'\n')
-        trial = json.loads(json.dumps(cfg))
-        trial.update(epochs=1, max_steps_per_epoch=2, max_runtime_seconds=1800, ss_eval_every_epochs=0)
-        trial['crish']['warmup_epochs'] = 0
-        smoke = directory/'smoke.json'
-        smoke.write_text(json.dumps(trial, indent=2)+'\n')
+    # Derive smoke from the selected dataset/arm, never a Cars-only preset.
+    directory = ROOT/'runs/plans'/('selex-config-'+uuid.uuid4().hex[:12])
+    directory.mkdir(parents=True, exist_ok=False)
+    full = directory/'full.json'
+    full.write_text(json.dumps(cfg, indent=2)+'\n')
+    trial = json.loads(json.dumps(cfg))
+    trial.update(epochs=1, max_steps_per_epoch=2, max_runtime_seconds=1800, ss_eval_every_epochs=0)
+    trial['crish']['warmup_epochs'] = 0
+    smoke = directory/'smoke.json'
+    smoke.write_text(json.dumps(trial, indent=2)+'\n')
     stages = [('preflight', full, None)] if args.mode == 'check' else []
     if args.mode == 'train':
         if not args.resume:
@@ -56,7 +60,10 @@ def main():
     elif args.mode == 'evaluate':
         stages.append(('evaluate', full, args.checkpoint))
     print(json.dumps(dict(baseline_family='selex', method=name, primary='fixed-final SS-v2',
+        dataset_name=cfg['dataset_name'], dino=cfg['dino'],
         epochs=cfg['epochs'], seed=cfg['seed'], head_dimension=cfg['mlp_out_dim'],
+        secondary='SS-v2 of best plain-test Old-v1' if cfg['report_best_old_test'] else None,
+        protocol='matched_extended_200_epochs' if cfg['epochs'] == 200 else 'explicit_config_schedule',
         status='dry_run' if args.dry_run else 'readiness_pending'), indent=2), flush=True)
     for mode, config, checkpoint in stages:
         stage = load_config(config)
@@ -72,8 +79,9 @@ def main():
             command += ['--checkpoint', str(checkpoint)]
         if args.dry_run:
             command += ['--dry-run']
+        final_count = 2 if mode == 'train' and stage['report_best_old_test'] else 1
         subprocess.run(command, cwd=ROOT, check=True,
-                       timeout=240+stage['max_runtime_seconds']+stage['final_eval_timeout_seconds'])
+                       timeout=240+stage['max_runtime_seconds']+final_count*stage['final_eval_timeout_seconds'])
 
 
 if __name__ == '__main__':

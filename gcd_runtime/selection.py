@@ -33,6 +33,10 @@ def validate_best(bundle, config):
 def load_evaluation_checkpoint(path, config, runtime):
     import torch
     checkpoint = torch.load(path, map_location='cpu', weights_only=True)
+    if config.get('baseline_family') == 'selex':
+        from selex_runtime.selection import BEST_FORMAT as SELEX_BEST_FORMAT, load_checkpoint
+        if checkpoint.get('format') == SELEX_BEST_FORMAT:
+            return load_checkpoint(path, config, runtime)
     if checkpoint.get('format') == BEST_FORMAT:
         validate_best(checkpoint, config)
         runtime.evaluation_epoch = checkpoint['selection']['epoch']

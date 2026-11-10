@@ -32,6 +32,27 @@ class ImageRows(Dataset):
         return self.transform(image) if self.transform is not None else image, row.target, row.sample_id
 
 
+class ArrayRows(Dataset):
+    """Own only RGB pixels, sanitized targets and IDs; never the source dataset."""
+    def __init__(self, pixels, rows, transform):
+        pixels = np.asarray(pixels)
+        if pixels.ndim != 4 or pixels.shape[1:] != (32, 32, 3) or pixels.dtype != np.uint8:
+            raise ValueError('Expected CIFAR-100 RGB pixel arrays')
+        self.pixels = np.array(pixels, copy=True)
+        self.pixels.flags.writeable = False
+        self.rows, self.transform = tuple(rows), transform
+        if len(self.pixels) != len(self.rows):
+            raise ValueError('Pixel/target/ID lengths differ')
+
+    def __len__(self):
+        return len(self.rows)
+
+    def __getitem__(self, index):
+        from PIL import Image
+        image, row = Image.fromarray(self.pixels[index]), self.rows[index]
+        return self.transform(image) if self.transform is not None else image, row.target, row.sample_id
+
+
 class SanitizedMerged(Dataset):
     def __init__(self, labeled, unlabeled):
         self.labelled_dataset, self.unlabelled_dataset = labeled, unlabeled
@@ -52,14 +73,30 @@ class SanitizedMerged(Dataset):
 
 
 def sanitize_training(merged, dataset_name='scars'):
-    from .datasets import image_paths, raw_targets
+    from .datasets import image_paths, raw_targets, dataset_spec
     labeled, unlabeled = merged.labelled_dataset, merged.unlabelled_dataset
+    if dataset_name == 'cifar100':
+        # Only the legally labeled side's targets/target_transform are accessed.
+        targets = raw_targets(labeled, dataset_name)
+        if len(targets) != len(labeled.uq_idxs):
+            raise ValueError('Labeled target/ID lengths differ')
+        rows = []
+        for target, sample_id in zip(targets, labeled.uq_idxs):
+            legal = int(target)
+            if labeled.target_transform is not None:
+                legal = int(labeled.target_transform(legal))
+            if not 0 <= legal < 80:
+                raise ValueError('CIFAR-100 supervised target outside known classes')
+            rows.append(ImageRow('', legal, int(sample_id)))
+        other = [ImageRow('', -1, int(sample_id)) for sample_id in unlabeled.uq_idxs]
+        return SanitizedMerged(ArrayRows(labeled.data, rows, labeled.transform),
+                               ArrayRows(unlabeled.data, other, unlabeled.transform))
     paths, targets = image_paths(labeled, dataset_name), raw_targets(labeled, dataset_name)
     if not len(paths) == len(targets) == len(labeled.uq_idxs):
         raise ValueError('Labeled path/target/ID lengths differ')
     rows = []
     for path, target, sample_id in zip(paths, targets, labeled.uq_idxs):
-        legal = int(target)-1
+        legal = int(target)-dataset_spec(dataset_name).target_offset
         if labeled.target_transform is not None:
             legal = int(labeled.target_transform(legal))
         rows.append(ImageRow(str(path), legal, int(sample_id)))

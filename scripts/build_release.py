@@ -58,8 +58,10 @@ def build(output):
                     selex_upstream_sha=json.loads(selex_manifest.read_text())['commit'],
                     baseline_families=['hypselex', 'selex'],
                     methods=['crish', 'baseline'], cuda_verified=False, benchmark_status='not_run',
-                    entrypoint='bash scripts/train_crish.sh', default_profile='final',
-                    default_config='configs/crish_final.json',
+                    entrypoint='bash scripts/train_selex.sh', default_profile='selex_200',
+                    default_config='configs/selex_scars_crish_200.json',
+                    datasets=['scars', 'cub', 'aircraft'], optional_datasets=['cifar100'],
+                    historical_entrypoint='bash scripts/train_crish.sh',
                     files={str(p.relative_to(ROOT)): sha256(p) for p in files})
     with tarfile.open(destination, 'x:gz') as archive:
         for path in files:

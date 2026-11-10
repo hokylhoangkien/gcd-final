@@ -65,6 +65,8 @@ def main():
                  '--junitxml=' + str(run_dir / 'pytest.xml')],
                 [sys.executable, 'scripts/check_integrity.py'],
                 [sys.executable, 'scripts/check_integrity.py', '--dataset', 'cub'],
+                [sys.executable, 'scripts/check_integrity.py', '--dataset', 'cifar100'],
+                [sys.executable, 'scripts/check_integrity.py', '--dataset', 'aircraft'],
                 [sys.executable, 'scripts/check_protocol.py'],
                 [sys.executable, 'scripts/check_manuscript.py']]
     metadata['commands'] = commands

@@ -19,6 +19,13 @@ class DataOnlyUnpickler(pickle.Unpickler):
 
 def check_split(path, dataset_name='scars'):
     spec = dataset_spec(dataset_name)
+    if dataset_name == 'cifar100':
+        # Upstream get_class_splits defines ranges; no SSB pickle exists here.
+        protocol = dict(dataset_name='cifar100', known_classes=list(range(80)),
+                        novel_classes=list(range(80, 100)), prop_train_labels=0.5)
+        digest = hashlib.sha256(json.dumps(protocol, sort_keys=True).encode()).hexdigest()
+        return dict(sha256=digest, kind='upstream_fixed_ranges_not_split_file',
+                    known_count=80, novel_count=20, protocol=protocol)
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     if digest != spec.split_sha256:
         raise ValueError('Official pinned split checksum mismatch')
@@ -75,9 +82,12 @@ def main():
     parser.add_argument('--data-root', type=Path)
     parser.add_argument('--dataset', default='scars', choices=tuple(DATASETS))
     args = parser.parse_args()
-    path = ROOT / 'upstream/HypCD/data/ssb_splits' / dataset_spec(args.dataset).split_file
+    filename = dataset_spec(args.dataset).split_file
+    path = ROOT / 'upstream/HypCD/data/ssb_splits' / filename if filename else None
     report = {'dataset_name': args.dataset, 'split': check_split(path, args.dataset), 'image_integrity': 'not_checked_no_manifest'}
     if args.manifest:
+        if args.dataset == 'cifar100':
+            parser.error('CIFAR-100 array membership is audited by remote preflight, not a file-image manifest')
         if not args.data_root:
             parser.error('--data-root is required with --manifest')
         with path.open('rb') as handle:

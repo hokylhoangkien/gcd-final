@@ -16,6 +16,11 @@ def upstream_policy(config):
     return config.get('evaluation_rng') == 'upstream'
 
 
+def train_plain_due(config, epoch):
+    """Source evaluates unlabeled-train BEFORE disjoint-test at this boundary."""
+    return upstream_policy(config) and (epoch+1) % config.get('train_report_interval', 200) == 0
+
+
 def seed_training(seed):
     """Exact source main calls; do not add Python/cudnn seeding here."""
     np.random.seed(seed)

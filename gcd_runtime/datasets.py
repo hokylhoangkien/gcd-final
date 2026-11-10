@@ -1,16 +1,18 @@
 """Dataset layout adapters; method/loss code is shared across supported datasets."""
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Optional
 
 
 @dataclass(frozen=True)
 class DatasetSpec:
     name: str
     folder: str
-    split_file: str
-    split_sha256: str
+    split_file: Optional[str]
+    split_sha256: Optional[str]
     num_classes: int
     metadata: tuple
+    target_offset: int = 1
 
 
 DATASETS = {
@@ -21,19 +23,33 @@ DATASETS = {
         '48bdcaa05603d932037738d3df776ab500945e9b7aeff85f4668305bf71bd1e7', 200,
         ('CUB_200_2011/images.txt', 'CUB_200_2011/image_class_labels.txt',
          'CUB_200_2011/train_test_split.txt', 'CUB_200_2011/attributes/image_attribute_labels.txt')),
+    'cifar100': DatasetSpec('cifar100', 'cifar100', None, None, 100,
+        ('cifar-100-python/train', 'cifar-100-python/test', 'cifar-100-python/meta'), 0),
+    'aircraft': DatasetSpec('aircraft', 'aircraft/fgvc-aircraft-2013b', 'aircraft_osr_splits.pkl',
+        '2a2481307cec7821721d6a73c1a3ca77db7e657649e043d1a83aa7dd81a5a194', 100,
+        ('data/images_variant_trainval.txt', 'data/images_variant_test.txt'), 0),
 }
 
 
 def dataset_spec(name='scars'):
     if name not in DATASETS:
-        raise ValueError(f'Unsupported dataset: {name}; choose scars or cub')
+        raise ValueError(f'Unsupported dataset: {name}; choose {", ".join(DATASETS)}')
     return DATASETS[name]
 
 
 def image_paths(dataset, name):
     dataset_spec(name)
+    if name == 'cifar100':
+        raise ValueError('CIFAR-100 stores pixel arrays; use sample IDs, not invented image paths')
     if name == 'scars':
         return tuple(map(str, dataset.data))
+    if name == 'aircraft':
+        base = (Path(dataset.root)/'data/images').resolve()
+        # Index path only: never unpack/read an unlabeled sample's target.
+        paths = tuple(Path(row[0]).resolve() for row in dataset.samples)
+        if any(not path.is_relative_to(base) for path in paths):
+            raise ValueError('Aircraft image path escapes the images directory')
+        return tuple(map(str, paths))
     # Access no target column, attribute array or target transform here. The
     # unlabeled training adapter calls only this path/ID accessor.
     base = (Path(dataset.root)/dataset.base_folder).resolve()
@@ -44,8 +60,12 @@ def image_paths(dataset, name):
 
 
 def raw_targets(dataset, name):
-    """Native one-based targets; only legal labeled training rows or audits."""
+    """Native targets; use target_offset, only legal labeled rows or audits."""
     dataset_spec(name)
+    if name == 'cifar100':
+        return dataset.targets
+    if name == 'aircraft':
+        return [row[1] for row in dataset.samples]
     return dataset.target if name == 'scars' else dataset.data['target'].tolist()
 
 
@@ -89,6 +109,60 @@ def configure_modules(config_module):
         if not self._check_integrity():
             raise RuntimeError('CUB inputs missing/corrupt; automatic download/extraction disabled. Prepare CUB_200_2011 locally.')
     cub.CustomCub2011._download = offline_cub
+    # Keep the pinned loader's download=True calls offline, including on missing
+    # or corrupt CIFAR inputs. Existing CUB/Cars-only environments are unchanged.
+    if hasattr(config_module, 'cifar_100_root'):
+        from data import cifar
+        cifar.cifar_100_root = config_module.cifar_100_root
+
+        def offline_cifar(self):
+            if not self._check_integrity():
+                raise RuntimeError('CIFAR-100 inputs missing/corrupt; automatic download disabled. Prepare cifar100/cifar-100-python/{train,test,meta}.')
+        cifar.CustomCIFAR100.download = offline_cifar
+    if hasattr(config_module, 'aircraft_root'):
+        from data import fgvc_aircraft
+        fgvc_aircraft.aircraft_root = config_module.aircraft_root
+
+        def offline_aircraft(self):
+            validate_aircraft_metadata(self.root)
+            if not self._check_exists():
+                raise RuntimeError('Aircraft inputs missing; automatic download disabled')
+        fgvc_aircraft.FGVCAircraft.download = offline_aircraft
+
+
+def validate_aircraft_metadata(root):
+    """Match native variant indexing in both pools before any loader/download.
+
+    The source indexes sorted raw class strings separately in trainval/test;
+    preserve that mapping, including detection of inconsistent line endings.
+    """
+    root = Path(root)
+    base = (root/'data/images').resolve()
+    pools, mappings = {}, {}
+    for split in ('trainval', 'test'):
+        path = root/f'data/images_variant_{split}.txt'
+        if not path.is_file():
+            raise ValueError(f'Missing Aircraft metadata: {path.name}; automatic download disabled')
+        ids, variants = set(), set()
+        for line in path.read_text().splitlines(keepends=True):
+            parts = line.split(' ', 1)
+            if len(parts) != 2 or not parts[0].isdigit() or not parts[1].strip():
+                raise ValueError('Invalid Aircraft variant metadata row')
+            sample, variant = parts
+            if sample in ids:
+                raise ValueError('Duplicate Aircraft image ID')
+            image = (base/(sample+'.jpg')).resolve()
+            if not image.is_relative_to(base) or not image.is_file():
+                raise ValueError('Missing or unsafe Aircraft image')
+            ids.add(sample)
+            variants.add(variant)
+        if not ids or len(variants) != 100 or len({v.strip() for v in variants}) != 100:
+            raise ValueError('Aircraft requires 100 consistent variant classes in each pool')
+        pools[split], mappings[split] = ids, sorted(variants)
+    if pools['trainval'] & pools['test']:
+        raise ValueError('Aircraft trainval/test image ID overlap')
+    if mappings['trainval'] != mappings['test']:
+        raise ValueError('Aircraft trainval/test variant class mappings differ')
 
 
 def whole_training_dataset(name, root):
@@ -96,5 +170,11 @@ def whole_training_dataset(name, root):
         from data.stanford_cars import CarsDataset
         return CarsDataset(train=True, data_dir=str(root))
     dataset_spec(name)
+    if name == 'cifar100':
+        from data.cifar import CustomCIFAR100
+        return CustomCIFAR100(root=str(root), train=True, download=False)
+    if name == 'aircraft':
+        from data.fgvc_aircraft import FGVCAircraft
+        return FGVCAircraft(root=str(root), split='trainval', download=False)
     from data.cub import CustomCub2011
     return CustomCub2011(root=str(root), train=True, download=False)
