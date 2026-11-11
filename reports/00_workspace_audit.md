@@ -1349,3 +1349,196 @@ provenance was refreshed without adding results or changing its historical
 method scope. Actual dataset/weights/CUDA and benchmark metrics remain absent.
 Next remote command after preparing Aircraft data/environment/weights:
 `bash scripts/train_selex.sh check --dataset aircraft --baseline`.
+
+## SelEx empty-cluster failure audit — 2026-11-11
+
+**Historical intermediate attempt:** the forced-support patch described in
+this section was not committed and is superseded by the source-preserving
+empty-slot resolution below and report 08. Its test receipt does not validate
+the final implementation.
+
+Workspace initially clean at `083326c`; existing reports, logs and upstream
+snapshots preserved. macOS arm64, no nvidia-smi executable; local CPU tests
+only. Process listing required sandbox escalation; no process was stopped or
+restarted. No remote process visibility or new traceback log beyond the user
+report. Latest existing validation logs are dated 2026-11-10; no benchmark
+readiness inferred from these synthetic tests.
+
+Failure path: `selex_runtime/hierarchy.py:extract_state` uses pinned SelEx
+K_Means, restores loader row order and substitutes nonfinite centers but does
+not fill missing assignment IDs. `SupervisionState.validate` correctly rejects
+empty clusters. sklearn coarse grouping can independently produce empty groups
+when level-0 prototypes coincide. Existing safe HypCD fitter is a different
+runtime; switching to it would alter the pinned SelEx algorithm.
+
+Safe next action: add deterministic post-fit repair of empty assignments in the
+shared SelEx extraction path, protecting labeled anchors and singleton donors;
+repair coarse parent assignments as whole base-cluster groups. Preserve exact
+nonempty behavior and upstream snapshots; add bounded CPU regression tests.
+This is a numerical/runtime policy change, not evidence of research novelty or
+accuracy. Existing protocol/novelty gates in reports 01/02/07/08 remain in force.
+
+Completed fix and validation: deterministic post-fit fallback in
+`selex_runtime/hierarchy.py`, six regressions in
+`tests/test_selex_empty_clusters.py`, policy/resume disclosure in README and
+report 08. Process audit saw Codex/IDE services and no Python training. No
+local datasets/weights/checkpoints directories; remote readiness unknown.
+
+Initial restricted tests had an OpenMP shared-memory failure; granted CPU
+execution resolved it. An explicit assertion exposed that the first fitter
+fixture could regain full support by later iterations; the fixture now uses
+one iteration per phase with fixed duplicate initial centers and verifies
+that the real fitter output contains an empty ID before repair. Production
+fitter iteration settings are unchanged.
+
+Final command: `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python
+scripts/run_smoke.py` — **177 passed, zero failures/errors/skips**, plus
+split/protocol, static syntax, upstream and manuscript checks passed. Each
+child command has a 60-second timeout. Receipt:
+`results/local_validation.json`; run ID
+`crish-v21-20261111T022031Z-2aa8a1ab`; log:
+`logs/crish-v21-20261111T022031Z-2aa8a1ab/smoke.log`.
+No training, downloads or checkpoint changes. CUDA/data behavior unverified.
+Next remote command on prepared hardware:
+`bash scripts/train_selex.sh check --dataset scars --baseline`, then bounded
+`bash scripts/train_selex.sh smoke --dataset scars --baseline`; substitute
+the actual dataset. Code fingerprint changes prevent direct old-source resume.
+
+### Follow-up semantic review — 2026-11-11
+
+Reviewed pinned SelEx fit_mix_once, coarse prototype grouping and downstream
+USE/pseudo-SSE. Empty-support repair preserves legal anchor assignments, K,
+and whole-child membership at coarse levels; affected means/radii are rebuilt.
+It changes pseudo-positive relations and USE geometry when triggered and is
+therefore an explicit algorithmic fallback, not exact source reproduction.
+Distances for multiple donor selections are measured against the pre-repair
+centers (fixed residual ranking), not a newly converged Lloyd solution.
+Identical embeddings may be partitioned arbitrarily by row-order tie breaking;
+nonempty support does not imply recovered semantic categories or restored
+feature diversity. Frequent repairs would require investigating representation
+collapse/initialization rather than claiming the problem solved numerically.
+
+Additional bounded CPU check: 100 seeded finite random fixtures, fixed K=7,
+30 rows/5 dimensions, four protected anchors and three empty IDs: all retained
+anchors and full support and did not increase squared-distance distortion.
+This is supporting numerical evidence, not a proof of convergence, fidelity
+to source balancing, semantic correctness or accuracy. No production code was
+changed during this follow-up review; final smoke receipt above still applies.
+
+## Resolve the SelEx/CRiSH support-contract mismatch — 2026-11-11
+
+User requests a correctness-first resolution and GitHub push. Preserve the
+prior uncommitted patch/history while revising its implementation. Branch
+`main`, origin `https://github.com/hokylhoangkien/gcd-final.git`; no local
+Python training found in fresh process inspection. Existing Mac CPU-only
+constraints and absent data/weights remain. No process will be replaced.
+
+Root cause confirmed in pinned SelEx training source: nonfinite empty base
+centers receive side-mean fallback and coarse grouping explicitly supports
+zero image support. The stricter CRiSH snapshot rejects source-legal empty
+slots. Correct resolution: retain source assignments and prototype budget,
+opt in to empty-slot support only for the SelEx snapshot, keep default HypCD
+validation strict, retain CRiSH move support requirements, and verify loss/
+gradient parity on degenerate states. Reject nonfinite occupied centers and
+invalid labels rather than inventing supervision. Add support/degeneracy
+diagnostics and replace the uncommitted forced-assignment patch. Upstream,
+source clustering, evaluation, dataset split and configs remain untouched.
+
+## Source re-audit requested by owner — 2026-11-11, 09:52 ICT
+
+- Scope: review the current SelEx + CRiSH algorithm, baseline parity, label
+  isolation, hierarchy/reliability/repair logic, evaluation and resume safety.
+  Preserve the older HypCD path and all pre-existing uncommitted edits.
+- Starting Git HEAD: `083326c`; modified files already present: `README.md`,
+  `crish/state.py`, `selex_runtime/hierarchy.py`, manuscript source/build/PDF,
+  reports 00/08 and `results/local_validation.json`; untracked regression suite
+  `tests/test_selex_empty_clusters.py`. These changes predate this review.
+- Read-only process audit (`ps -axo pid,ppid,etime,%cpu,%mem,command`, filtered
+  to Python/train/pytest/Codex) found Codex/IDE processes, no local Python
+  training or pytest. Initial sandbox denied `ps`; approved read-only inspection
+  succeeded. Remote process state is unknown; no process was stopped.
+- Hardware: Apple M5, 10 CPU cores, 16 GB RAM, macOS arm64. Local venv:
+  Python 3.9.6, PyTorch 2.4.1; CUDA false, MPS false in the sandbox. Use CPU
+  synthetic checks with explicit timeouts; no full training/downloads.
+- Latest existing validation artifacts: `logs/crish-v21-20261111T023129Z-4bccb7b0/`
+  (09:31 ICT). Old checkpoints remain under `logs/final-backup-20261101/`;
+  their existence does not establish a current SelEx benchmark or CUDA readiness.
+  Current `runs/` contains launch plans; dataset images/pretrained weights are
+  not present at the default workspace locations.
+- Safe next action: inspect pinned upstream and current objective/hierarchy,
+  evidence and repair acceptance, then run the bounded CPU smoke suite. Record
+  actionable findings in a dedicated source review; do not claim benchmark
+  correctness from synthetic tests or resume old-source checkpoints.
+
+Re-audit outcome: confirmed/fixed a multi-destination Move confirmation-cache
+collision in `crish/engine.py`, added a failing-before/passing-after regression,
+and refreshed the reviewed manuscript digest/PDF. Final bounded CPU suite:
+184 passed, zero failures/errors/skips; run
+`crish-v21-20261111T025722Z-81f40790`, receipt
+`results/local_validation.json`. Initial sandbox SHM and stale manuscript
+fingerprint failures were resolved; original logs are retained. No GPU job,
+data download, process stop or upstream modification. Detailed findings and
+remaining empirical/novelty gates: `reports/11_source_algorithm_review.md`.
+Next remote command: `bash scripts/train_selex.sh check --dataset scars --baseline`.
+
+## Owner requests a code improvement, paper frozen — 2026-11-11
+
+Fresh process inspection again found only IDE/Codex services and no Python
+training. Existing uncommitted changes remain in place. Same M5/16 GB CPU
+environment, missing real data/weights/CUDA. The owner explicitly prohibits
+editing LaTeX/.tex/PDF in this task; hashes of every existing paper file are
+saved in `logs/online-pair-change-20261111/paper_before.json` for verification.
+No paper regeneration is authorized or needed for this implementation.
+
+Next safe action: implement a switchable online pair-reliability experiment
+on the corrected SelEx base pseudo-SSE, preserving baseline/supervised/coarse
+losses. Use continuous minibatch coverage rather than assuming a larger
+discrete-repair budget improves accuracy. Record rationale/overlap before
+implementation, add meaningful coefficient/gradient/integration tests, and
+run bounded CPU code checks with the intentionally frozen manuscript gate
+reported separately. No unmeasured accuracy or novelty claim.
+
+Implementation completed: new `crish/online_pairs.py`, validated pair settings,
+base pseudo-SSE coefficient weighting, weighted target-drift/repair integration,
+batch/epoch diagnostics, eight matched 200-epoch configs and CLI ablations.
+Prior objective remains available with `--pair-reliability off`; baseline
+always bypasses the online module. Full CPU code suite passed 204 tests with
+zero failures/errors/skips, run `crish-v21-20261111T031200Z-2f99aa23`.
+Manuscript gate explicitly not run; SHA256 comparison confirms no paper bytes
+changed during this task. The source/config fingerprint necessarily changed.
+No process was stopped and no remote training/weight download occurred.
+Next remote command: `bash scripts/train_selex.sh check --dataset scars --baseline`,
+then bounded smoke for B0 and the new CRiSH default. Effectiveness remains
+unmeasured. New method rationale is in report 02; command/evidence details
+are appended to report 09.
+
+## Full A2/A1/CRiSH-P implementation — 2026-11-11
+
+Owner authorizes all three implementation stages and a GitHub/train handoff;
+the subsequent greeting does not cancel that task. Preserve all existing
+uncommitted work. Repeated read-only process inspection after interruption
+found IDE/Codex only, no Python training/test still running. Local environment
+remains M5/16 GB, Python 3.9.6/Torch 2.4.1, no CUDA/MPS available and no current
+dataset/weights at default paths. Last code-only suite: 204 tests passed.
+No competing training, remote job, download or process termination is planned.
+
+Current HEAD `083326c`, origin `https://github.com/hokylhoangkien/gcd-final.git`.
+User wants source ready for their push; no push/commit is performed implicitly.
+Paper files remain frozen, with fresh hashes in
+`logs/full-three-20261111/preservation.json`. Audit/read phase completed;
+next action is structured probes, measured-dose plans/diagnostics, and a
+separate bounded population-policy engine with its own regression suite.
+
+Completed A2/A1/CRiSH-P code/config/test handoff. Main 200-epoch profiles now
+select structured 8-way/2-shot probes and population policy, with local/online
+variants available explicitly. Global ranking uses occupied-prototype margin;
+coverage and actual scoring-batch mass guards, fresh local confirmation folds,
+measured-dose logs, controlled plans and per-seed aggregation are implemented.
+Final CPU code-only suite: 231 passed, no failures/errors/skips; run
+`crish-v21-20261111T035336Z-c7ba71b6` with source/split/archive checks passed.
+Paper hashes unchanged; manuscript gate explicitly not run. Full experimental
+and push/train instructions: `reports/12_full_method_handoff.md`.
+CUDA/real data/weights still absent locally; no GPU run, download or process
+stop was initiated. No commit/push performed. First remote action remains
+`bash scripts/train_selex.sh check --dataset scars --baseline`, then bounded
+B0/policy smokes. Actual All/Old/New and novelty remain unvalidated.

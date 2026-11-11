@@ -19,6 +19,8 @@ def load_config(path, *, eval_every_epochs=None):
         return validate_config(cfg, eval_every_epochs=eval_every_epochs)
     if cfg.get('method') not in ('crish', 'baseline'):
         raise ValueError('method must be crish or baseline')
+    if cfg.get('population_policy', {}).get('enabled'):
+        raise ValueError('Population policy is currently verified only on the separate SelEx path')
     if 'reliability' in cfg:
         raise ValueError('Retired reliability settings are not part of this source release')
     defaults = dict(dataset_name='scars', training_protocol='crish_v2_1', kmeans_timeout_seconds=120,

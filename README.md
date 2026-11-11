@@ -2,13 +2,30 @@
 
 Source nghiên cứu GCD với CRiSH và baseline đối chứng. **Hướng mới ngày 10/11/2026: áp dụng CRiSH lên SelEx đã cập nhật**, không dùng hyperbolic learning. Nhánh Hyp-SelEx cũ vẫn được giữ riêng.
 
+**Bộ A2/A1/CRiSH-P ngày 11/11/2026:** profile 200 epoch mặc định hiện là **CRiSH-P thử nghiệm**, dùng counterfactual chọn tỷ lệ abstention trên unlabeled pool, probe known **8 lớp × 2 ảnh/fold**, giới hạn giữ support và khối lượng supervision. Online weighting và local Move/Abstain tắt trong profile này để tách tác dụng. B0 bỏ qua mọi can thiệp; các cặp config vẫn chỉ khác `method`. **Chưa có benchmark CUDA hoặc bằng chứng tăng accuracy/tính mới.** Mô tả, giới hạn, setup và bộ đối chứng nằm trong [handoff đầy đủ](reports/12_full_method_handoff.md).
+
+Chọn `--variant local` cho CRiSH sửa từng mẫu, `--variant online` cho online pair weighting, `--variant policy` cho CRiSH-P, hoặc `--variant hybrid` cho policy + online weighting. `--probe-known-per-class 1` giữ sampling cũ; mặc định mới là 2. Local nhiều action dùng confirmation fold mới cho từng lần accept. Các config 20/50 epoch cũ được giữ nguyên và không tự bật policy mới.
+
+Online pair reliability vẫn có các lựa chọn `--pair-reliability rn|cross_view|both|off`: chỉ giảm trọng số pseudo-positive tầng cơ sở có bằng chứng qua hai view, warm-up/ramp 10/10 epoch, sàn .25, giữ supervised/USE/coarse và cạnh chưa quan sát. `--no-repair` tắt cả local và population controller; dùng cùng `--variant online` cho đối chứng chỉ weighting. Để quay về local CRiSH trước online/policy, dùng `--variant local --probe-known-per-class 1`.
+
+Paper được giữ nguyên theo yêu cầu. Kiểm thử code bằng `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/run_smoke.py --code-only`; receipt ghi rõ manuscript gate không chạy. Source mới không còn được fingerprint của bản paper cũ chứng nhận.
+
 **Chạy SelEx / SelEx + CRiSH, 200 epoch, DINOv2** trên Linux NVIDIA, sau khi chuẩn bị môi trường/data/weights:
 
 ```bash
 # Bộ chính: --dataset scars | cub | aircraft. Chạy từng job, không chạy đồng thời.
 bash scripts/train_selex.sh check --dataset scars --baseline
+bash scripts/train_selex.sh smoke --dataset scars --variant policy
 bash scripts/train_selex.sh --dataset scars --baseline
-bash scripts/train_selex.sh --dataset scars
+bash scripts/train_selex.sh --dataset scars --variant policy
+```
+
+Lệnh train tự chạy preflight và bounded smoke trước full run. Smoke phải chấm được counterfactual, được phép chọn Keep; fallback do lỗi/budget hoặc chưa chấm được candidate sẽ chặn full train. A1/A2/controls chỉ được **chuẩn bị config**, không tự chạy sweep:
+
+```bash
+.venv/bin/python scripts/prepare_crish_experiments.py --dataset scars --suite all --seeds 1
+# Sau khi có run hoàn chỉnh: xuất đúng SS-last và dose thực nhận, không chọn best hậu nghiệm
+.venv/bin/python scripts/summarize_crish_experiments.py runs --output results/crish_observed.csv
 ```
 
 Source SelEx ghim tại `d8107b5`; bộ thí nghiệm chính là **Stanford Cars + CUB + FGVC-Aircraft**, thay CIFAR-100 theo lựa chọn mới. Sáu cấu hình trong `configs/selex_{scars,cub,aircraft}_{baseline,crish}_200.json` dùng **200 epoch**, DINOv2, batch 128, head 65536; các tầng loss vào dần mỗi 10 epoch. Trong mỗi dataset hai arm chỉ khác `method`, giữ các tham số riêng của dataset theo source. Đây là **thí nghiệm kéo dài cùng ngân sách**, khác lịch 50 epoch cho ba dataset này trong README upstream cập nhật. Config CIFAR-100 và các config 50 epoch cũ vẫn được giữ như tùy chọn.
@@ -16,6 +33,8 @@ Source SelEx ghim tại `d8107b5`; bộ thí nghiệm chính là **Stanford Cars
 Kết quả chính là **SS-v2 của final checkpoint**. Cả 6 config mới bật `report_best_old_test=true`: mỗi epoch lấy **Old-v1 trên plain disjoint test** để giữ một checkpoint best, rồi cuối training chấm **SS-v2 cho cả best và last** như luồng GitHub. `evaluation.json` / `evaluation_last.json` là SS-last; `evaluation_best_old_test.json` là SS-best. Plain train-unlabeled tại epoch 200 chỉ để theo dõi. Selector phụ dùng nhãn đánh giá, không điều khiển SGD/CRiSH hoặc đổi kết quả chính. **Chưa xác minh CUDA/dữ liệu thật hoặc benchmark của đường SelEx mới.** Layout dữ liệu, lệnh cho đủ 6 run, seed/resume và điều kiện dừng nằm trong [hướng dẫn 3 dataset × 200 epoch](reports/09_selex_200epoch_multidataset.md); thiết lập môi trường và nền tảng phương pháp nằm trong [SelEx + CRiSH](reports/08_selex_crish_migration.md).
 
 Các config SelEx hiện dùng `evaluation_rng=upstream`: seed train theo source, plain-test tiêu thụ RNG theo thứ tự upstream và SS đặt seed 0 trước khi tạo dataset. Đây là thay đổi cho **run mới**; checkpoint của bản trước cần source/config gốc để resume. Chi tiết và giới hạn kiểm chứng nằm trong báo cáo migration.
+
+**Sửa cluster rỗng (11/11/2026):** SelEx được phép trả về ít cluster có mẫu hơn số slot prototype yêu cầu. Runtime giữ nguyên assignment, ID và số slot; chỉ thay tâm không hữu hạn của slot rỗng bằng fallback cùng phía known/novel như source. State SelEx chấp nhận slot rỗng hữu hạn; CRiSH vẫn không được Move vào cluster thiếu support hoặc làm cluster nguồn thiếu support. Tâm không hữu hạn của cluster đang có mẫu, feature lỗi và assignment sai vẫn báo lỗi. `hierarchy.jsonl` và dòng `HIERARCHY` ghi support, ID rỗng, tâm trùng và độ phân tán feature để phát hiện suy biến. Xem [giải thích và kiểm chứng](reports/08_selex_crish_migration.md#empty-slot-compatibility--2026-11-11). Chưa xác nhận CUDA; checkpoint cũ không resume trực tiếp bằng source mới vì fingerprint đã đổi.
 
 **Đối chiếu paper:** code phát hành năm 2024 có mặc định 200 epoch; 50 epoch ở trên là lịch của bản sửa 2026. Bộ chính Cars/CUB/Aircraft có các dòng DINOv2 trong paper; pipeline hiện tại vẫn dùng hierarchy/hyperparameters đã sửa. CIFAR-100 giữ tùy chọn và dòng của nó trong paper dùng DINOv1. Xem [audit paper, metric và checkpoint](reports/10_paper_comparability_audit.md) trước khi so số.
 

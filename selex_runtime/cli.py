@@ -21,6 +21,14 @@ def main():
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--seed', type=int, help='Matched run seed; default comes from config')
     parser.add_argument('--eval-every', type=int, help='Extra SS monitoring interval; default 0')
+    parser.add_argument('--pair-reliability', choices=['off', 'rn', 'cross_view', 'both'],
+                        help='Online base pseudo-SSE ablation; default from the selected config')
+    parser.add_argument('--no-repair', action='store_true',
+                        help='Disable local and population repair for a weighting-only control')
+    parser.add_argument('--variant', choices=['local', 'online', 'policy', 'hybrid'],
+                        help='Explicit experiment variant; default comes from config')
+    parser.add_argument('--probe-known-per-class', type=int,
+                        help='1: historical sampling; >=2: exact structured legal class quotas')
     args = parser.parse_args()
     if args.resume and args.mode != 'train':
         parser.error('--resume is for train only')
@@ -38,6 +46,34 @@ def main():
         parser.error('--dataset must match the supplied --config')
     if args.seed is not None:
         cfg['seed'] = args.seed
+    if args.variant is not None:
+        from crish.population_settings import PopulationSettings
+        from crish.config import PairReliabilitySettings
+        from dataclasses import asdict
+        cfg['population_policy'] = PopulationSettings(**dict(cfg.get('population_policy', {}),
+            enabled=args.variant in ('policy', 'hybrid'))).to_dict()
+        cfg['pair_reliability'] = asdict(PairReliabilitySettings(**dict(cfg.get('pair_reliability', {}),
+            enabled=args.variant in ('online', 'hybrid'))))
+        cfg['crish']['enabled'] = args.variant == 'local'
+    if args.probe_known_per_class is not None:
+        cfg['crish']['probe_known_per_class'] = args.probe_known_per_class
+        from dataclasses import asdict
+        from crish.config import CrishSettings
+        cfg['crish'] = asdict(CrishSettings(**cfg['crish']))
+    if args.pair_reliability is not None:
+        from dataclasses import asdict
+        from crish.config import PairReliabilitySettings
+        values = dict(cfg.get('pair_reliability', {}))
+        values.update(enabled=args.pair_reliability != 'off',
+                      reciprocal=args.pair_reliability in ('rn', 'both'),
+                      cross_view=args.pair_reliability in ('cross_view', 'both'))
+        cfg['pair_reliability'] = asdict(PairReliabilitySettings(**values))
+    if args.no_repair:
+        if args.baseline:
+            parser.error('--no-repair belongs to the CRiSH weighting-only control')
+        cfg['crish']['enabled'] = False
+        if 'population_policy' in cfg:
+            cfg['population_policy']['enabled'] = False
     if cfg.get('baseline_family') != 'selex' or cfg['method'] != name:
         parser.error('Config must match SelEx and the selected baseline/CRiSH arm')
     # Derive smoke from the selected dataset/arm, never a Cars-only preset.
@@ -46,8 +82,14 @@ def main():
     full = directory/'full.json'
     full.write_text(json.dumps(cfg, indent=2)+'\n')
     trial = json.loads(json.dumps(cfg))
-    trial.update(epochs=1, max_steps_per_epoch=2, max_runtime_seconds=1800, ss_eval_every_epochs=0)
+    trial.update(epochs=1, max_steps_per_epoch=2, max_runtime_seconds=1800, ss_eval_every_epochs=0,
+                 require_intervention_smoke=True)
     trial['crish']['warmup_epochs'] = 0
+    if trial.get('pair_reliability', {}).get('enabled'):
+        trial['pair_reliability'].update(warmup_epochs=0, ramp_epochs=1)
+    if trial.get('population_policy', {}).get('enabled'):
+        trial['population_policy']['warmup_epochs'] = 0
+        trial['population_policy']['schedule_epochs'] = 1
     smoke = directory/'smoke.json'
     smoke.write_text(json.dumps(trial, indent=2)+'\n')
     stages = [('preflight', full, None)] if args.mode == 'check' else []
@@ -62,6 +104,9 @@ def main():
     print(json.dumps(dict(baseline_family='selex', method=name, primary='fixed-final SS-v2',
         dataset_name=cfg['dataset_name'], dino=cfg['dino'],
         epochs=cfg['epochs'], seed=cfg['seed'], head_dimension=cfg['mlp_out_dim'],
+        pair_reliability=cfg.get('pair_reliability', dict(enabled=False)),
+        discrete_repair=name == 'crish' and cfg['crish']['enabled'],
+        population_policy=cfg.get('population_policy', dict(enabled=False)),
         secondary='SS-v2 of best plain-test Old-v1' if cfg['report_best_old_test'] else None,
         protocol='matched_extended_200_epochs' if cfg['epochs'] == 200 else 'explicit_config_schedule',
         status='dry_run' if args.dry_run else 'readiness_pending'), indent=2), flush=True)

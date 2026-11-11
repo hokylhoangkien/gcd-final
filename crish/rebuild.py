@@ -128,10 +128,28 @@ def pseudo_masks(state: SupervisionState, batch_ids: Tensor, level: int):
     return original, original & ~removed
 
 
+def checked_pair_weights(weights, state, batch_ids, device):
+    """Validate detached symmetric coefficients and exact protected weights."""
+    if weights is None:
+        return None
+    rows = rows_for_ids(state.ids, batch_ids)
+    n = len(rows)
+    if (weights.shape != (n, n) or not weights.is_floating_point()
+            or weights.requires_grad or not torch.isfinite(weights).all()
+            or ((weights < 0) | (weights > 1)).any()
+            or not torch.equal(weights, weights.T)):
+        raise ValueError('Pair weights must be detached finite symmetric [B,B] in [0,1]')
+    ids, labeled = state.ids[rows].to(weights.device), state.labeled[rows].to(weights.device)
+    protected = (ids[:, None] == ids[None, :]) | (labeled[:, None] & labeled[None, :])
+    if (weights[protected] != 1).any():
+        raise ValueError('Pair weights may not change protected coefficients')
+    return weights.to(device)
+
+
 @torch.no_grad()
 def target_drift(before: SupervisionState, after: SupervisionState, batch_ids: Tensor,
                  backbone_views: Tensor, *, smoothing: float, strategy: str = 'zero_one',
-                 normalization: str = 'legacy') -> dict:
+                 normalization: str = 'legacy', pair_weights=None) -> dict:
     """Actual batch target-coefficient changes, not semantic error estimates.
 
     Legacy USE targets need not be probabilities; row mode has unit mass.
@@ -154,7 +172,10 @@ def target_drift(before: SupervisionState, after: SupervisionState, batch_ids: T
             denominator = (original.repeat(2, 2) & offdiag).sum(1, keepdim=True)
             if (denominator <= 0).any():
                 raise ValueError('Missing protected positives')
-            coefficients.append((retained.repeat(2, 2) & offdiag).float() / denominator)
+            numerator = (retained.repeat(2, 2) & offdiag).float()
+            if ell == 0 and pair_weights is not None:
+                numerator *= checked_pair_weights(pair_weights, state, batch_ids, 'cpu').repeat(2, 2)
+            coefficients.append(numerator / denominator)
         change = coefficients[1] - coefficients[0]
         rows = rows_for_ids(before.ids, batch_ids)
         labeled = before.labeled[rows].repeat(2)
@@ -166,7 +187,8 @@ def target_drift(before: SupervisionState, after: SupervisionState, batch_ids: T
                 use_identity_smoothing_shift_max=float(delta[identity].abs().max()), sse_levels=levels)
 
 
-def pseudo_sse_loss(criterion, features: Tensor, state: SupervisionState, batch_ids: Tensor, level: int):
+def pseudo_sse_loss(criterion, features: Tensor, state: SupervisionState, batch_ids: Tensor, level: int,
+                    *, pair_weights=None):
     """Abstain removes eligible numerators, retains baseline positive counts.
 
     No-action delegates directly to original SupConLoss. Only its verified
@@ -176,7 +198,8 @@ def pseudo_sse_loss(criterion, features: Tensor, state: SupervisionState, batch_
     rows = rows_for_ids(state.ids, batch_ids)
     if features.ndim != 3 or features.shape[0] != len(rows) or features.shape[1] != 2 or features.shape[2] == 0 or not torch.isfinite(features).all():
         raise ValueError('Expected finite [B,2,d] features')
-    if torch.equal(original, kept):
+    weights = checked_pair_weights(pair_weights, state, batch_ids, features.device)
+    if torch.equal(original, kept) and (weights is None or (weights == 1).all()):
         return criterion(features, labels=state.labels[level][rows].to(features.device))
     if criterion.contrast_mode != 'all':
         raise ValueError('Only contrast_mode=all is verified for abstention')
@@ -192,7 +215,9 @@ def pseudo_sse_loss(criterion, features: Tensor, state: SupervisionState, batch_
     offdiag = ~torch.eye(len(flat), dtype=torch.bool, device=flat.device)
     logprob = logits - torch.log((torch.exp(logits) * offdiag).sum(1, keepdim=True))
     p = original.to(flat.device).repeat(2, 2) & offdiag
-    retained = kept.to(flat.device).repeat(2, 2) & offdiag
+    retained = (kept.to(flat.device).repeat(2, 2) & offdiag).float()
+    if weights is not None:
+        retained *= weights.repeat(2, 2)
     count = p.sum(1)
     if (count <= 0).any() or not torch.isfinite(logprob).all():
         raise ValueError('Invalid positive count or contrastive logits')

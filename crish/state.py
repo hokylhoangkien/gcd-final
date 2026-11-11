@@ -19,6 +19,9 @@ class SupervisionState:
     radii: Tuple[Tensor, ...]
     abstained: Tuple[Tensor, ...]
     version: int = 0
+    # Updated SelEx explicitly retains unsupported prototype slots. HypCD
+    # snapshots keep the stricter default; CRiSH Move still requires support.
+    allow_empty_clusters: bool = False
 
     def __post_init__(self):
         object.__setattr__(self, 'ids', integer_ids(self.ids))
@@ -41,15 +44,21 @@ class SupervisionState:
             raise ValueError('Incomplete level state')
         if type(self.version) is not int or self.version < 0:
             raise ValueError('Invalid snapshot version')
-        for labels, centers, radius, abstained in zip(self.labels, self.prototypes, self.radii, self.abstained):
+        if type(self.allow_empty_clusters) is not bool:
+            raise ValueError('Empty-cluster policy must be boolean')
+        for level, (labels, centers, radius, abstained) in enumerate(zip(
+                self.labels, self.prototypes, self.radii, self.abstained)):
             if labels.shape != (n,) or labels.dtype != torch.long:
                 raise ValueError('Invalid pseudo-label rows')
             if centers.ndim != 2 or centers.shape[1] != self.features.shape[1] or len(centers) < 2:
                 raise ValueError('Expected >=2 prototypes per level')
             if not centers.is_floating_point() or not torch.isfinite(centers).all():
                 raise ValueError('Nonfinite prototypes')
-            if ((labels < 0) | (labels >= len(centers))).any() or (torch.bincount(labels, minlength=len(centers)) == 0).any():
-                raise ValueError('Invalid assignment or empty cluster')
+            if ((labels < 0) | (labels >= len(centers))).any():
+                raise ValueError(f'Invalid assignment at level={level}')
+            empty = (torch.bincount(labels, minlength=len(centers)) == 0).nonzero().flatten().tolist()
+            if empty and not self.allow_empty_clusters:
+                raise ValueError(f'Invalid assignment or empty cluster at level={level}: empty IDs={empty}')
             if radius.shape != (len(centers),) or not torch.isfinite(radius).all() or (radius < 0).any():
                 raise ValueError('Invalid prototype radii')
             if abstained.shape != (n,) or abstained.dtype != torch.bool or abstained[self.labeled].any():
@@ -59,4 +68,5 @@ class SupervisionState:
 
     def copy(self):
         return SupervisionState(self.ids, self.features, self.labeled, self.known_targets,
-                                self.labels, self.prototypes, self.radii, self.abstained, self.version)
+                                self.labels, self.prototypes, self.radii, self.abstained, self.version,
+                                allow_empty_clusters=self.allow_empty_clusters)

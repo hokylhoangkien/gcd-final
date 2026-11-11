@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from .reliability import blockwise_query_knn
 
 
-def balanced_known_folds(rows, targets, count, generator):
+def balanced_known_folds(rows, targets, count, generator, *, per_class=1, folds=2):
     """Two ID-disjoint round-robin samples using legally labeled targets only.
 
     Classes are randomized separately per fold, then cycled while rows remain.
@@ -14,15 +14,31 @@ def balanced_known_folds(rows, targets, count, generator):
     if (rows.ndim != 1 or targets.shape != rows.shape or
             rows.dtype != torch.long or targets.dtype != torch.long or
             len(rows.unique()) != len(rows) or type(count) is not int or count < 1
-            or len(rows) < 2*count):
+            or type(folds) is not int or folds < 2 or len(rows) < folds*count
+            or type(per_class) is not int or per_class < 1):
         raise ValueError('Insufficient/invalid labeled rows for two balanced folds')
     groups = targets.unique(sorted=True)
+    if per_class > 1:
+        if count % per_class or count//per_class < 2:
+            raise ValueError('Structured folds require exact quotas and >=2 classes')
+        eligible = [group for group in groups if int((targets == group).sum()) >= folds*per_class]
+        ways = count//per_class
+        if len(eligible) < ways:
+            raise ValueError('Insufficient distinct legal images/classes for structured probe folds')
+        selected = torch.randperm(len(eligible), generator=generator)[:ways].tolist()
+        batches = [[] for _ in range(folds)]
+        for index in selected:
+            members = rows[targets == eligible[index]]
+            members = members[torch.randperm(len(members), generator=generator)]
+            for fold in range(folds):
+                batches[fold].extend(members[fold*per_class:(fold+1)*per_class].tolist())
+        return [torch.tensor(batch, dtype=torch.long) for batch in batches]
     queues = []
     for group in groups:
         members = rows[targets == group]
         queues.append(members[torch.randperm(len(members), generator=generator)].tolist())
-    folds = []
-    for _ in range(2):
+    result = []
+    for _ in range(folds):
         order = torch.randperm(len(groups), generator=generator).tolist()
         chosen = []
         while len(chosen) < count:
@@ -31,8 +47,16 @@ def balanced_known_folds(rows, targets, count, generator):
                     chosen.append(queues[group].pop())
                     if len(chosen) == count:
                         break
-        folds.append(torch.tensor(chosen, dtype=torch.long))
-    return folds
+        result.append(torch.tensor(chosen, dtype=torch.long))
+    return result
+
+
+def known_fold_structure(targets):
+    """Observed legal class support, with no claim about discovery accuracy."""
+    counts = targets.unique(return_counts=True)[1]
+    return dict(known_rows=len(targets), known_classes=len(counts),
+                images_per_class=sorted(counts.tolist()),
+                cross_image_positive_pairs=int((counts*(counts-1)).sum()))
 
 
 def global_neighbor_pool(state, available, budget, k, generator, *,

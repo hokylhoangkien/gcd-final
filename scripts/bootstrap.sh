@@ -33,5 +33,5 @@ if [[ "$mode" == cuda ]]; then
 fi
 .venv/bin/python -m pip check
 .venv/bin/python scripts/bootstrap_upstream.py
-.venv/bin/python scripts/run_smoke.py
+.venv/bin/python scripts/run_smoke.py --code-only
 # No data/weights are downloaded and no training is started.

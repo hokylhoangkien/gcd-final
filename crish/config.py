@@ -25,6 +25,7 @@ class CrishSettings:
     probe_known: int = 4
     probe_unlabeled: int = 8
     probe_sampling: str = 'random'
+    probe_known_per_class: int = 1
     probe_known_weight: float = 1.0
     probe_view_weight: float = 1.0
     probe_variance_weight: float = 0.1
@@ -52,13 +53,18 @@ class CrishSettings:
                 raise ValueError(f'crish.{name} must be a nonnegative integer')
         for name in ('refresh_every', 'evidence_samples', 'evidence_trials', 'k', 'boundaries',
                      'max_targets', 'max_accepted', 'min_support', 'min_edges', 'train_batch',
-                     'probe_known', 'probe_unlabeled', 'max_refresh_seconds', 'neighbor_reference_block'):
+                     'probe_known', 'probe_unlabeled', 'probe_known_per_class',
+                     'max_refresh_seconds', 'neighbor_reference_block'):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f'crish.{name} must be a positive integer')
         if self.probe_unlabeled < 2 or self.train_batch < 2 or self.evidence_samples <= self.k:
             raise ValueError('Probe needs >=2 unlabeled rows; evidence_samples must exceed k')
         if self.boundaries > self.train_batch:
             raise ValueError('Boundary budget must fit the scoring train_batch')
+        if self.probe_known_per_class > 1 and (self.probe_sampling != 'class_balanced'
+                or self.probe_known % self.probe_known_per_class
+                or self.probe_known // self.probe_known_per_class < 2):
+            raise ValueError('Structured known probes need class_balanced, exact quotas and >=2 classes')
         for name in ('min_reliability', 'probe_known_weight', 'probe_view_weight',
                      'probe_variance_weight', 'probe_std_floor', 'acceptance_gain',
                      'known_tolerance', 'max_protected_shift', 'stability_noise'):
@@ -72,3 +78,34 @@ class CrishSettings:
 
     def due(self, epoch):
         return self.enabled and epoch >= self.warmup_epochs and (epoch-self.warmup_epochs) % self.refresh_every == 0
+
+
+@dataclass(frozen=True)
+class PairReliabilitySettings:
+    """Experimental online base pseudo-SSE weights; absent configs stay off."""
+    enabled: bool = False
+    reciprocal: bool = True
+    cross_view: bool = True
+    k: int = 5
+    warmup_epochs: int = 10
+    ramp_epochs: int = 10
+    floor: float = .25
+
+    def __post_init__(self):
+        for name in ('enabled', 'reciprocal', 'cross_view'):
+            if type(getattr(self, name)) is not bool:
+                raise ValueError(f'pair_reliability.{name} must be boolean')
+        if self.enabled and not (self.reciprocal or self.cross_view):
+            raise ValueError('Online pair reliability needs at least one component')
+        for name in ('k', 'ramp_epochs'):
+            if type(getattr(self, name)) is not int or getattr(self, name) < 1:
+                raise ValueError(f'pair_reliability.{name} must be positive integer')
+        if type(self.warmup_epochs) is not int or self.warmup_epochs < 0:
+            raise ValueError('pair_reliability.warmup_epochs must be nonnegative integer')
+        if type(self.floor) not in (float, int) or not math.isfinite(self.floor) or not 0 < self.floor <= 1:
+            raise ValueError('pair_reliability.floor must be in (0,1]')
+
+    def strength(self, epoch):
+        if type(epoch) is not int or epoch < 0:
+            raise ValueError('Epoch must be a nonnegative integer')
+        return min(1., max(0., (epoch-self.warmup_epochs+1)/self.ramp_epochs)) if self.enabled else 0.

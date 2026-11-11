@@ -58,10 +58,14 @@ class ReleaseTests(unittest.TestCase):
             config['tests'] = 'tests/crish_v21'
             target = root/'configs/release_smoke.json'
             target.write_text(json.dumps(config))
-            result = subprocess.run([sys.executable, 'scripts/run_smoke.py', '--config', str(target)],
+            # Exercise packaged code independently of the separately checked
+            # manuscript, which the owner may explicitly keep frozen.
+            result = subprocess.run([sys.executable, 'scripts/run_smoke.py', '--config', str(target), '--code-only'],
                                     cwd=root, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
             self.assertEqual(json.loads((root/'results/local_validation.json').read_text())['status'], 'passed')
+            self.assertEqual(json.loads((root/'results/local_validation.json').read_text())['manuscript_check'],
+                             'not_run_code_only')
             for flag in ([], ['--baseline']):
                 result = subprocess.run([sys.executable, '-m', 'gcd_runtime.train_cli', '--dry-run']+flag,
                                         cwd=root, capture_output=True, text=True, timeout=10)

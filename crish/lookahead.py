@@ -100,7 +100,7 @@ def exact_sgd_comparison(model: nn.Module, optimizer: torch.optim.Optimizer,
                 loss = sum(getattr(probe.weights, key) * value for key, value in components.items())
             if not torch.isfinite(loss) or any(not torch.isfinite(p).all() for p in virtual.parameters()):
                 raise ValueError('Nonfinite cloned optimizer step')
-            scores.append(dict(loss=float(loss), known=float(components['known'])))
+            scores.append(dict(loss=float(loss), **{key: float(value) for key, value in components.items()}))
     return dict(gain=scores[0]['loss'] - scores[1]['loss'],
                 known_increase=scores[1]['known'] - scores[0]['known'],
                 keep=scores[0], action=scores[1])

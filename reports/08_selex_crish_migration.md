@@ -196,3 +196,63 @@ the effective config. Example dry-run only:
 Next command on the prepared Linux NVIDIA machine:
 `bash scripts/train_selex.sh check --baseline`. Do not start full training
 until this and the bounded real-data smoke succeed.
+
+## Empty-slot compatibility — 2026-11-11
+
+The failure is a contract mismatch: pinned SelEx's fitter and coarse hierarchy
+allow unsupported prototype slots, while the shared CRiSH state originally
+required support for every slot. An intermediate uncommitted post-fit approach
+filled missing IDs by moving images/children; it has been removed because it
+would change pseudo-positive relations unnecessarily.
+
+The final implementation preserves every source assignment and prototype ID.
+Requested K remains the prototype-slot budget, not a claim that K semantic
+groups were discovered. The SelEx extractor explicitly sets
+`SupervisionState.allow_empty_clusters=True`; the Hyp-SelEx state default
+remains strict. Copy and dataclass rebuild retain this policy. CRiSH Move
+still requires the source after removal and destination before insertion to
+have at least min_support members, so it cannot populate an unsupported slot.
+Keep/Abstain and supported Moves work without altering other empty slots.
+
+For nonfinite empty base centers only, use the source's finite side-mean
+fallback (zero if that entire side has no finite center). There is an important
+source defect: it sanitizes `prev_protos` for coarse grouping but leaves the
+returned level-0 `prototype_higher[0]` NaN. The runtime uses the same finite
+copy at level 0 too so radii/USE can run. Finite centers, including unsupported
+ones, remain unchanged. Nonfinite occupied centers, nonfinite input features,
+invalid assignment IDs, changed anchors and missing known-class anchors fail
+explicitly. This numerical correction is shared by B0 and CRiSH and must be
+disclosed when comparing with source/published scores.
+
+Coarse labels/means retain the pinned joint, non-nested grouping exactly,
+including child-mean fallback for a group with no images and zero fallback
+when it has no children. Empty slots participate in prototype-radius geometry
+as in the source; excluding them or compacting IDs would change USE. No
+synthetic labels, tie-breaking image transfers, extra RNG or clustering
+restarts are introduced. Duplicate features may legitimately yield fewer
+occupied groups; acceptance by the state is not evidence of semantic recovery.
+
+Each extraction writes `hierarchy.jsonl` with epoch, active-level flags,
+requested slots, occupied groups, empty IDs, total/labeled/unlabeled support,
+exact duplicate-prototype counts, total feature variance and the IDs whose
+empty centers needed finite fallback. Stdout reports level support/duplicates.
+These diagnostics never feed the loss, CRiSH acceptance or evaluation. Frequent
+empty groups or near-zero feature variance need investigation on real logs;
+no accuracy/representation-collapse conclusion is inferred from synthetic data.
+
+Tests execute the pinned fitter with CPU/device, initialization and one-step
+budget adaptation, verify an actual empty output and exact assignment
+preservation, run the source coarse statements on duplicate/empty slots, and
+compare USE/SSE loss and projector gradients with executed source arithmetic
+on finite degenerate states. Additional tests cover finite fallback, hard
+failure cases, no hidden-label influence, real CRiSH engine actions, disabled
+arm parity, checkpoint/resume, diagnostics, and strict Hyp-SelEx defaults.
+The source's raw NaN level-0 output has no valid loss/gradient to match; the
+finite-center correction is explicitly outside exact NaN-source reproduction.
+
+Upstream checkouts, fitter, evaluation, splits and configs are untouched.
+Source fingerprints change: the existing resume guard rejects old snapshots;
+do not bypass it or overwrite an existing run. On the prepared NVIDIA host run
+`bash scripts/train_selex.sh check --dataset scars --baseline`, followed by
+`bash scripts/train_selex.sh smoke --dataset scars --baseline`, substituting
+the actual dataset/arm. CPU tests do not establish CUDA or benchmark readiness.

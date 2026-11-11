@@ -2,8 +2,9 @@
 from dataclasses import asdict
 import math
 
-from crish.config import CrishSettings
+from crish.config import CrishSettings, PairReliabilitySettings
 from .reference import COMMIT
+from crish.population_settings import PopulationSettings
 
 
 def validate_config(cfg, *, eval_every_epochs=None):
@@ -13,6 +14,8 @@ def validate_config(cfg, *, eval_every_epochs=None):
         raise ValueError('Expected pinned updated SelEx protocol')
     if cfg.get('method') not in ('baseline', 'crish'):
         raise ValueError('SelEx method must be baseline or crish')
+    if type(cfg.get('require_intervention_smoke', False)) is not bool:
+        raise ValueError('require_intervention_smoke must be boolean')
     if cfg.get('dataset_name') not in ('scars', 'cub', 'aircraft', 'cifar100') or cfg.get('dino') not in ('v1', 'v2'):
         raise ValueError('SelEx supports scars, cub, aircraft, cifar100 and DINO v1/v2')
     cfg.setdefault('train_report_interval', 200)
@@ -52,4 +55,10 @@ def validate_config(cfg, *, eval_every_epochs=None):
     if cfg.get('strategy') != 'zero_one' or cfg.get('evaluation_rng') not in ('isolated', 'upstream'):
         raise ValueError('Expected zero_one and an explicit SelEx RNG policy')
     cfg['crish'] = asdict(CrishSettings(**cfg['crish']))
+    if 'pair_reliability' in cfg:
+        cfg['pair_reliability'] = asdict(PairReliabilitySettings(**cfg['pair_reliability']))
+    if 'population_policy' in cfg:
+        cfg['population_policy'] = PopulationSettings(**cfg['population_policy']).to_dict()
+        if cfg['population_policy']['enabled'] and cfg['crish']['enabled']:
+            raise ValueError('Local and population repair are separate experiment variants')
     return cfg

@@ -21,7 +21,7 @@ from crish.policy import DecisionEvidence, sequential_repair
 from crish.probe import LegalProbe, ProbeWeights
 from crish.rebuild import target_drift
 from crish.reliability import blockwise_euclidean_knn, sparse_evidence
-from crish.sampling import balanced_known_folds, global_neighbor_pool
+from crish.sampling import balanced_known_folds, global_neighbor_pool, known_fold_structure
 from crish.stability import partition_stability
 from .config import CrishSettings
 from .loss import hypselex_loss
@@ -84,23 +84,25 @@ def cached_views(model, dataset, ids, device, deadline, batch_size=16):
     return torch.stack([torch.cat(first), torch.cat(second)], dim=1)
 
 
-def _draw_context(state, settings, generator, deadline=None):
+def _draw_context(state, settings, generator, deadline=None, *, fold_count=None):
+    fold_count = fold_count or 1+min(settings.max_accepted, settings.boundaries)
     known = state.labeled.nonzero().flatten()
     other = (~state.labeled).nonzero().flatten()
-    if len(known) < 2*settings.probe_known or len(other) < 2*settings.probe_unlabeled:
+    if len(known) < fold_count*settings.probe_known or len(other) < fold_count*settings.probe_unlabeled:
         raise ValueError('Insufficient legal probe support; refresh Keep')
     if settings.probe_sampling == 'class_balanced':
-        known_folds = balanced_known_folds(known, state.known_targets, settings.probe_known, generator)
+        known_folds = balanced_known_folds(known, state.known_targets, settings.probe_known, generator,
+                                          per_class=settings.probe_known_per_class, folds=fold_count)
     else:
         known = known[torch.randperm(len(known), generator=generator)]
-        known_folds = [known[fold*settings.probe_known:(fold+1)*settings.probe_known] for fold in range(2)]
+        known_folds = [known[fold*settings.probe_known:(fold+1)*settings.probe_known] for fold in range(fold_count)]
     other = other[torch.randperm(len(other), generator=generator)]
     folds = []
-    for fold in range(2):
+    for fold in range(fold_count):
         k = known_folds[fold]
         u = other[fold*settings.probe_unlabeled:(fold+1)*settings.probe_unlabeled]
         folds.append((k, u))
-    reserved = set(torch.cat(known_folds).tolist()+other[:2*settings.probe_unlabeled].tolist())
+    reserved = set(torch.cat(known_folds).tolist()+other[:fold_count*settings.probe_unlabeled].tolist())
     available = torch.tensor([i for i in range(len(state.ids)) if i not in reserved], dtype=torch.long)
     if len(available) <= settings.k:
         raise ValueError('Insufficient disjoint evidence support; refresh Keep')
@@ -209,8 +211,9 @@ class CrishEngine:
                 record['evidence_reference_rows'] = (len(state.ids)-sum(len(k)+len(u) for k, u in folds)
                                                      if settings.evidence_sampling == 'global_neighbors' else len(pool))
                 record['view_neighbor_scope'] = 'local_cached_two_views'
-                record['probe_folds'] = [dict(known_rows=len(k), unlabeled_rows=len(u),
-                    known_classes=len(state.labels[0][k].unique())) for k, u in folds]
+                record['probe_folds'] = [dict(known_fold_structure(state.labels[0][k]),
+                                              unlabeled_rows=len(u)) for k, u in folds]
+                record['confirmation_fold_policy'] = 'fresh_fold_per_accepted_action'
                 device = next(head.parameters()).device
                 trial_neighbors = []
                 first_cache = None
@@ -260,7 +263,9 @@ class CrishEngine:
                                             proposal_ids=state.ids[pool], legal_labels=legal_registry,
                                             weights=ProbeWeights(settings.probe_known_weight, settings.probe_view_weight,
                                                                  settings.probe_variance_weight, settings.probe_std_floor)))
-                probes[0].assert_disjoint(probes[1])
+                for i, probe in enumerate(probes):
+                    for other in probes[i+1:]:
+                        probe.assert_disjoint(other)
                 def gradients(loss):
                     return torch.autograd.grad(loss, parameters, allow_unused=True)
                 query = gradients(probes[0].loss(frozen))
@@ -275,12 +280,13 @@ class CrishEngine:
                         if not any(a.kind == 'move' and a.target == action.target for a in refreshed):
                             raise ValueError('Move lost neighborhood support after a prior repair')
                     if current.version not in cache:
-                        cache[current.version] = gradients(self.objective(frozen, flat, batch_ids, membership, targets,
-                                                                         current, args, epoch)['loss'])
-                    keep_gradient = cache[current.version]
+                        result = self.objective(frozen, flat, batch_ids, membership, targets, current, args, epoch)
+                        cache[current.version] = (gradients(result['loss']), result.get('pseudo_pair_weights'))
+                    keep_gradient, pair_weights = cache[current.version]
                     drift = target_drift(current, proposed, batch_ids, flat,
                                          smoothing=args.unsupervised_smoothing, strategy=args.strategy,
-                                         normalization=getattr(args, 'use_target_normalization', 'legacy'))
+                                         normalization=getattr(args, 'use_target_normalization', 'legacy'),
+                                         pair_weights=pair_weights)
                     if max(x['protected_coefficient_shift_max'] for x in drift['sse_levels']) > settings.max_protected_shift:
                         raise ValueError('Move exceeds predeclared protected-coefficient shift cap')
                     mass = sum(x['coefficient_half_l1_mean']/2**(x['level']+1) for x in drift['sse_levels'])
@@ -296,15 +302,22 @@ class CrishEngine:
                                           [zero(g, p) for g, p in zip(keep_gradient, parameters)], changed_mass=mass)
                     discovery = exact_sgd_comparison(frozen, virtual_optimizer, keep_gradient, action_gradient, probes[0])
                     entry = dict(version=current.version, sample_id=action.sample_id, level=action.level,
-                                 kind=action.kind, proxy=proxy, exact_discovery=discovery,
+                                 kind=action.kind, source=action.source, target=action.target,
+                                 proxy=proxy, exact_discovery=discovery,
                                  confirmation=None, target_drift=drift)
                     record['gains'].append(entry)
-                    candidates[(current.version, action.sample_id, action.level, action.kind)] = (keep_gradient, action_gradient, entry)
+                    # Action includes source, target and snapshot version: two
+                    # Move destinations must never share confirmation gradients.
+                    candidates[action] = (keep_gradient, action_gradient, entry)
                     return DecisionEvidence((discovery['gain'],), 0., discovery['known_increase'], mass)
+                confirmation_index = 1
                 def confirm(current, proposed, action):
+                    nonlocal confirmation_index
                     _check_deadline(deadline)
-                    g0, ga, entry = candidates[(current.version, action.sample_id, action.level, action.kind)]
-                    comparison = exact_sgd_comparison(frozen, virtual_optimizer, g0, ga, probes[1])
+                    g0, ga, entry = candidates[action]
+                    comparison = exact_sgd_comparison(frozen, virtual_optimizer, g0, ga, probes[confirmation_index])
+                    entry['confirmation_fold'] = confirmation_index
+                    confirmation_index += 1
                     entry['confirmation'] = comparison
                     return comparison
                 repaired, trace = sequential_repair(state, actions, scorer, max_accepted=settings.max_accepted,
@@ -320,4 +333,5 @@ class CrishEngine:
             return state
         finally:
             record['seconds'] = time.monotonic()-start
+            self.runtime.last_local_record = record
             self._append(record)

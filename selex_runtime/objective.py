@@ -4,7 +4,9 @@ import torch
 import torch.nn.functional as F
 
 from crish.ids import rows_for_ids
-from crish.rebuild import confusion_factor, pseudo_sse_loss
+from crish.rebuild import confusion_factor, pseudo_sse_loss, pseudo_masks
+from crish.config import PairReliabilitySettings
+from crish.online_pairs import online_pair_weights, pair_diagnostics
 from .reference import definitions
 
 
@@ -26,6 +28,12 @@ def selex_loss(head, backbone_views, batch_ids, labeled, legal_targets, state, a
     n = len(batch_ids)
     if len(backbone_views) != 2*n or args.n_views != 2:
         raise ValueError('SelEx requires two complete views')
+    weights, diagnostics = None, None
+    settings = PairReliabilitySettings(**(getattr(args, 'pair_reliability', None) or {}))
+    if getattr(args, 'method', 'baseline') == 'crish' and settings.enabled:
+        weights, evidence = online_pair_weights(backbone_views, batch_ids, membership, settings, epoch)
+        diagnostics = pair_diagnostics(weights, state.labels[0][rows], batch_ids, membership, evidence,
+                                       retained=pseudo_masks(state, batch_ids, 0)[1])
     scope = source_losses(str(backbone_views.device))
     # Match source normalization before both USE and prefix-wise SSE. The
     # original info_nce_logits normalizes again, deliberately preserved.
@@ -44,9 +52,11 @@ def selex_loss(head, backbone_views, batch_ids, labeled, legal_targets, state, a
         width = flat.shape[-1] // 2**(level+1)
         if width < 1:
             raise ValueError('SelEx head too small for active hierarchy')
-        pseudo = pseudo + pseudo_sse_loss(criterion, paired[:, :, :width], state, batch_ids, level) / 2**(level+1)
+        pseudo = pseudo + pseudo_sse_loss(criterion, paired[:, :, :width], state, batch_ids, level,
+                            pair_weights=weights if level == 0 else None) / 2**(level+1)
     loss = (1-args.sup_con_weight)*use + args.sup_con_weight*(true+pseudo)/2
     if not torch.isfinite(loss):
         raise FloatingPointError('Nonfinite SelEx loss')
     return dict(loss=loss, angle=loss, distance=loss*0, features=flat,
-                distance_weight=0., supervised=[true], use=use, pseudo=pseudo)
+                distance_weight=0., supervised=[true], use=use, pseudo=pseudo,
+                pseudo_pair_weights=weights, pair_reliability=diagnostics)

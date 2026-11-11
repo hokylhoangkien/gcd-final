@@ -29,6 +29,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--config', type=Path, default=ROOT / 'configs/local_smoke.json')
     parser.add_argument('--report', type=Path, default=ROOT/'results/local_validation.json')
+    parser.add_argument('--code-only', action='store_true',
+                        help='Run code/protocol checks while explicitly leaving the manuscript gate unrun')
     args = parser.parse_args()
     cfg = json.loads(args.config.read_text())
     if cfg['device'] != 'cpu' or cfg['full_training_enabled'] or cfg['pretrained_weights'] or cfg['dataset'] is not None:
@@ -59,7 +61,8 @@ def main():
                     upstream_sha=provenance['sha'], upstream_kind=provenance['kind'],
                     absent_source_inputs=[name for name in input_names if not (ROOT / name).is_file()],
                     python=sys.version, platform=platform.platform(), log_path=str(run_dir / 'smoke.log'),
-                    benchmark_metrics=None, status='running')
+                    benchmark_metrics=None, status='running',
+                    manuscript_check='not_run_code_only' if args.code_only else 'required')
     (run_dir / 'config.json').write_text(json.dumps(cfg, indent=2) + '\n')
     commands = [[sys.executable, '-m', 'pytest', cfg['tests'], '-q', '--tb=short', '-o', 'cache_dir=.cache/pytest',
                  '--junitxml=' + str(run_dir / 'pytest.xml')],
@@ -67,8 +70,11 @@ def main():
                 [sys.executable, 'scripts/check_integrity.py', '--dataset', 'cub'],
                 [sys.executable, 'scripts/check_integrity.py', '--dataset', 'cifar100'],
                 [sys.executable, 'scripts/check_integrity.py', '--dataset', 'aircraft'],
-                [sys.executable, 'scripts/check_protocol.py'],
-                [sys.executable, 'scripts/check_manuscript.py']]
+                [sys.executable, 'scripts/check_protocol.py']]
+    if not args.code_only:
+        commands.append([sys.executable, 'scripts/check_manuscript.py'])
+    else:
+        print('Manuscript gate NOT RUN (--code-only); paper files are preserved.', flush=True)
     metadata['commands'] = commands
     try:
         if metadata['upstream_sha'] != cfg['upstream_sha']:
@@ -99,7 +105,8 @@ def main():
         (run_dir / 'metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')
         print('Run metadata:', run_dir / 'metadata.json')
     summary = {k: metadata[k] for k in ('run_id', 'kind', 'status', 'git_sha', 'upstream_sha', 'pytest', 'timestamp_utc', 'completed_utc', 'benchmark_metrics')}
-    summary.update(metadata_path=str((run_dir / 'metadata.json').relative_to(ROOT)),
+    summary.update(manuscript_check=metadata['manuscript_check'],
+                   metadata_path=str((run_dir / 'metadata.json').relative_to(ROOT)),
                    log_path=str((run_dir / 'smoke.log').relative_to(ROOT)),
                    real_data_gate='not_run_no_dataset_weights_or_local_cuda',
                    config=cfg, python=sys.version, platform=platform.platform(), cuda_verified=False,

@@ -163,3 +163,49 @@ compares reference/final; upgraded remains an explicitly separate row-USE
 ablation. No new algorithm, empirical benefit or novelty claim is implied by
 the profile name. Fresh runs are required after the CLI source fingerprint
 change; historical checkpoints keep their original source/config.
+
+## Online base-pair reliability experiment — 2026-11-11
+
+The owner requests an implementation change and explicitly freezes paper files.
+The present discrete repair schedule permits at most 38 accepted edits in 200
+epochs and resets them at every extraction. This motivates a separate online
+control, not an assertion that accepting more edits is beneficial.
+
+Proposed insertion: detach current two-view backbone embeddings, aggregate
+duplicate sample IDs separately in each view, normalize, and build kNN graphs
+over distinct minibatch IDs. For each observed undirected edge, RN is mean
+reciprocity over the two views and CVS is persistence of either directed edge
+across views. Select RN, CVS, or RN*CVS. Unobserved edges remain unknown and
+keep weight one; they are never interpreted as negative semantic evidence.
+Use `w=1-ramp*(1-floor)*(1-score)`, with independent component switches,
+10-epoch warmup, 10-epoch ramp and initial floor .25. These are predeclared
+experimental settings, not tuned optima.
+
+Apply weights only to base-level pseudo-positive numerators with at least one
+unlabeled endpoint. Keep same-ID and legally labeled-labeled weights exactly
+one, and retain original positive counts. Thus protected coefficients do not
+shift through renormalization. Existing Abstain still removes its eligible
+relations; the new floor is not a floor for already abstained pairs. Genuine
+supervised, USE and coarse-level objectives stay unchanged. Collapse/insufficient
+unique-ID evidence uses Keep weights; nonfinite inputs fail explicitly.
+The exact same weighting must enter the cloned lookahead objective and its
+target-drift audit. This avoids inconsistency between proposal scoring and SGD.
+
+Overlap is substantial: [HypGCD equations 15–16](https://duannyu.github.io/assets/papers/hypgcd.pdf)
+already mines reciprocal neighbors; [Learning to Distinguish Samples, ECCV 2024](https://www.ecva.net/papers/eccv_2024/papers_ECCV/html/8177_ECCV_2024_paper.php)
+uses a learned neighbor graph and cross-view filtering. Its PDF fetch timed out
+in this session, so the full-method gate is still open. [Let's Start Over,
+IJCAI 2024](https://ijcai.org/proceedings/2024/532) uses distance-aware
+consistency selection and progressive retraining. RCA/LEAH gates described
+above remain open. This online weighting is therefore implemented as an
+experimental denoising control/hybrid option, not a renamed novel contribution.
+Its concrete scope differs from sample filtering/retraining: detached local
+edge weights, fixed protected coefficients, base pseudo-SSE only, and coherent
+integration with CRiSH's independent-confirmation repair. None proves novelty.
+
+Required controls are SelEx B0, legacy CRiSH (`pair_reliability=off`), RN only,
+CVS only, both with discrete repair disabled, and both with CRiSH. Match source,
+seed, training budget and SS-last evaluation; inspect Old/New, weight histograms,
+eligible/changed pair counts, no-evidence fallbacks, time and memory. Revert the
+new option if matched measured outcomes are negative. CPU tests establish
+bounded scores/coefficient semantics/backward/parity/resume, not efficacy.

@@ -35,7 +35,7 @@
   "crish": {
     "lookahead_scope": "projector",
     "evidence_space": "normalized_backbone_euclidean",
-    "enabled": true,
+    "enabled": false,
     "warmup_epochs": 10,
     "refresh_every": 5,
     "evidence_samples": 128,
@@ -63,8 +63,38 @@
     "max_refresh_seconds": 120,
     "stability_trials": 0,
     "stability_noise": 0.005,
-    "save_partitions": true
+    "save_partitions": true,
+    "probe_known_per_class": 2
   },
   "train_report_interval": 200,
-  "report_best_old_test": true
+  "report_best_old_test": true,
+  "pair_reliability": {
+    "enabled": false,
+    "reciprocal": true,
+    "cross_view": true,
+    "k": 5,
+    "warmup_epochs": 10,
+    "ramp_epochs": 10,
+    "floor": 0.25
+  },
+  "population_policy": {
+    "enabled": true,
+    "mode": "counterfactual",
+    "fractions": [
+      0.0,
+      0.05,
+      0.1,
+      0.2
+    ],
+    "fixed_fraction": 0.1,
+    "warmup_epochs": 10,
+    "refresh_every": 5,
+    "schedule_epochs": 30,
+    "train_batch": 128,
+    "rank_block": 256,
+    "max_cluster_fraction": 0.5,
+    "min_cluster_kept": 2,
+    "min_retained_mass": 0.7,
+    "max_refresh_seconds": 180
+  }
 }

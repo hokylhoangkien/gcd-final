@@ -255,3 +255,86 @@ trainval/test coverage, class mappings, duplicate/missing/unsafe paths, native
 retained. All four split descriptors and source/protocol/syntax/archive checks
 passed; log: `logs/crish-v21-20261110T134317Z-52b19aa4/smoke.log`.
 No real dataset/weights/CUDA benchmark was launched.
+
+## Online pair reliability — 2026-11-11
+
+This section records the earlier online-weighting stage. The current default
+200-epoch experiment is CRiSH-P with structured probes and online weighting
+off; see [the full A2/A1/CRiSH-P handoff](12_full_method_handoff.md). Explicit
+variant flags below preserve the earlier comparisons without relying on the
+changed default. No historical validation receipt is a current benchmark.
+
+Owner explicitly requests an algorithm implementation change while freezing
+all LaTeX/.tex/PDF. The four dataset pairs of 200-epoch configs now include
+the same online-pair settings; the baseline ignores them completely. The
+default CRiSH arm combines online weighting with the existing confirmed
+discrete repair. Historical 20/50-epoch configs omit the field and retain
+the prior objective. No observed benchmark gain or novelty is claimed.
+
+After 10 warmup epochs, ramp the online effect over 10 epochs, with minimum
+weight .25. At each minibatch, build detached normalized-backbone kNN graphs
+on distinct sample IDs for both augmentations; repeated sampler IDs are
+aggregated. For measured edges use mean reciprocal status (RN), persistent
+directed edges (CVS), or their product. Unmeasured edges retain weight one.
+Apply weights only to base-level pseudo-positive numerators involving an
+unlabeled endpoint. Original denominators, same-ID/labeled-labeled weights,
+genuine supervised loss, USE and every coarse objective are preserved.
+
+The new mechanism is evaluated on every batch after warmup; it is not limited
+to the discrete repair's 38 possible refreshes. The complete intervention is
+still a hypothesis. Loss reduction after downweighting is partly a coefficient
+mass change and is not accuracy evidence. Local neighborhoods can reinforce
+semantic errors or reflect density differences, especially for rare classes.
+The fixed floor, warmup and component controls allow that trade-off to be tested.
+
+Commands below select one experiment at a time on the prepared NVIDIA machine;
+inspect availability/data/weights first. No sweep is started here.
+
+```bash
+# B0: unchanged corrected-SelEx objective
+bash scripts/train_selex.sh check --dataset scars --baseline
+bash scripts/train_selex.sh smoke --dataset scars --baseline
+
+# Earlier online + local CRiSH combination, selected explicitly
+bash scripts/train_selex.sh smoke --dataset scars --variant local --pair-reliability both
+bash scripts/train_selex.sh --dataset scars --variant local --pair-reliability both
+
+# Original CRiSH objective, online weighting off
+bash scripts/train_selex.sh --dataset scars --variant local --pair-reliability off
+
+# Online-only controls, no discrete repair
+bash scripts/train_selex.sh --dataset scars --variant online --pair-reliability rn --no-repair
+bash scripts/train_selex.sh --dataset scars --variant online --pair-reliability cross_view --no-repair
+bash scripts/train_selex.sh --dataset scars --variant online --pair-reliability both --no-repair
+```
+
+Use `--dry-run` to inspect any command locally and `--seed` for predeclared
+matched seeds when compute permits. Smoke forces online warmup 0/ramp 1
+to exercise the branch within its bounded two batches; full profiles retain
+10/10. This smoke override is not a benchmark setting. `--no-repair` disables
+only discrete repair; `--pair-reliability off` independently disables weighting.
+
+Outputs: `pair_reliability.jsonl` every 20 steps and epoch summaries in
+`metrics.jsonl` include eligible/changed directed pair counts, weight mass,
+histogram, and mean weights by legally labeled/unlabeled anchor. They do not
+use evaluation known/novel identity. Retain `crish.jsonl`, hierarchy support,
+memory/time and final All/Old/New as before. Zero changed pairs can be a valid
+no-evidence/clean-neighborhood outcome; investigate distributions rather than
+assuming an accuracy gain.
+
+Executed CPU code validation:
+`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/run_smoke.py --code-only`:
+**204 passed; 0 failures/errors/skips**, run
+`crish-v21-20261111T031200Z-2f99aa23`. The 60-second child deadlines, source/split,
+static and archive checks all passed. New tests cover score/weight bounds,
+components, duplicate IDs, unknown/collapsed evidence, independent coefficient
+and gradient arithmetic, baseline/off/warmup parity, protected/coarse loss
+preservation, weighted repair drift, hidden-target invariance and resumed SGD.
+Receipt: `results/local_validation.json`; log:
+`logs/crish-v21-20261111T031200Z-2f99aa23/smoke.log`.
+
+All three paper files retain the exact SHA256 recorded at task start in
+`logs/online-pair-change-20261111/paper_before.json`. The manuscript gate is
+explicitly `not_run_code_only`, not passed. Its historical source digest is
+now stale by design; no paper regeneration or full GPU training occurred.
+Old-source checkpoints must retain their original source/config for resume.

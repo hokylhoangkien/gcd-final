@@ -13,6 +13,7 @@ from crish.partition_audit import audit_stack
 from .config import CrishSettings
 from .engine import CrishEngine
 from .loss import hypselex_loss
+from .diagnostics import supervision_dose
 
 
 def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
@@ -21,6 +22,8 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
         from gcd_runtime import trainer
         extractor = trainer.extract_labeled_protos
     args.use_target_normalization = runtime.config.get('use_target_normalization', 'legacy')
+    args.method = runtime.config['method']
+    args.pair_reliability = runtime.config.get('pair_reliability')
     optimizer = torch.optim.SGD(list(head.parameters())+list(model.parameters()),
                                 lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr*1e-3)
@@ -32,6 +35,8 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
             return
         raise ValueError('Checkpoint reached final epoch; evaluate instead of resuming')
     engine = CrishEngine(runtime, objective=objective)
+    from .population import PopulationEngine
+    population = PopulationEngine(runtime, objective=objective)
     settings = CrishSettings(**runtime.config['crish'])
     device = next(head.parameters()).device
     print(f'TRAIN plan method={runtime.config["method"]} device={device} epochs={args.epochs} '
@@ -57,11 +62,35 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
             np.savez_compressed(runtime.run_dir/f'partitions_epoch_{epoch:04d}.npz',
                                 ids=state.ids.numpy(), labeled=state.labeled.numpy(),
                                 **{f'level_{i}': labels.numpy() for i, labels in enumerate(state.labels)})
+        before_intervention = state
         state = engine.prepare(state, model, head, optimizer, train_loader.dataset, args, epoch)
+        state = population.prepare(state, model, head, optimizer, train_loader.dataset, args, epoch)
+        if runtime.config.get('require_intervention_smoke') and runtime.config['method'] == 'crish':
+            if population.settings.due(epoch):
+                record = getattr(runtime, 'last_population_record', {})
+                exercised = any('discovery' in c for c in record.get('candidates', []))
+            elif settings.due(epoch):
+                record = getattr(runtime, 'last_local_record', {})
+                exercised = bool(record.get('gains'))
+            else:
+                record, exercised = {}, True
+            if record.get('status') == 'fallback_keep' or not exercised:
+                raise RuntimeError('Bounded intervention smoke did not execute a counterfactual: '+
+                                   record.get('reason', 'no scored candidate; inspect support/cache/budget'))
+        dose = supervision_dose(before_intervention, state)
+        with (runtime.run_dir/'intervention_diagnostics.jsonl').open('a') as handle:
+            handle.write(json.dumps(dict(epoch=epoch, **dose), allow_nan=False)+'\n')
+        if settings.save_partitions and dose['changed_ids']:
+            np.savez_compressed(runtime.run_dir/f'supervision_epoch_{epoch:04d}.npz',
+                ids=state.ids.numpy(), labeled=state.labeled.numpy(),
+                **{f'level_{i}': y.numpy() for i, y in enumerate(state.labels)},
+                **{f'abstained_{i}': y.numpy() for i, y in enumerate(state.abstained)})
         runtime.hierarchy_state = state
         model.train()
         head.train()
         total, steps = 0., 0
+        pair_summary = dict(eligible_pairs=0, changed_pairs=0, weight_sum=0., weight_histogram=[0]*5)
+        pair_batches = 0
         for batch_index, (views, targets, ids, membership) in enumerate(train_loader):
             limit = runtime.config.get('max_steps_per_epoch', 0)
             if limit and steps >= limit:
@@ -73,6 +102,19 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
             legal = targets[membership].long()
             raw = model(torch.cat(views).to(device))
             result = objective(head, raw, ids, membership, legal, state, args, epoch)
+            pair_record = result.get('pair_reliability')
+            if pair_record is not None:
+                pair_batches += 1
+                for key in ('eligible_pairs', 'changed_pairs', 'weight_sum'):
+                    pair_summary[key] += pair_record[key]
+                pair_summary['weight_histogram'] = [a+b for a, b in zip(
+                    pair_summary['weight_histogram'], pair_record['weight_histogram'])]
+                if batch_index % 20 == 0:
+                    with (runtime.run_dir/'pair_reliability.jsonl').open('a') as handle:
+                        handle.write(json.dumps(dict(epoch=epoch, batch=batch_index, **pair_record), allow_nan=False)+'\n')
+                    print(f'PAIR epoch={epoch} step={batch_index} status={pair_record["status"]} '
+                          f'changed={pair_record["changed_pairs"]}/{pair_record["eligible_pairs"]} '
+                          f'mean_weight={pair_record["mean_weight"]}', flush=True)
             runtime.log_loss_geometry(result['angle'], result['distance'], result['features'],
                                       membership.to(device), result['distance_weight'])
             optimizer.zero_grad(set_to_none=True)
@@ -89,8 +131,13 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
             raise ValueError('No complete training batches; check data/batch size')
         scheduler.step()
         runtime.last_training_summary = dict(loss=total/steps, steps=steps, seconds=time.monotonic()-start,
-                                             repairs=state.version, method=runtime.config['method'],
+                                             repairs=state.version, intervention=dose,
+                                             method=runtime.config['method'],
                                              peak_cuda_allocated_bytes=torch.cuda.max_memory_allocated(device) if device.type == 'cuda' else None)
+        if pair_batches:
+            pair_summary.update(batches=pair_batches, mean_weight=(pair_summary['weight_sum']/pair_summary['eligible_pairs']
+                                if pair_summary['eligible_pairs'] else None))
+            runtime.last_training_summary['pair_reliability'] = pair_summary
         if getattr(runtime, 'monitor_before_save', False):
             # Upstream SelEx consumes plain-evaluation RNG before saving. On a
             # bounded evaluator failure save SGD + the pending RNG phase so
