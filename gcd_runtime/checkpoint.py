@@ -92,6 +92,7 @@ class EpochRuntime:
         print(f'RUNTIME epoch_complete={epoch} resume={self.run_dir / "resume.pt"}', flush=True)
 
     def evaluation(self, metrics):
+        metrics = dict(metrics)
         from datetime import datetime, timezone
         import hashlib
         import math
@@ -110,7 +111,7 @@ class EpochRuntime:
             unit='fraction', protocol=TEST_PROTOCOL if is_test else 'balanced_ss_kmeans_train_unlabeled',
             matching='hungarian_v2_global',
             epoch=epoch, epoch_number=epoch+1, seed=self.config['seed'],
-            evaluation_seed=evaluation_seed(self.config, epoch, 'disjoint_test' if is_test else 'final_ss'),
+            evaluation_seed=metrics.pop('evaluation_seed', evaluation_seed(self.config, epoch, 'disjoint_test' if is_test else 'final_ss')),
             purpose=role, checkpoint_selection=self.config.get('checkpoint_selection', 'final_epoch'),
             # A fixed last/monitor snapshot is not chosen by test scores even
             # when this run also maintains a separate test-selected best.

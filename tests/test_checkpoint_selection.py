@@ -204,6 +204,22 @@ class DisjointEvaluatorTests(unittest.TestCase):
 
 
 class FinalReportTests(unittest.TestCase):
+    def test_explicit_evaluator_seed_is_preserved_without_mutating_metrics(self):
+        from gcd_runtime.evaluation_policy import evaluation_seed
+        cfg = training_config('baseline')
+        for explicit in (False, True):
+            with self.subTest(explicit=explicit), tempfile.TemporaryDirectory() as tmp:
+                metrics = dict(all_acc=.6, old_acc=.7, new_acc=.5)
+                if explicit:
+                    metrics['evaluation_seed'] = 0
+                original = dict(metrics)
+                runtime = EpochRuntime(tmp, cfg)
+                runtime.evaluation(metrics)
+                record = json.loads((Path(tmp)/'evaluation_last.json').read_text())
+                expected = 0 if explicit else evaluation_seed(cfg, cfg['epochs']-1, 'final_ss')
+                self.assertEqual(record['evaluation_seed'], expected)
+                self.assertEqual(metrics, original)
+
     def test_best_bundle_loading_uses_its_actual_epoch_and_rejects_config_drift(self):
         cfg = selected_config()
         with tempfile.TemporaryDirectory() as tmp:
