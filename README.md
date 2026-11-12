@@ -2,6 +2,18 @@
 
 Source nghiên cứu GCD với CRiSH và baseline đối chứng. **Hướng mới ngày 10/11/2026: áp dụng CRiSH lên SelEx đã cập nhật**, không dùng hyperbolic learning. Nhánh Hyp-SelEx cũ vẫn được giữ riêng.
 
+**Đường chạy đúng mục tiêu hiện tại (12/11/2026): baseline SelEx và SelEx + CRiSH Keep/Abstain/Move (`local`).** Xem [hướng dẫn train chính](reports/14_selex_local_training.md) để cài đặt, kiểm tra, chạy trong tmux, theo dõi SS/best và resume. `local` là cơ chế sửa giám sát cục bộ, không phải device CPU/Mac.
+
+| Lựa chọn | Thuật toán thực sự | Có Move? |
+|---|---|---|
+| `--baseline` | SelEx, bỏ qua mọi can thiệp | Không |
+| `--variant local` | SelEx + CRiSH Keep/Abstain/Move | Có, nếu đủ support và qua probe |
+| `--variant policy` | SelEx + CRiSH-P, chọn tỷ lệ Abstain toàn tập | Không |
+| `--variant online` | SelEx + online pair weighting | Không |
+| `--variant hybrid` | Policy + online weighting; không bật local repair | Không |
+
+**Không bỏ `--variant local` khi muốn Keep/Abstain/Move:** các JSON 200 epoch hiện vẫn mặc định `policy`. Giữ default này bảo toàn lịch sử/config đã chạy, không có nghĩa CRiSH-P là thuật toán đầy đủ thay thế local. Lệnh train là từng lựa chọn độc lập, không chạy đồng thời trên một GPU.
+
 **Bộ A2/A1/CRiSH-P ngày 11/11/2026:** profile 200 epoch mặc định hiện là **CRiSH-P thử nghiệm**, dùng counterfactual chọn tỷ lệ abstention trên unlabeled pool, probe known **8 lớp × 2 ảnh/fold**, giới hạn giữ support và khối lượng supervision. Online weighting và local Move/Abstain tắt trong profile này để tách tác dụng. B0 bỏ qua mọi can thiệp; các cặp config vẫn chỉ khác `method`. **Chưa có benchmark CUDA hoặc bằng chứng tăng accuracy/tính mới.** Mô tả, giới hạn, setup và bộ đối chứng nằm trong [handoff đầy đủ](reports/12_full_method_handoff.md).
 
 Chọn `--variant local` cho CRiSH sửa từng mẫu, `--variant online` cho online pair weighting, `--variant policy` cho CRiSH-P, hoặc `--variant hybrid` cho policy + online weighting. `--probe-known-per-class 1` giữ sampling cũ; mặc định mới là 2. Local nhiều action dùng confirmation fold mới cho từng lần accept. Các config 20/50 epoch cũ được giữ nguyên và không tự bật policy mới.
@@ -10,15 +22,18 @@ Online pair reliability vẫn có các lựa chọn `--pair-reliability rn|cross
 
 Paper được giữ nguyên theo yêu cầu. Kiểm thử code bằng `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/run_smoke.py --code-only`; receipt ghi rõ manuscript gate không chạy. Source mới không còn được fingerprint của bản paper cũ chứng nhận.
 
-**Chạy SelEx / SelEx + CRiSH, 200 epoch, DINOv2** trên Linux NVIDIA, sau khi chuẩn bị môi trường/data/weights:
+**Chạy SelEx / SelEx + CRiSH Keep/Abstain/Move, 200 epoch, DINOv2** trên Linux NVIDIA, sau khi chuẩn bị môi trường/data/weights:
 
 ```bash
 # Bộ chính: --dataset scars | cub | aircraft. Chạy từng job, không chạy đồng thời.
 bash scripts/train_selex.sh check --dataset scars --baseline
-bash scripts/train_selex.sh smoke --dataset scars --variant policy
-bash scripts/train_selex.sh --dataset scars --baseline
-bash scripts/train_selex.sh --dataset scars --variant policy
+bash scripts/train_selex.sh smoke --dataset scars --variant local
+# Chọn một arm để train; cả hai có cùng lịch SS mỗi epoch.
+bash scripts/train_selex.sh --dataset scars --baseline --eval-every 1
+bash scripts/train_selex.sh --dataset scars --variant local --eval-every 1
 ```
+
+`--eval-every 1` chấm SS sau mỗi epoch (epoch cuối dùng final evaluator), in All/Old/New và `SS_BEST`, lưu `backbone_best_ss_{all,old,new}.pt`, các JSON tương ứng và `ss_best.json`. Mỗi best giữ cả bộ All/Old/New cùng epoch; không ghép ba cực đại thành một hàng. Các best này được chọn bằng nhãn đánh giá; áp dụng cùng lịch/chính sách cho baseline. SS-last vẫn được báo riêng. Mặc định không có flag này thì chỉ SS cuối run. Xem [chi tiết best SS](reports/13_ss_epoch_best.md).
 
 Lệnh train tự chạy preflight và bounded smoke trước full run. Smoke phải chấm được counterfactual, được phép chọn Keep; fallback do lỗi/budget hoặc chưa chấm được candidate sẽ chặn full train. A1/A2/controls chỉ được **chuẩn bị config**, không tự chạy sweep:
 

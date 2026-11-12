@@ -1,5 +1,10 @@
 # SelEx + CRiSH — implementation and verification scope
 
+Current training instructions (2026-11-12): [SelEx baseline and local CRiSH](14_selex_local_training.md).
+Keep/Abstain/Move requires `--variant local`; raw 200-epoch configs default
+to the separate CRiSH-P experiment. Historical environment notes below are
+not a requirement to replace the working Torch 2.4.1/Python 3.10 environment.
+
 Date: 2026-11-10. This is a new experimental path, not a benchmark result or a
 novelty claim. Legacy Hyp-SelEx/CRiSH commands and profiles remain available.
 
@@ -135,10 +140,10 @@ Run one stage/job at a time, after confirming the GPU is available:
 ```bash
 bash scripts/train_selex.sh check --baseline
 bash scripts/train_selex.sh --baseline
-bash scripts/train_selex.sh
+bash scripts/train_selex.sh --variant local
 ```
 
-The train command runs bounded real-data smoke before a fresh 50-epoch run;
+The current train command runs bounded real-data smoke before a fresh 200-epoch run;
 each launcher stage includes preflight. Nothing above is an automatic sweep.
 For review without GPU, append `--dry-run`. For another seed, copy the full
 config and change only seed, then use `--config PATH` for the corresponding arm.

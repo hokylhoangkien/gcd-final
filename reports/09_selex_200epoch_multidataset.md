@@ -1,5 +1,10 @@
 # SelEx / SelEx + CRiSH: three datasets, 200 epochs
 
+2026-11-12 clarification: the requested main method is **local CRiSH
+Keep/Abstain/Move on SelEx**, selected explicitly below. Raw JSON defaults
+remain CRiSH-P for provenance. See [the main training guide](14_selex_local_training.md)
+for per-epoch SS/best checkpoints and the distinction from optional policy runs.
+
 Date: 2026-11-10. User-authorized extended-budget experiments; no benchmark
 results are asserted. Both methods use the corrected, pinned **Euclidean
 SelEx** source `d8107b5458f3337b2d5342f79345a976037a1265`. Pinned upstream files
@@ -111,11 +116,11 @@ For each dataset first run preflight for both arms (one command at a time):
 
 ```bash
 bash scripts/train_selex.sh check --dataset scars --baseline
-bash scripts/train_selex.sh check --dataset scars
+bash scripts/train_selex.sh check --dataset scars --variant local
 bash scripts/train_selex.sh check --dataset cub --baseline
-bash scripts/train_selex.sh check --dataset cub
+bash scripts/train_selex.sh check --dataset cub --variant local
 bash scripts/train_selex.sh check --dataset aircraft --baseline
-bash scripts/train_selex.sh check --dataset aircraft
+bash scripts/train_selex.sh check --dataset aircraft --variant local
 ```
 
 Then select the appropriate individual job command. This is a command list,
@@ -123,11 +128,11 @@ not an automatic sweep; do not paste all jobs into concurrent sessions:
 
 ```bash
 bash scripts/train_selex.sh --dataset scars --baseline
-bash scripts/train_selex.sh --dataset scars
+bash scripts/train_selex.sh --dataset scars --variant local
 bash scripts/train_selex.sh --dataset cub --baseline
-bash scripts/train_selex.sh --dataset cub
+bash scripts/train_selex.sh --dataset cub --variant local
 bash scripts/train_selex.sh --dataset aircraft --baseline
-bash scripts/train_selex.sh --dataset aircraft
+bash scripts/train_selex.sh --dataset aircraft --variant local
 ```
 
 Append `--seed 2` or `--seed 3` to both arms for matched additional seeds when

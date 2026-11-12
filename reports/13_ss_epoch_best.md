@@ -1,5 +1,10 @@
 # Per-epoch SS and independent best checkpoints
 
+The SS/best feature applies to **both local CRiSH and CRiSH-P**, and baseline.
+The policy command below records the earlier run request; it is not the
+Keep/Abstain/Move method. Use [report 14](14_selex_local_training.md) for the
+current local-method training commands.
+
 2026-11-12. User requested a fresh Cars CRiSH-P run, SS every epoch and
 separate best All / Old / New weights, epochs and paired metric triplets.
 Existing remote process is not controlled from this local workspace.

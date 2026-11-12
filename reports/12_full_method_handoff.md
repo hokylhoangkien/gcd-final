@@ -1,5 +1,11 @@
 # A2, A1 and CRiSH-P: implementation contract
 
+Scope clarification, 2026-11-12: this is the **optional CRiSH-P / controls
+handoff**, not a claim that population abstention replaces local CRiSH's
+Keep/Abstain/Move algorithm. The requested SelEx + local CRiSH training guide
+is [report 14](14_selex_local_training.md). Raw defaults below remain policy;
+use explicit `--variant local` for the local algorithm.
+
 Date: 2026-11-11. This is an experimental implementation and handoff, not
 evidence of increased accuracy, cleared novelty or GPU verification. The owner
 explicitly freezes all paper/LaTeX/PDF files. Preserve existing local work.
