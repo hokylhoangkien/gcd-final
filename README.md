@@ -1,133 +1,102 @@
-# CRiSH-GCD v2.1
+# SelEx + CRiSH — hướng dẫn train
 
-Source nghiên cứu GCD với CRiSH và baseline đối chứng. **Hướng mới ngày 10/11/2026: áp dụng CRiSH lên SelEx đã cập nhật**, không dùng hyperbolic learning. Nhánh Hyp-SelEx cũ vẫn được giữ riêng.
+**Đọc file này là đủ để chạy Stanford Cars, CUB và FGVC-Aircraft.**
+Baseline là **SelEx**; phương pháp cần kiểm chứng là **SelEx + CRiSH local
+Keep / Abstain / Move**. Train trên Linux NVIDIA; Mac chỉ phát triển/test nhỏ.
 
-**Đường chạy đúng mục tiêu hiện tại (12/11/2026): baseline SelEx và SelEx + CRiSH Keep/Abstain/Move (`local`).** Xem [hướng dẫn train chính](reports/14_selex_local_training.md) để cài đặt, kiểm tra, chạy trong tmux, theo dõi SS/best và resume. `local` là cơ chế sửa giám sát cục bộ, không phải device CPU/Mac.
-
-| Lựa chọn | Thuật toán thực sự | Có Move? |
+| Bạn muốn chạy | Flag bắt buộc | Có Move? |
 |---|---|---|
-| `--baseline` | SelEx, bỏ qua mọi can thiệp | Không |
-| `--variant local` | SelEx + CRiSH Keep/Abstain/Move | Có, nếu đủ support và qua probe |
-| `--variant policy` | SelEx + CRiSH-P, chọn tỷ lệ Abstain toàn tập | Không |
-| `--variant online` | SelEx + online pair weighting | Không |
-| `--variant hybrid` | Policy + online weighting; không bật local repair | Không |
+| SelEx baseline | `--baseline` | Không |
+| Thuật toán CRiSH local | `--variant local` | Có, nếu ứng viên đạt điều kiện |
+| CRiSH-P thử nghiệm riêng | `--variant policy` | Không, chỉ Keep/Abstain toàn tập |
 
-**Không bỏ `--variant local` khi muốn Keep/Abstain/Move:** các JSON 200 epoch hiện vẫn mặc định `policy`. Giữ default này bảo toàn lịch sử/config đã chạy, không có nghĩa CRiSH-P là thuật toán đầy đủ thay thế local. Lệnh train là từng lựa chọn độc lập, không chạy đồng thời trên một GPU.
+**Luôn ghi `--variant local` khi train thuật toán của bạn.** JSON 200 epoch
+hiện vẫn mặc định policy để bảo toàn config lịch sử; bỏ flag sẽ chọn nhầm.
+`local` chỉ cơ chế sửa giám sát, không có nghĩa chạy trên CPU/Mac.
+Các biến thể online/hybrid và nhánh Hyp-SelEx cũ không thuộc quickstart này.
 
-**Bộ A2/A1/CRiSH-P ngày 11/11/2026:** profile 200 epoch mặc định hiện là **CRiSH-P thử nghiệm**, dùng counterfactual chọn tỷ lệ abstention trên unlabeled pool, probe known **8 lớp × 2 ảnh/fold**, giới hạn giữ support và khối lượng supervision. Online weighting và local Move/Abstain tắt trong profile này để tách tác dụng. B0 bỏ qua mọi can thiệp; các cặp config vẫn chỉ khác `method`. **Chưa có benchmark CUDA hoặc bằng chứng tăng accuracy/tính mới.** Mô tả, giới hạn, setup và bộ đối chứng nằm trong [handoff đầy đủ](reports/12_full_method_handoff.md).
+## 1. Cài môi trường một lần
 
-Chọn `--variant local` cho CRiSH sửa từng mẫu, `--variant online` cho online pair weighting, `--variant policy` cho CRiSH-P, hoặc `--variant hybrid` cho policy + online weighting. `--probe-known-per-class 1` giữ sampling cũ; mặc định mới là 2. Local nhiều action dùng confirmation fold mới cho từng lần accept. Các config 20/50 epoch cũ được giữ nguyên và không tự bật policy mới.
-
-Online pair reliability vẫn có các lựa chọn `--pair-reliability rn|cross_view|both|off`: chỉ giảm trọng số pseudo-positive tầng cơ sở có bằng chứng qua hai view, warm-up/ramp 10/10 epoch, sàn .25, giữ supervised/USE/coarse và cạnh chưa quan sát. `--no-repair` tắt cả local và population controller; dùng cùng `--variant online` cho đối chứng chỉ weighting. Để quay về local CRiSH trước online/policy, dùng `--variant local --probe-known-per-class 1`.
-
-Paper được giữ nguyên theo yêu cầu. Kiểm thử code bằng `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/run_smoke.py --code-only`; receipt ghi rõ manuscript gate không chạy. Source mới không còn được fingerprint của bản paper cũ chứng nhận.
-
-**Chạy SelEx / SelEx + CRiSH Keep/Abstain/Move, 200 epoch, DINOv2** trên Linux NVIDIA, sau khi chuẩn bị môi trường/data/weights:
+Nếu máy đã có repo, môi trường và data/weights thì bỏ qua phần cài/tải.
+Không clone đè, cập nhật runtime hoặc đổi config dưới job đang chạy.
 
 ```bash
-# Bộ chính: --dataset scars | cub | aircraft. Chạy từng job, không chạy đồng thời.
-bash scripts/train_selex.sh check --dataset scars --baseline
-bash scripts/train_selex.sh smoke --dataset scars --variant local
-# Chọn một arm để train; cả hai có cùng lịch SS mỗi epoch.
-bash scripts/train_selex.sh --dataset scars --baseline --eval-every 1
-bash scripts/train_selex.sh --dataset scars --variant local --eval-every 1
-```
-
-`--eval-every 1` chấm SS sau mỗi epoch (epoch cuối dùng final evaluator), in All/Old/New và `SS_BEST`, lưu `backbone_best_ss_{all,old,new}.pt`, các JSON tương ứng và `ss_best.json`. Mỗi best giữ cả bộ All/Old/New cùng epoch; không ghép ba cực đại thành một hàng. Các best này được chọn bằng nhãn đánh giá; áp dụng cùng lịch/chính sách cho baseline. SS-last vẫn được báo riêng. Mặc định không có flag này thì chỉ SS cuối run. Xem [chi tiết best SS](reports/13_ss_epoch_best.md).
-
-Lệnh train tự chạy preflight và bounded smoke trước full run. Smoke phải chấm được counterfactual, được phép chọn Keep; fallback do lỗi/budget hoặc chưa chấm được candidate sẽ chặn full train. A1/A2/controls chỉ được **chuẩn bị config**, không tự chạy sweep:
-
-```bash
-.venv/bin/python scripts/prepare_crish_experiments.py --dataset scars --suite all --seeds 1
-# Sau khi có run hoàn chỉnh: xuất đúng SS-last và dose thực nhận, không chọn best hậu nghiệm
-.venv/bin/python scripts/summarize_crish_experiments.py runs --output results/crish_observed.csv
-```
-
-Source SelEx ghim tại `d8107b5`; bộ thí nghiệm chính là **Stanford Cars + CUB + FGVC-Aircraft**, thay CIFAR-100 theo lựa chọn mới. Sáu cấu hình trong `configs/selex_{scars,cub,aircraft}_{baseline,crish}_200.json` dùng **200 epoch**, DINOv2, batch 128, head 65536; các tầng loss vào dần mỗi 10 epoch. Trong mỗi dataset hai arm chỉ khác `method`, giữ các tham số riêng của dataset theo source. Đây là **thí nghiệm kéo dài cùng ngân sách**, khác lịch 50 epoch cho ba dataset này trong README upstream cập nhật. Config CIFAR-100 và các config 50 epoch cũ vẫn được giữ như tùy chọn.
-
-Kết quả chính là **SS-v2 của final checkpoint**. Cả 6 config mới bật `report_best_old_test=true`: mỗi epoch lấy **Old-v1 trên plain disjoint test** để giữ một checkpoint best, rồi cuối training chấm **SS-v2 cho cả best và last** như luồng GitHub. `evaluation.json` / `evaluation_last.json` là SS-last; `evaluation_best_old_test.json` là SS-best. Plain train-unlabeled tại epoch 200 chỉ để theo dõi. Selector phụ dùng nhãn đánh giá, không điều khiển SGD/CRiSH hoặc đổi kết quả chính. **Chưa xác minh CUDA/dữ liệu thật hoặc benchmark của đường SelEx mới.** Layout dữ liệu, lệnh cho đủ 6 run, seed/resume và điều kiện dừng nằm trong [hướng dẫn 3 dataset × 200 epoch](reports/09_selex_200epoch_multidataset.md); thiết lập môi trường và nền tảng phương pháp nằm trong [SelEx + CRiSH](reports/08_selex_crish_migration.md).
-
-Các config SelEx hiện dùng `evaluation_rng=upstream`: seed train theo source, plain-test tiêu thụ RNG theo thứ tự upstream và SS đặt seed 0 trước khi tạo dataset. Đây là thay đổi cho **run mới**; checkpoint của bản trước cần source/config gốc để resume. Chi tiết và giới hạn kiểm chứng nằm trong báo cáo migration.
-
-**Sửa cluster rỗng (11/11/2026):** SelEx được phép trả về ít cluster có mẫu hơn số slot prototype yêu cầu. Runtime giữ nguyên assignment, ID và số slot; chỉ thay tâm không hữu hạn của slot rỗng bằng fallback cùng phía known/novel như source. State SelEx chấp nhận slot rỗng hữu hạn; CRiSH vẫn không được Move vào cluster thiếu support hoặc làm cluster nguồn thiếu support. Tâm không hữu hạn của cluster đang có mẫu, feature lỗi và assignment sai vẫn báo lỗi. `hierarchy.jsonl` và dòng `HIERARCHY` ghi support, ID rỗng, tâm trùng và độ phân tán feature để phát hiện suy biến. Xem [giải thích và kiểm chứng](reports/08_selex_crish_migration.md#empty-slot-compatibility--2026-11-11). Chưa xác nhận CUDA; checkpoint cũ không resume trực tiếp bằng source mới vì fingerprint đã đổi.
-
-**Đối chiếu paper:** code phát hành năm 2024 có mặc định 200 epoch; 50 epoch ở trên là lịch của bản sửa 2026. Bộ chính Cars/CUB/Aircraft có các dòng DINOv2 trong paper; pipeline hiện tại vẫn dùng hierarchy/hyperparameters đã sửa. CIFAR-100 giữ tùy chọn và dòng của nó trong paper dùng DINOv1. Xem [audit paper, metric và checkpoint](reports/10_paper_comparability_audit.md) trước khi so số.
-
-**Các mục bên dưới mô tả nhánh Hyp-SelEx cũ**, dùng `scripts/train_crish.sh`, hỗ trợ Cars/CUB và có các profile `reference/final/upgraded`. Chúng không phải cấu hình SelEx mới.
-
-**Bản chốt cấu hình ngày 08/11/2026:** entrypoint mặc định dùng `--profile final`: USE `legacy`, evidence shortlist bằng hàng xóm trên toàn bộ frozen features, probe mỗi fold 16 labeled / 32 unlabeled và lấy labeled cân bằng theo lớp. Loss, lịch train và điều kiện chấp nhận repair giữ nguyên. `final` là tên bản cấu hình đã chốt để thử nghiệm; chưa có bằng chứng tăng accuracy. Profile `reference` và `upgraded` vẫn giữ để đối chứng.
-
-Code đã có kiểm thử CPU tổng hợp. Log GPU được cung cấp ngày 05/11/2026 cho thấy bản trước chạy hết epoch 0–2 trên A40 rồi lỗi prototype khi dựng hierarchy. Runtime hiện có xử lý cụm rỗng dùng chung cho CRiSH/B0 và thêm kiểm tra HSSK vào preflight. **Bản sửa chưa được xác nhận lại trên CUDA/dữ liệu thật; chưa có kết quả benchmark CRiSH hoàn chỉnh.** Hiệu quả và tính mới của phương pháp vẫn cần thực nghiệm.
-
-## 1. Cài trên máy train
-
-Linux + NVIDIA CUDA, Python 3.9–3.11. Dung lượng VRAM và thời gian thực tế phải đo bằng smoke test; cấu hình đầy đủ dùng batch 128, projector 8192 chiều, 200 epoch.
-
-Giải nén gói source rồi mở terminal trong thư mục vừa giải nén. Gói đã chứa upstream HypCD đúng phiên bản, không cần clone lại.
-
-```bash
+git clone --recurse-submodules https://github.com/hokylhoangkien/gcd-final.git
+cd gcd-final
 GCD_PYTHON=python3 bash scripts/bootstrap.sh cuda
 ```
 
-Lệnh tạo `.venv` nếu chưa có, cài PyTorch 2.4.1/CUDA 12.1 và dependencies, xác minh upstream rồi chạy test CPU có timeout. Cần Internet để cài dependencies. Nếu driver không chạy được bộ CUDA này, xử lý môi trường trước khi train.
+Cần Python **3.9–3.11**. Bootstrap tạo `.venv`, cài **Torch 2.4.1/cu121,
+torchvision 0.19.1** và dependencies ghim, kiểm tra source và code CPU;
+không tải data/weights hoặc train dài. Nếu suite CPU timeout 60 giây, đó chưa
+phải test pass; không cài lại cả môi trường hay đổi Torch chỉ vì timeout.
+Preflight/smoke thực ở dưới vẫn cần đạt trước full train.
 
-## 2. Đặt dataset và pretrained weights
-
-**Gói source không kèm ảnh dataset hoặc pretrained weights.** Tải chúng trực tiếp trên máy Linux NVIDIA sau bước cài môi trường ở mục 1; không cần tải bộ dữ liệu lớn về Mac. Lệnh train không tải data/weights tự động. Các lệnh dưới chạy từ thư mục gốc project, dùng đường dẫn mặc định. Nếu đã có đủ file ở ổ khác, bỏ qua bước tải và đặt biến môi trường ở cuối mục này.
-
-### 2.1. Tải Stanford Cars
-
-Nguồn ảnh và annotations dạng gốc: [mirror cộng đồng trên Hugging Face](https://huggingface.co/datasets/iharabukhouski/stanford_cars/tree/main), khoảng 2 GB theo danh sách file. Nguồn Stanford cũ hiện không còn tải được theo [Torchvision](https://docs.pytorch.org/vision/stable/generated/torchvision.datasets.StanfordCars.html). Mirror chưa được kiểm chứng toàn bộ trên workspace này; preflight sẽ kiểm tra ảnh, annotation và membership trước khi train.
-
-Cài thêm công cụ tải rồi tải nguyên tên file/thư mục, giữ nguyên train/test gốc. Cú pháp dùng [Hugging Face CLI 0.26.2](https://huggingface.co/docs/huggingface_hub/v0.26.2/guides/cli):
+Trên Ubuntu trống, công cụ hệ thống tối thiểu:
 
 ```bash
-.venv/bin/python -m pip install 'huggingface_hub[cli]==0.26.2'
-timeout 3600 .venv/bin/huggingface-cli download iharabukhouski/stanford_cars \
-  --repo-type dataset --local-dir datasets/cars \
-  --include 'cars_train/**' 'cars_test/**' 'devkit/**' 'cars_test_annos_withlabels.mat'
+apt-get update && apt-get install -y python3-venv python3-dev build-essential git curl tmux unzip ca-certificates
 ```
 
-`timeout` là lệnh trên Linux; giới hạn tải một giờ, không phải ước lượng thời gian hoàn tất. Nếu tải bị ngắt, chạy lại lệnh download để tiếp tục các file còn thiếu. Nếu nhóm đã có bản Cars dùng trong thí nghiệm trước, có thể dùng lại bản đó và chạy preflight.
+Không cài lại NVIDIA driver nếu `nvidia-smi` đang nhận GPU bình thường.
+Nếu dùng interpreter đã chuẩn bị ở nơi khác, đặt `SELEX_PYTHON` trỏ tới nó.
 
-Mirror đặt annotation test ở thư mục gốc, còn loader của project đọc trong `devkit/`. Chép file vào đúng vị trí, giữ file đã có:
+## 2. Chuẩn bị data và weights
 
-```bash
-mkdir -p datasets/cars/devkit
-cp -n datasets/cars/cars_test_annos_withlabels.mat datasets/cars/devkit/
+Cả ba dùng chung **DINOv2 ViT-B/14 với 4 register tokens**. Không commit ảnh,
+weights, checkpoint hoặc credentials. Layout mặc định tính từ gốc repo:
+
+```text
+datasets/
+  cars/
+    cars_train/                              # 8144 ảnh
+    cars_test/                               # 8041 ảnh
+    devkit/cars_train_annos.mat
+    devkit/cars_test_annos_withlabels.mat
+  cub/CUB_200_2011/
+    images/
+    images.txt
+    image_class_labels.txt
+    train_test_split.txt
+    attributes/image_attribute_labels.txt
+  aircraft/fgvc-aircraft-2013b/
+    data/images/
+    data/images_variant_trainval.txt
+    data/images_variant_test.txt
+weights/dinov2_vitb14_reg4_pretrain.pth
 ```
 
-Không đổi tên ảnh, tự chia lại train/test hoặc tự sắp ảnh theo tên lớp. Split Cars SSB đã đi kèm upstream: 98 lớp known, 98 lớp novel; 50% ảnh của các lớp known được gán nhãn theo loader gốc. Nhãn của tập unlabeled chỉ được dùng trong evaluator riêng sau khi khóa checkpoint.
+**Giữ train/test và metadata gốc; không tự chia lại lớp hay đổi tên ảnh.**
+SSB split đã ghim trong upstream. Aircraft dùng bài toán **100 variant**,
+`trainval` để train, `test` riêng để theo dõi. CUB cần cả file attributes.
 
-### 2.2. Tải pretrained DINOv2
+| Dataset | Flag | Known / Novel | Tỷ lệ labeled trong known |
+|---|---|---|---|
+| Stanford Cars | `scars` | 98 / 98 | 50% |
+| CUB-200-2011 | `cub` | 100 / 100 | 50% |
+| FGVC-Aircraft | `aircraft` | 50 / 50 | 50% |
 
-Dùng **DINOv2 ViT-B/14 với 4 register tokens**, file `dinov2_vitb14_reg4_pretrain.pth`. [Weights tải trực tiếp từ Meta](https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_reg4_pretrain.pth) được liệt kê trong [repo DINOv2 chính thức](https://github.com/facebookresearch/dinov2). Kiến trúc model đã nằm trong upstream, chỉ cần bổ sung weights.
+Có thể dùng data gốc nhóm đã có. Nguồn Cars tải gộp:
+[stanford_cars.zip](https://huggingface.co/zhengli97/prompt_learning_dataset/tree/main).
+Giải nén archive đó vào thư mục tạm, xác định `cars_train`, `cars_test`,
+`devkit` rồi đặt theo cây trên; annotation test có thể ở thư mục gốc archive,
+cần đặt bản sao vào `devkit/`. Không dùng split Zhou trong archive thay SSB.
+Nguồn Aircraft: [trang phát hành FGVC-Aircraft](https://www.robots.ox.ac.uk/~vgg/data/fgvc-aircraft/).
+CUB cần bản phát hành CUB-200-2011 đầy đủ đúng cây thư mục trên, không chỉ ảnh.
+Runtime không tự tải/giải nén dataset; preflight sẽ kiểm tra file và protocol.
 
-Nếu chưa có weights, chạy:
+Nếu chưa có weights, tải mirror công khai và kiểm tra SHA256 trước khi dùng:
 
 ```bash
 mkdir -p weights
-curl --fail --location --continue-at - --connect-timeout 20 --max-time 1800 \
-  --output weights/dinov2_vitb14_reg4_pretrain.pth \
-  https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_reg4_pretrain.pth
+curl -fL -C - --connect-timeout 20 --max-time 1800 \
+  -o weights/dinov2_vitb14_reg4_pretrain.pth \
+  https://huggingface.co/cubert-gmbh/dinov2/resolve/e2c8060a74112f7537484ed50097b1497d5f032c/dinov2_vitb14_reg4_pretrain.pth
+
+echo '73182a088cf94833c94b1666d1c99e02fe87e2007bff57b564fb6206e25dba71  weights/dinov2_vitb14_reg4_pretrain.pth' | sha256sum -c -
 ```
 
-Lệnh giới hạn 30 phút và có thể chạy lại để tiếp tục tải dở. Preflight nạp state dict vào đúng kiến trúc, ghi SHA256 weights và thử forward/backward CUDA; tải thành công chưa phải xác nhận CUDA.
-
-### 2.3. Kiểm tra vị trí file
-
-```text
-datasets/cars/
-├── cars_train/                         # ảnh train gốc
-├── cars_test/                          # ảnh test gốc
-└── devkit/
-    ├── cars_train_annos.mat
-    └── cars_test_annos_withlabels.mat
-weights/
-└── dinov2_vitb14_reg4_pretrain.pth
-```
-
-Nếu data/weights đã ở ổ khác, đặt biến môi trường trỏ tới **thư mục cha** tương ứng. Ví dụ `GCD_DATA_ROOT` chứa thư mục `cars/`, còn `GCD_WEIGHTS_ROOT` chứa trực tiếp file `.pth`:
+Nếu data ở ổ khác, đặt các root trước mọi lệnh (thay bằng đường dẫn của bạn):
 
 ```bash
 export GCD_DATA_ROOT=/path/to/datasets
@@ -135,279 +104,228 @@ export GCD_WEIGHTS_ROOT=/path/to/weights
 export GCD_RUNS_ROOT=/path/to/runs
 ```
 
-Sau khi đặt đủ file và biến môi trường, kiểm tra trên máy CUDA:
+Root data là thư mục **chứa** `cars/`, `cub/`, `aircraft/`; root weights chứa
+trực tiếp file `.pth`. Mặc định là `datasets/`, `weights/`, `runs/` trong repo.
+
+## 3. Chọn dataset và kiểm tra trước train
+
+Từ thư mục gốc repo, chọn **một** dataset, dùng xuyên suốt phiên shell:
 
 ```bash
-bash scripts/train_crish.sh check
+GCD_DATASET=scars
+# Đổi thành cub hoặc aircraft cho hai dataset còn lại.
 ```
 
-Chỉ tiếp tục mục 3 khi preflight thành công. Nếu báo thiếu file, sửa vị trí theo thông báo; không tự tạo annotation hoặc split thay thế.
-
-## 3. Chạy train
-
-Kiểm tra lệnh và cấu hình, không dùng GPU:
+Xem plan, không dùng GPU:
 
 ```bash
-bash scripts/train_crish.sh --dry-run
+bash scripts/train_selex.sh --dataset "$GCD_DATASET" --variant local --eval-every 1 --dry-run
 ```
 
-Train CRiSH:
+Plan local phải có `baseline_family=selex`, `method=crish`,
+`discrete_repair=true`, `population_policy.enabled=false`, online weighting
+false, `epochs=200`, head 65536. Baseline dùng `method=baseline` và bypass
+mọi controller. `TRAIN method=crish` đơn lẻ không phân biệt local với policy.
+
+Kiểm tra GPU trống bằng `nvidia-smi`. Nếu có job đang chạy, xem chủ sở hữu và
+log trước; không tự kill hoặc mở job cạnh tranh. Sau đó:
 
 ```bash
-bash scripts/train_crish.sh
+bash scripts/train_selex.sh check --dataset "$GCD_DATASET" --variant local
 ```
 
-Lệnh này chạy **preflight → smoke 1 epoch/tối đa 2 batch, có selector và hai final evaluator → một run mới 200 epoch**. Mỗi stage chỉ tiếp tục khi stage trước thành công. Preflight kiểm tra split/ảnh/weights/import, forward/backward CUDA thật, backbone và loss/scorer. Smoke kiểm tra toàn bộ đường chọn best và báo best/last trên dữ liệu thật; accuracy của smoke không phải kết quả benchmark. Smoke không tiếp tục thành checkpoint của run chính.
-
-Preflight giới hạn 180 giây; worker smoke gồm train/selector tối đa 1.800 giây; worker full train gồm selector tối đa 86.400 giây. Mỗi evaluator có giới hạn 1.800 giây; sau worker train/smoke có tối đa **hai** final evaluator, mỗi worker tối đa 1.800 giây. Đây là giới hạn dừng, không phải dự báo thời gian hoàn thành. Chương trình chạy foreground, in PID và đường dẫn log, lưu resume trước mỗi selector. Nếu đã có tiến trình GPU, lệnh dừng để người vận hành kiểm tra; không tự dừng tiến trình khác. Preflight kiểm tra HSSK với embedding trùng nhau và plain k-means trên CUDA; log `KMEANS ... empty_cluster_repairs=...` ghi số lần xử lý cụm rỗng.
-
-Môi trường CUDA đã có từ bản trước cần bổ sung backend Git đúng phiên bản (không tải lại weights):
+Preflight xác minh data/split/weights/import và **CUDA forward/backward ảnh
+thật với head thật**. Chỉ nhận GPU qua `nvidia-smi` chưa phải CUDA test đạt.
+Nếu muốn kiểm tra smoke riêng trước quyết định train dài:
 
 ```bash
-.venv/bin/python -m pip install -r environments/requirements-selector-cuda.txt
-.venv/bin/python -m pip install --force-reinstall --no-deps -r environments/requirements-selector-cuda.txt
+bash scripts/train_selex.sh smoke --dataset "$GCD_DATASET" --variant local
 ```
 
-File này ghim `kmeans_pytorch` ở commit `f7f36bd1cb4e3a761d73d584866d0a9c6b4d2805` của repo chính thức, kèm Numba. Lệnh thứ hai buộc thay bản PyPI cùng version bằng bản Git; `--no-deps` giữ nguyên Torch và các dependencies đã được giải quyết ở lệnh đầu. PyPI 0.3 thiếu `tqdm_flag`, có khác biệt về GPU/empty-cluster; CUDA preflight chặn backend cũ. CPU fixture vẫn có thể dùng PyPI 0.3 trên dữ liệu nhỏ, không xác nhận CUDA. Không chạy bootstrap/update dependency khi GPU run cũ còn dùng môi trường đó.
+Smoke local là 1 epoch, tối đa 2 minibatch; warmup 0, SS định kỳ tắt nhưng vẫn
+có đánh giá SS cuối. Nó trích/clustering toàn bộ pool. Gate yêu cầu thực sự
+chấm được counterfactual; Keep hợp lệ, fallback/no-scoring sẽ chặn full train.
+Smoke hoàn tất báo **`Status=completed`**. Điểm smoke không phải benchmark.
 
-Các lệnh bổ sung:
+## 4. Train 200 epoch trong tmux
 
 ```bash
-# Chỉ kiểm tra độ sẵn sàng trên máy CUDA
-bash scripts/train_crish.sh check
-
-# Chỉ smoke dữ liệu thật, chưa chạy đủ 200 epoch
-bash scripts/train_crish.sh smoke
-
-# Đối chứng B0: cùng objective, backbone, split và lịch tối ưu
-bash scripts/train_crish.sh --baseline
-
-# Thêm SS-k-means trên train-unlabeled mỗi epoch (tốn thêm thời gian)
-bash scripts/train_crish.sh --eval-every 1
-
-# Mặc định: test selector mỗi epoch; SS chỉ cho best/last khi train xong
-bash scripts/train_crish.sh --eval-every 0
-
-# Tiếp tục từ cuối epoch đã lưu; dùng đúng source/config của run đó
-bash scripts/train_crish.sh --resume runs/RUN_ID/resume.pt
-
-# Đánh giá lại backbone đã khóa ở epoch cuối
-bash scripts/train_crish.sh evaluate --checkpoint runs/RUN_ID/backbone_final.pt
-
-# Đánh giá lại best với đúng config snapshot (kể cả --eval-every đã override)
-.venv/bin/python -m gcd_runtime.launch evaluate --config runs/RUN_ID/config.json \
-  --checkpoint runs/RUN_ID/backbone_best_old_test.pt
+tmux new -s train
 ```
 
-Thêm `--baseline` khi resume/evaluate checkpoint B0 bằng entrypoint chung. Checkpoint resume có optimizer/RNG nên chỉ nạp file tin cậy. Resume đòi đúng config (gồm `--eval-every` nếu đã dùng) và fingerprint source; checkpoint từ source cũ cần chạy bằng bản source cũ đã lưu. Với chế độ chọn best, giữ **cả thư mục run**: `resume.pt`, `backbone_best_old_test.pt`, `test_evaluations/` và các histories. Chỉ chép `resume.pt` sẽ không đủ để khôi phục best đã chọn. Cập nhật code này không thay đổi run đang chạy trên máy khác và không bổ sung được lịch sử accuracy cho các epoch chưa từng đánh giá.
+Nếu session đã có: `tmux attach -t train`. Kiểm tra job cũ đã kết thúc trước
+khi chạy job mới. Trong tmux, chọn **đúng một lệnh** từ các bảng dưới;
+không dán cả bảng để chạy tuần tự ngoài ý muốn, không chạy đồng thời.
 
-Sau khi cập nhật bản sửa lỗi prototype ngày 05/11/2026, giữ nguyên thư mục run/checkpoint cũ để đối chiếu. Checkpoint của bản trước bị chặn resume do fingerprint source đã đổi; bản sửa này không bỏ qua kiểm tra đó. Dùng source mới trên máy Linux NVIDIA, chạy `bash scripts/train_crish.sh check`, tiếp theo `bash scripts/train_crish.sh smoke`. Nếu cả hai thành công, `bash scripts/train_crish.sh` tạo một run mới, có preflight và smoke trước training đầy đủ. Chạy lại B0 bằng cùng bản sửa khi so sánh.
+**Phương pháp: SelEx + CRiSH Keep/Abstain/Move, SS mỗi epoch**
 
-## 4. Cấu hình và kết quả
+| Dataset | Lệnh |
+|---|---|
+| Cars | `bash scripts/train_selex.sh --dataset scars --variant local --eval-every 1` |
+| CUB | `bash scripts/train_selex.sh --dataset cub --variant local --eval-every 1` |
+| Aircraft | `bash scripts/train_selex.sh --dataset aircraft --variant local --eval-every 1` |
 
-`configs/crish_final.json` là cấu hình mặc định; `configs/baseline_final.json` chỉ khác trường `method`. Hai file `_final_smoke.json` dùng riêng cho kiểm tra ngắn. `configs/crish.json` / `baseline.json` giữ cấu hình reference cũ, chọn bằng `--profile reference`; `_upgraded.json` là ablation đổi USE sang `row`. CUB có các file tương ứng với tiền tố `cub_`. Các siêu tham số CRiSH hiện là lựa chọn kỹ thuật chưa được xác nhận bằng benchmark. M2 stability mặc định tắt; lookahead chỉ cập nhật bản sao projector trong một bước SGD.
+**Baseline SelEx, cùng lịch SS**
 
-**Cấu hình Cars/DINOv2 đã chốt theo script upstream:** `unsupervised_smoothing=0.5`, **`hyper_max_weight=0.5`**, `c=0.1`, `cr=2.0`, `grad_from_block=10`, batch 128, 200 epoch, SGD lr 0.1, weight decay 5e-5, supervised weight 0.35, projector 8192, seed 1, official SSB split/labeled fraction 0.5. B0 và CRiSH dùng cùng các giá trị này; smoke chỉ rút epoch/step. Mốc đối chiếu là lệnh `scars v2 0.5 0.5 0.1 2.0` trong [script Hyp-SelEx được ghim](upstream/HypCD/scripts/train_HypSelEx.cmd), không lấy default 1.0 của parser thay cho lệnh Cars-v2.
+| Dataset | Lệnh |
+|---|---|
+| Cars | `bash scripts/train_selex.sh --dataset scars --baseline --eval-every 1` |
+| CUB | `bash scripts/train_selex.sh --dataset cub --baseline --eval-every 1` |
+| Aircraft | `bash scripts/train_selex.sh --dataset aircraft --baseline --eval-every 1` |
 
-`scripts/check_protocol.py` đọc trực tiếp script/parser upstream và so với **CLI thực tế của worker**, không chạy Slurm. Kiểm tra này nằm trong CPU smoke; preflight CUDA cũng ghi đối chiếu vào `readiness.json`. Chạy riêng bằng `.venv/bin/python scripts/check_protocol.py`. Kết quả khớp tham số không có nghĩa đã khôi phục chính xác mọi số trong paper: các sửa lỗi runtime, RNG isolation và checkpoint mapping chưa công bố vẫn được ghi riêng. Run cũ dùng weight 1.0 phải giữ nguyên cấu hình/nhãn thí nghiệm của nó; chuyển sang 0.5 là run mới, không đổi số hay metadata cũ.
+Full command tự chạy **preflight → smoke → full 200 epoch**. Không cần smoke
+riêng nếu đã chọn full command; nếu vừa smoke riêng thì full vẫn lặp smoke.
+Smoke và full có **run ID/log khác nhau**. `TRAIN plan ... epochs=200` xác nhận
+đã vào full run, không có nghĩa đã hoàn thành. Mỗi dataset có config riêng
+trong `configs/selex_{scars,cub,aircraft}_{baseline,crish}_200.json`.
 
-Mỗi lần chạy tạo `runs/RUN_ID/` với `config.json`, `environment.txt`, `metadata.json`, `readiness.json`, `run.log`, checkpoint và diagnostics. Theo dõi đường dẫn log được in ra:
+Cả ba dùng DINOv2 reg4, batch 128, head 65536, seed mặc định 1. Thêm `--seed N`
+cho cả hai arm để so seed khác. Không tự mở multi-seed sweep. Đo VRAM và thời
+gian thực, nhất là controller và các mốc bật tầng loss; không hứa thời gian
+hoàn tất. Deadline full 604800 giây, mỗi evaluator 7200 giây là **giới hạn**.
+
+- Rời tmux mà giữ train: **Ctrl+B, thả ra, D**.
+- Vào lại: `tmux attach -t train`.
+- Tmux tự nó không dùng VRAM; Python/CUDA bên trong mới dùng.
+- Ctrl+C ở pane chạy chính dừng launcher. Ctrl+C ở `tail`/`watch` chỉ dừng xem.
+
+## 5. Theo dõi log, GPU và can thiệp
+
+Launcher in đường dẫn run full. Ở tab SSH phụ, từ gốc repo đặt đúng thư mục
+full (thay `RUN_ID` bằng ID được in, hoặc dùng đường dẫn `GCD_RUNS_ROOT`):
 
 ```bash
-tail -f runs/RUN_ID/run.log
+RUN_DIR=runs/RUN_ID
+tail -n 100 -f "$RUN_DIR/run.log"
 ```
 
-Mặc định B0 và CRiSH dùng `checkpoint_selection=best_old_test_v2`, theo quy tắc chọn checkpoint trong **code Hyp-SelEx phát hành**, với hai bước:
+`-n 100` chỉ số dòng cũ hiện ban đầu; `-f` hiện **mọi dòng mới liên tục**.
+Nó không tự chuyển file từ smoke sang full: lấy đúng log full mà launcher in.
 
-1. **Mỗi epoch:** khóa snapshot sau SGD, chờ worker riêng trích normalized backbone features trên **disjoint test**, chạy **plain Euclidean k-means**, Hungarian-v2 toàn cục và in All/Old/New. Khi **Old-v2 tăng**, lưu best; hòa điểm giữ epoch sớm hơn. `test_metrics.jsonl` và `test_evaluations/epoch_0001.json` lưu kết quả từng epoch. `selection.json` ghi epoch/điểm/quy tắc chọn và hash best. Không early-stop, không đưa score vào loss hay CRiSH action screening.
-2. **Sau epoch cuối:** worker riêng chạy **balanced SS-k-means trên train-unlabeled**, với labeled anchors, cho cả **best và last**; báo metric Hungarian-v2 toàn cục. `evaluation_best_old_test.json` là best, `evaluation_last.json` là last; `evaluation.json` là bản sao kết quả best trong chế độ này. Best được chọn theo Old-test, không phải All cao nhất trong lịch sử.
-
-`--eval-every N` chỉ thêm bước SS monitoring trên train-unlabeled mỗi N epoch; mặc định **0**, không ảnh hưởng selector disjoint test mỗi epoch. `1` có đủ SS metrics mỗi epoch nhưng tốn thêm một lượt trích feature/clustering. Các kết quả SS monitoring nằm trong `epoch_metrics.jsonl` và `evaluations/epoch_NNNN.json`. Best/last SS cũng xuất hiện trong lịch sử SS; khi không bật monitoring, các đỉnh SS chỉ xét hai checkpoint đã đánh giá, không phải mọi epoch.
-
-`run.log` in `EVAL epoch=… protocol=… All=…% Old=…% New=…%`, cùng dòng `SELECTION` báo best hiện tại. `results_summary.json` và lệnh bên dưới tổng kết riêng **epoch max-All, max-Old, max-New**, kèm nguyên bộ All/Old/New tại từng epoch và tách theo protocol. File JSON lưu accuracy dạng **fraction**, kèm sample counts, thời gian, seed/RNG seed, epoch, timestamp và hash checkpoint; nhân 100 để lấy %. `metrics.jsonl` vẫn chỉ ghi loss/thời gian của worker train, không nhận oracle score.
-
-Để xem lại bảng kết quả đã lưu:
+GPU cập nhật mỗi 2 giây, chạy ở tab khác:
 
 ```bash
-.venv/bin/python scripts/show_metrics.py runs/RUN_ID
+watch -n 2 nvidia-smi
 ```
 
-Chỉ giữ snapshot gần nhất `backbone_monitor.pt`, best `backbone_best_old_test.pt`, `resume.pt` và `backbone_final.pt`; không giữ weights của cả 200 epoch. Best là một bundle gồm backbone và metadata chọn model được thay thế nguyên tử; không có optimizer để resume từ best. Resume dùng last optimizer/RNG và sao chép best/history từ run nguồn. Nếu selector của epoch vừa lưu thất bại, resume đánh giá lại epoch đó trước khi chạy SGD tiếp; kể cả khi đã hết epoch, có thể khôi phục selector rồi chuyển sang final evaluations. Thiếu lịch sử hoặc best sẽ báo lỗi, không tự reset điểm best. Tổng thời gian/VRAM bổ sung cần đo trên NVIDIA.
+Đọc `Memory-Usage`, không coi utilization 0% tức thời là treo. VRAM không tăng
+đơn giản theo số epoch; trainer/evaluator có thể đồng thời hiện hai PID.
+Kiểm tra command/PID trước khi kết luận có job người khác. Không tự kill PID.
 
-Đây là **checkpoint selection có dùng nhãn đánh giá** theo yêu cầu đối chiếu code gốc, thay cho quy tắc chỉ lấy epoch cuối trước đây; không gọi đây là protocol không dùng oracle. Với v2, global Hungarian dùng nhãn cả known/novel trước khi tính Old. Nhãn/score vẫn ở evaluator và không đi vào SGD/CRiSH. Muốn giữ quy tắc cũ, đặt `checkpoint_selection=final_epoch` và `test_every_epochs=0` cho cả hai cấu hình; khi đó `evaluation.json` là kết quả last.
-
-Để so sánh dùng cùng selector, lịch, backend và cấu hình cho B0/CRiSH. SelEx gốc mặc định chọn theo Old-v1 (helper trả metric đầu tiên); không gọi chế độ Old-v2 này là tái lập nguyên xi SelEx. HypCD eval script nạp `model_test.pt`; chưa xác minh checkpoint nào sinh từng số paper. B0 vẫn có các sửa runtime/siêu tham số đã ghi nhận, nên việc khớp selector không tự chứng minh tái lập đầy đủ bảng công bố. Evaluation RNG được tách khỏi training, seed được ghi lại; đây cũng là khác biệt so với script gốc dùng chung RNG.
-
-## 5. Kiểm thử và bố cục
-
-Trên Mac/CPU, chỉ chạy:
+Xem tất cả action local thực sự được nhận, không in các mảng prototype dài:
 
 ```bash
-.venv/bin/python scripts/run_smoke.py
+.venv/bin/python -c 'import json,sys; [(print("epoch:",r["epoch"],"accepted:",r["accepted"]), print([(d["kind"],d["sample_id"],d.get("source"),d.get("target")) for d in r["decisions"] if d["status"]=="accepted"])) for r in map(json.loads,open(sys.argv[1]))]' "$RUN_DIR/crish.jsonl"
 ```
 
-Nếu máy chưa có môi trường local: `GCD_PYTHON=python3 bash scripts/bootstrap.sh local`. Không chạy train dài trên Mac. Biên nhận test nằm ở `results/local_validation.json`; không phải số liệu benchmark.
+Local warmup 10: lần đầu ở **`epoch=10`, tức epoch thứ 11**, rồi 15,20,25,…
+Mỗi lần tối đa **1 action được chấp nhận**, có thể Keep. `crish.jsonl` chứa
+candidate, discovery/confirmation gain, quyết định và thời gian. Policy dùng
+`crish_p.jsonl`/`CRISH_P`, không phải local. `intervention_diagnostics.jsonl`
+ghi số ảnh và quan hệ positive thực sự thay đổi.
 
-```text
-crish/          thuật toán, objective adapter, repair/probe/lookahead và vòng train chung
-gcd_runtime/   data boundary, CLI, preflight, checkpoint và evaluation
-configs/        CRiSH, B0 và smoke
-scripts/        bootstrap, integrity check, smoke, train và đóng gói
-tests/         unit, protocol và synthetic integration tests
-audit/         oracle đối chiếu loss với source baseline
-upstream/      HypCD giữ nguyên, pin commit
-reports/       audit, protocol, phương pháp, giới hạn và đối chiếu bản thảo
-paper/         nguồn LaTeX và PDF bản thảo nghiên cứu hiện tại
-results/       biên nhận kiểm tra; không có accuracy CRiSH giả lập
-```
+Đầu mỗi epoch dựng lại hierarchy; weights/optimizer vẫn tiếp tục, không học
+lại từ đầu. Mask/assignment sửa chỉ sống trong epoch đó, ảnh hưởng đã học
+vào weights vẫn giữ. Probe gain là chênh lệch loss sau SGD thử, **không phải
+% accuracy tăng**. Accepted nhiều hay đổi nhiều quan hệ không chứng minh tốt hơn.
 
-[Phương pháp và kế hoạch nghiên cứu](reports/04_method_and_research_plan.md) · [Protocol](reports/01_baseline_protocol.md) · [Đối chiếu source/bản thảo](reports/06_manuscript_source_alignment.md) · [Nguồn LaTeX](paper/manuscript.tex) · [Bản thảo PDF](paper/manuscript.pdf) · [Nguồn gốc mã](NOTICE) · [Giấy phép HypCD](LICENSES/HypCD-MIT.txt).
+## 6. Đọc SS, best All/Old/New và thời gian
 
-`paper/` giữ bản thảo đã đồng bộ với thuật toán/cấu hình hiện tại; các giới hạn
-và kế hoạch chưa thực nghiệm được ghi riêng. Chưa phải paper hoàn chỉnh. `.venv/`
-được giữ để chạy local. Slide, preview và các release cũ đã được dọn; chỉ
-giữ tài liệu phương pháp ở `reports/`. Checkpoint/log dữ liệu thật của hướng
-cũ nằm trong `logs/final-backup-20261101/`, không phải kết quả CRiSH. Bản
-source khớp fingerprint của run lịch sử được giữ cùng backup để tái lập.
+| Dòng log | Ý nghĩa |
+|---|---|
+| `TRAIN ... loss=...` | Loss minibatch |
+| `EVAL ... plain_kmeans_disjoint_test` | Accuracy plain theo dõi mỗi epoch |
+| `SELEX_SELECTION ... Old_v1=...` | Chọn checkpoint phụ theo Old-v1 disjoint-test |
+| `EVAL ... balanced_ss_kmeans_train_unlabeled` | **SS All/Old/New cần so sánh** |
+| `SS_BEST metric=all/old/new` | Best SS riêng, epoch và full triplet |
+| `RUNTIME epoch_complete=0` | Đã hoàn tất epoch đầu (log đếm từ 0) |
+| `EVAL worker_seconds=...` | Thời gian evaluator SS, không phải toàn epoch |
 
-`AGENTS.md` và upstream giữ nguyên. Đóng gói khi cần bằng
-`.venv/bin/python scripts/build_release.py`; `dist/` được tạo lại với manifest
-và SHA256. Gói gồm code, ghi chú nghiên cứu và bản thảo LaTeX/PDF hiện tại,
-không kèm `.venv`, data/weights, log/checkpoint, slide hoặc backup lịch sử.
+SS dùng **Balanced Semi-Supervised K-means**, legal known labels làm anchors,
+chấm phần unlabeled của train pool bằng global Hungarian-v2, tương ứng
+`Train ACC Unlabelled_v2` của SelEx. Ground truth unlabeled chỉ ở evaluator,
+không đưa vào training/controller. All là trung bình theo số mẫu Old/New,
+không phải trung bình cộng hai tỷ lệ. JSON lưu fraction; log in phần trăm.
 
-Kiểm tra code–paper và độ khớp LaTeX/PDF:
+`--eval-every 1` chấm SS epoch 1–199; epoch 200 dùng final-last evaluator để
+không chấm trùng. Trong run full:
+
+| File | Nội dung |
+|---|---|
+| `evaluations/epoch_NNNN.json`, `epoch_metrics.jsonl` | SS từng epoch |
+| `ss_best.json` | Best All, Old, New riêng, full triplet, epoch và hash/path |
+| `backbone_best_ss_all.pt` + `evaluation_best_ss_all.json` | Weights và điểm best All |
+| `backbone_best_ss_old.pt` + `evaluation_best_ss_old.json` | Weights và điểm best Old |
+| `backbone_best_ss_new.pt` + `evaluation_best_ss_new.json` | Weights và điểm best New |
+| `evaluation_last.json`, `evaluation.json` | SS của fixed-last |
+| `evaluation_best_old_test.json` | SS của checkpoint chọn theo plain-test Old-v1 |
+| `test_metrics.jsonl`, `test_evaluations/` | Lịch sử plain, khác SS |
+| `config.json`, `metadata.json`, `environment.txt`, `readiness.json` | Provenance/preflight |
+| `resume.pt` | Model/head/optimizer/scheduler/RNG/config để resume |
+
+Ba SS best giữ weights riêng, không lưu 200 bản backbone; hòa điểm giữ epoch
+sớm hơn. **Không ghép cực đại All/Old/New ở ba epoch thành một hàng.** Best SS
+được chọn bằng nhãn đánh giá, không phải held-out độc lập. So baseline bằng
+cùng split/backbone/seed/epoch/ngân sách chấm/chính sách chọn; giữ SS-last riêng.
+Bộ chọn best SS chỉ xét SS định kỳ và fixed-last, không thêm lần
+chấm checkpoint phụ Old-test vào tập ứng viên. Baseline phải bật SS cùng lịch.
+
+Xem bảng điểm đã lưu, không chạy evaluation mới:
 
 ```bash
-.venv/bin/python scripts/check_manuscript.py
+.venv/bin/python scripts/show_metrics.py "$RUN_DIR"
+cat "$RUN_DIR/ss_best.json"
 ```
 
-Bảng cấu hình trong paper được sinh từ config thật. Nếu thuật toán/config
-đổi, phải rà lại công thức và pseudocode trước khi cập nhật bảng/digest bằng
-`scripts/check_manuscript.py --write`, rồi dựng PDF bằng
-`scripts/build_paper.py --compiler PATH_TO_TEX_COMPILER`. Compiler hỗ trợ
-Tectonic, pdfLaTeX hoặc XeLaTeX đã có sẵn; script không cài vào `.venv` và
-để log/intermediate trong thư mục tạm hoặc `logs/`. Biên nhận
-`paper/manuscript.build.json` kiểm tra PDF đi cùng đúng nguồn LaTeX và source
-đã review; smoke local cũng chạy kiểm tra này. Hash không thay thế việc đọc
-và đối chiếu ngữ nghĩa thuật toán.
+`ss_best.json` là nguồn rõ ràng cho ba weights best SS. `show_metrics.py`
+in lịch sử và các peaks theo protocol, không thay chính sách chọn checkpoint.
+Để ước lượng thời gian, lấy timestamp hai SS report cách vài epoch chia số
+epoch chênh lệch; đừng nhân riêng `worker_seconds` thành thời gian train.
+Đo cả giai đoạn sau warmup/bật tầng loss. Ổ đĩa: `df -h .` và `du -sh "$RUN_DIR"`.
 
-Trước khi train lại để báo cáo paper, đọc [audit đánh giá HypCD/SelEx](reports/07_evaluation_and_retraining_audit.md).
-SelEx đã xác nhận lỗi ordering ở tầng thô; runtime này sửa chung cho B0/CRiSH,
-nên cần baseline chạy lại cùng source. Không ghép peak All/Old/New từ các epoch
-khác nhau, và không dùng plain-test score thay final SS train-unlabeled.
+## 7. Dừng và resume
 
-Chuẩn bị snapshot ghép cặp cho nhiều seed, **chỉ sinh plan, không chạy GPU**:
+Nếu chủ động dừng: attach đúng tmux, Ctrl+C một lần, chờ dấu nhắc, kiểm tra
+`nvidia-smi`. Giữ nguyên **toàn bộ run folder**, source commit và config.
+Checkpoint chỉ bảo đảm tới epoch lưu xong; batch đang chạy dở có thể chưa lưu.
+Không cập nhật source/config để resume rồi bỏ qua fingerprint. Best backbone
+không có optimizer; resume phải dùng `resume.pt`.
+
+Local, từ đúng phiên bản source của run:
 
 ```bash
-.venv/bin/python scripts/prepare_retraining.py --dataset scars --profile final --seeds 1 2 3
+bash scripts/train_selex.sh --config "$RUN_DIR/config.json" --resume "$RUN_DIR/resume.pt"
 ```
 
-Plan nằm ở `runs/plans/`, có `manifest.json` và `commands.txt`; trên máy Linux
-NVIDIA tạo lại từ đúng source rồi chạy từng stage B0 preflight → smoke → full,
-sau đó CRiSH cùng seed. Không chạy các job đồng thời. Mặc định giữ
-`best_old_test_v2`, đồng thời báo riêng fixed-last. Nếu chọn `--selection final_epoch`,
-phải khóa trước khi xem kết quả và dùng cho cả hai arm. Script không xác nhận
-data/weights/CUDA hoặc VRAM cho máy target. Sửa provenance trong audit này
-làm đổi source fingerprint: bắt đầu run mới; checkpoint cũ cần source cũ để resume.
+Baseline thêm `--baseline`. Không thêm override seed/variant/epoch/SS vì resume
+cần config gốc. Không chuyển policy sang local hoặc dataset khác bằng resume.
+Run resume có ID mới; phải lấy log mới. Không xóa run nguồn chứa best/history.
 
-## Chuyển sang CUB-200-2011
+## 8. Trạng thái nghiên cứu và tài liệu tham khảo
 
-Dùng cùng loss, CRiSH, checkpoint selector và evaluator; CLI chọn loader, preflight và cấu hình riêng. Chuẩn bị dữ liệu gốc trên máy Linux NVIDIA:
+Code giữ upstream SelEx snapshot `d8107b5` nguyên vẹn, có sửa adapter được ghi
+nhận. Đây là **corrected SelEx, lịch kéo dài 200 epoch**, không tự coi là tái
+lập nguyên xi số paper 2024 hoặc lịch 50 epoch của README upstream sửa 2026.
+Manuscript cũ còn mô tả nền Hyp-SelEx; chưa phải mô tả hoàn toàn khớp run local
+trên SelEx. Stability tùy chọn đang tắt. Không hứa tăng accuracy, SOTA hay novelty.
 
-```text
-datasets/cub/CUB_200_2011/
-  images/
-  images.txt
-  image_class_labels.txt
-  train_test_split.txt
-  attributes/image_attribute_labels.txt
-```
+Log CUDA Cars do người dùng cung cấp đã có full local run và action Move/
+Abstain, SS/best theo epoch; chưa có completed benchmark 200 epoch hoặc baseline
+matched để kết luận hiệu quả. CUB/Aircraft có wiring/config/test, chưa xác nhận
+full CUDA run từ phiên này. Bản sửa scoring batch local đã qua 74 test CPU;
+đó là kiểm chứng triển khai, không phải bằng chứng hiệu quả thực nghiệm.
 
-File attributes bắt buộc vì loader upstream đọc nó. Runtime không tự tải hoặc giải nén CUB. `GCD_DATA_ROOT` trỏ tới thư mục cha chứa `cub/` và/hoặc `cars/`, không phải thư mục images. Dùng cùng pretrained DINOv2 reg4 ở mục 2.
+Chạy kiểm tra code nhỏ, không train trên Mac:
 
 ```bash
-# Xem cấu hình trên Mac, không chạy train
-bash scripts/train_crish.sh --dataset cub --dry-run
-
-# Trên Linux NVIDIA, kiểm tra dữ liệu/weights và CUDA
-bash scripts/train_crish.sh check --dataset cub
-
-# Smoke dữ liệu thật, có giới hạn
-bash scripts/train_crish.sh smoke --dataset cub
-
-# Smoke rồi chạy một thí nghiệm 200 epoch
-bash scripts/train_crish.sh --dataset cub
-
-# Đối chứng B0 trên cùng dataset
-bash scripts/train_crish.sh --dataset cub --baseline
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/run_smoke.py --code-only
 ```
 
-CUB dùng official SSB 100 known/100 novel, labeled fraction 0.5; không chia lại lớp theo ID liên tiếp. Theo lệnh `cub v2 1.0 1.0 0.1 1.5` trong script upstream, CUB dùng smoothing 1.0, hyper weight 1.0, `c=0.1`, `cr=1.5`. Cars giữ smoothing/hyper weight 0.5 và `cr=2.0`. Các giá trị này nằm trong `configs/cub_*.json` và `configs/*.json`; `scripts/check_protocol.py` đối chiếu mọi profile full/smoke với source được ghim. Chưa tuning CRiSH riêng cho CUB.
-
-Không chuyển checkpoint Cars sang CUB bằng `--resume`; resume phải giữ nguyên dataset, source và config của run. Cơ chế lưu lịch sử từng epoch, chọn best theo Old-test-v2 và báo SS-kmeans best/last giữ nguyên giữa hai dataset. CPU tests với ảnh giả lập xác nhận wiring/split và cách ly nhãn; chưa có kết quả benchmark CUB thật hoặc xác nhận khớp bảng paper.
-
-## Các profile và bản chốt để train (08/11/2026)
-
-`--profile final` là mặc định cho cả Cars/CUB và CRiSH/B0, chốt riêng thay đổi
-evidence/probe và giữ loss reference. `--profile reference` chọn cấu hình cũ;
-`--profile upgraded` thêm thay đổi USE normalization. Đây là các lựa chọn có thể
-đối chứng, chưa có bằng chứng tăng accuracy hoặc đạt novelty gate. CUB dùng
-cùng lựa chọn CRiSH để kiểm tra khả năng tổng quát khi có compute.
-
-| Thành phần | Reference | Final (mặc định) | Upgraded (ablation) |
-|---|---|---|---|
-| `use_target_normalization` | `legacy` | `legacy` | `row` |
-| `crish.evidence_sampling` | `random` | `global_neighbors` | `global_neighbors` |
-| `crish.probe_sampling` | `random` | `class_balanced` | `class_balanced` |
-| Probe mỗi fold | 4 labeled / 8 unlabeled | 16 labeled / 32 unlabeled | 16 labeled / 32 unlabeled |
-
-`global_neighbors` chỉ shortlist từ frozen features hợp lệ; kiểm tra hai view
-vẫn diễn ra trong cache 128 mẫu. Nó không dùng hidden labels hay global
-augmented-view kNN. Probe lớn hơn và tìm hàng xóm có thể tốn thời gian hơn;
-giữ ngân sách refresh 120 giây và đo fallback/acceptance trong smoke thật.
-Đối chứng reference/final giúp tách thay đổi evidence/probe khỏi objective;
-để gán tác dụng cho từng thành phần vẫn cần ablation riêng.
-
-USE ở chế độ `row` có fallback về view còn lại của cùng ảnh khi không có
-smoothing support; không cần nhãn ẩn. Các loss class upstream và true-label
-supervised terms được giữ nguyên. Đây là thay đổi objective, nên B0 upgraded
-cũng dùng chuẩn hóa mới; không gọi nó là baseline paper nguyên vẹn.
-
-Shortlist dùng normalized backbone features hiện có, khoảng cách Euclidean,
-chia block tham chiếu 1.024 hàng và loại cả hai probe khỏi tập tham chiếu.
-Cache vẫn tối đa 128 ảnh; kNN hai augmentation chỉ đo trong cache này, **không
-phải global cross-view kNN**. Hai probe độc lập về sample ID; unlabeled chỉ có
-ảnh/feature và membership, không có known/novel identity. Warmup 10 epoch,
-refresh mỗi 5 epoch, tối đa một repair và các acceptance guard giữ nguyên.
-Chi phí thực tế trên CUDA cần được đo. `crish.jsonl` ghi số reference/cache,
-scope, kích thước/độ phủ lớp labeled của probe, candidate, quyết định và thời gian.
-
-Trên Linux NVIDIA có dữ liệu/weights và GPU rảnh:
-
-```bash
-# Kiểm tra rồi bounded smoke riêng trước khi quyết định chạy đủ lịch
-bash scripts/train_crish.sh check --profile upgraded
-bash scripts/train_crish.sh smoke --profile upgraded
-
-# Run mới: preflight -> bounded smoke -> training hữu hạn -> SS best/last
-bash scripts/train_crish.sh --profile upgraded
-
-# Đối chứng cùng chuẩn hóa USE và cùng protocol
-bash scripts/train_crish.sh --profile upgraded --baseline
-```
-
-Thêm `--dataset cub` cho CUB. Mac chỉ xem kế hoạch bằng
-`bash scripts/train_crish.sh --profile upgraded --dry-run` và chạy
-`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 .venv/bin/python scripts/run_smoke.py`.
-Không chạy các full run đồng thời hoặc tự động sweep nhiều seed.
-
-Các file `configs/*_upgraded*.json` giữ config riêng cho từng dataset/method và
-smoke. Từng thành phần có thể tắt riêng bằng các giá trị trong bảng; khi đối
-chứng probe cần khóa cả cách sampling và kích thước. Dùng config riêng qua
-`python -m gcd_runtime.launch ... --config PATH` sau check/smoke tương ứng;
-không chỉnh config đang dùng bởi một run. Checkpoint source cũ vẫn cần source
-cũ để resume; `--profile upgraded` không chuyển đổi checkpoint cũ.
-
-Protocol checker ghi riêng CLI hyperparameter match và
-`reference_use_arithmetic_preserved`; upgraded có trường thứ hai là `false`.
-Kết quả accuracy/All/Old/New và lợi ích của từng thay đổi: **chưa chạy**.
+Các báo cáo dưới đây chỉ để tra cứu thêm, **không cần đọc để chạy các lệnh trên**:
+[protocol/paper comparability](reports/10_paper_comparability_audit.md),
+[algorithm audit](reports/11_source_algorithm_review.md),
+[SS-best](reports/13_ss_epoch_best.md),
+[local scoring-support fix](reports/15_local_scoring_support.md).
+Nhánh Hyp-SelEx cũ được lưu trong lịch sử Git và các báo cáo baseline lịch sử;
+`scripts/train_crish.sh` không dùng cho cặp SelEx/local trong README này.
+Giấy phép và nguồn gốc: [NOTICE](NOTICE), [LICENSES](LICENSES/).
