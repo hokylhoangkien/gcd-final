@@ -88,6 +88,9 @@ bash scripts/train_selex.sh smoke --dataset scars --variant local
 Smoke là 1 epoch, tối đa 2 minibatch, warmup 0, vẫn dùng extraction/clustering
 toàn bộ pool. Nó phải thực sự chấm ứng viên; Keep hợp lệ, fallback/no scoring
 không phải smoke thành công. Không dùng kết quả smoke làm benchmark.
+Nếu báo `No pseudo-SSE change in the scoring batch`, kiểm tra
+`crish.jsonl`/`scoring_batch` và [audit batch chấm local](15_local_scoring_support.md).
+Không đổi sang `policy` hoặc nới guard để bỏ qua lỗi coverage của local.
 
 ## 4. Train từng arm, trong tmux
 

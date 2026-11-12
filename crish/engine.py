@@ -22,6 +22,7 @@ from crish.probe import LegalProbe, ProbeWeights
 from crish.rebuild import target_drift
 from crish.reliability import blockwise_euclidean_knn, sparse_evidence
 from crish.sampling import balanced_known_folds, global_neighbor_pool, known_fold_structure
+from crish.scoring_batch import scoring_ids
 from crish.stability import partition_stability
 from .config import CrishSettings
 from .loss import hypselex_loss
@@ -233,13 +234,15 @@ class CrishEngine:
                 if not actions:
                     record['reason'] = 'No measured supported boundaries'
                     return state
-                required = list(dict.fromkeys(a.sample_id for a in actions))
-                for sample in list(required):
-                    required.extend(j for j, _ in sorted(adjacency[sample], key=lambda item: -item[1]) if j not in required)
-                required.extend(int(state.ids[row]) for row in pool if int(state.ids[row]) not in required)
-                batch_ids = torch.tensor(required[:max(settings.train_batch, settings.boundaries)], dtype=torch.long)
-                cache_rows = rows_for_ids(state.ids[pool], batch_ids)
-                train_views = first_cache[cache_rows]
+                reserved = torch.cat([torch.cat([k, u]) for k, u in folds])
+                batch_ids, record['scoring_batch'] = scoring_ids(
+                    state, actions, adjacency, pool, reserved, max(settings.train_batch, settings.boundaries))
+                cached = {int(sample): first_cache[i] for i, sample in enumerate(state.ids[pool])}
+                missing = torch.tensor([int(sample) for sample in batch_ids if int(sample) not in cached], dtype=torch.long)
+                if len(missing):
+                    extra = cached_views(model, dataset, missing, device, deadline)
+                    cached.update({int(sample): extra[i] for i, sample in enumerate(missing)})
+                train_views = torch.stack([cached[int(sample)] for sample in batch_ids])
                 flat = torch.cat([train_views[:, v] for v in range(2)]).detach()
                 metadata_rows = rows_for_ids(state.ids, batch_ids)
                 membership = state.labeled[metadata_rows]
@@ -288,11 +291,15 @@ class CrishEngine:
                                          normalization=getattr(args, 'use_target_normalization', 'legacy'),
                                          pair_weights=pair_weights)
                     if max(x['protected_coefficient_shift_max'] for x in drift['sse_levels']) > settings.max_protected_shift:
+                        record.setdefault('scoring_rejections', []).append(dict(
+                            sample_id=action.sample_id, level=action.level, kind=action.kind, target_drift=drift))
                         raise ValueError('Move exceeds predeclared protected-coefficient shift cap')
                     mass = sum(x['coefficient_half_l1_mean']/2**(x['level']+1) for x in drift['sse_levels'])
                     # SSE and USE remain separate diagnostics; SSE mass is the
                     # declared normalization reference, not a fabricated sum.
                     if mass <= 0:
+                        record.setdefault('scoring_rejections', []).append(dict(
+                            sample_id=action.sample_id, level=action.level, kind=action.kind, target_drift=drift))
                         raise ValueError('No pseudo-SSE change in the scoring batch')
                     action_gradient = gradients(self.objective(frozen, flat, batch_ids, membership, targets,
                                                                proposed, args, epoch)['loss'])
