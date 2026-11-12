@@ -113,7 +113,8 @@ EpochRuntime(directory, config, evaluation_epoch=int(epoch), evaluated_checkpoin
                 self.assertTrue(all(r['purpose'] == 'monitor_only' for r in reports))
                 self.assertTrue(all(len(r['checkpoint_sha256']) == 64 for r in reports))
                 self.assertFalse((Path(on)/'evaluation.json').exists())
-                self.assertFalse(any(Path(on).glob('*best*')))
+                self.assertEqual(len(list(Path(on).glob('backbone_best_ss_*.pt'))), 3)
+                self.assertFalse((Path(on)/'selection.json').exists())
         self.assertEqual(len(calls), 4)
         self.assertTrue(all(kwargs['timeout'] == 20 and kwargs['check'] for _, kwargs in calls))
 
@@ -170,8 +171,10 @@ class PeriodicMetricTests(unittest.TestCase):
             cfg = training_config('baseline')
             cfg.update(ss_eval_every_epochs=1, epochs=3)
             output = io.StringIO()
+            checkpoint = Path(tmp)/'fixture_backbone.pt'
+            torch.save(torch.nn.Identity().state_dict(), checkpoint)
             for epoch in (0, None):
-                runtime = EpochRuntime(tmp, cfg, evaluation_epoch=epoch)
+                runtime = EpochRuntime(tmp, cfg, evaluation_epoch=epoch, evaluated_checkpoint=checkpoint)
                 model = torch.nn.Identity()
                 with patch.object(trainer, '_runtime', runtime, create=True), \
                      patch.object(trainer, 'device', torch.device('cpu'), create=True), \

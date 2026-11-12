@@ -119,6 +119,13 @@ class SelExRuntime(EpochRuntime):
             torch.save(model.state_dict(), self.run_dir/'backbone_final.tmp')
             import os
             os.replace(self.run_dir/'backbone_final.tmp', self.run_dir/'backbone_final.pt')
+        if self.resume:
+            from gcd_runtime.monitoring import monitor_due, monitor_epoch
+            epoch = self.restored_epoch
+            report = self.run_dir/'evaluations'/f'epoch_{epoch+1:04d}.json'
+            if monitor_due(self.config, epoch) and not report.is_file():
+                # A failed SS worker must be replayed before advancing SGD.
+                monitor_epoch(self, epoch, model)
         return start
 
     def monitor_epoch(self, epoch, model):

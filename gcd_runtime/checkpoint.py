@@ -42,6 +42,8 @@ class EpochRuntime:
             raise ValueError('Source changed since checkpoint; use the original source release to resume')
         if state['config'] != self.config:
             raise ValueError('Resume requires the exact original config, epochs and seed')
+        from .ss_best import restore_best
+        restore_best(Path(self.resume).parent, self.run_dir, self.config, state['epoch'])
         model.load_state_dict(state['model'])
         head.load_state_dict(state['head'])
         optimizer.load_state_dict(state['optimizer'])
@@ -153,6 +155,8 @@ class EpochRuntime:
             history = self.run_dir/'epoch_metrics.jsonl'
         atomic_json(destination, record)
         write_epoch(history, record)
+        from .ss_best import update_best
+        update_best(self.run_dir, self.config, record)
         summarize_run(self.run_dir, write=True)
         print(f'EVAL epoch={epoch+1}/{self.config["epochs"]} protocol={record["protocol"]} '
               f'All={100*metrics["all_acc"]:.2f}% Old={100*metrics["old_acc"]:.2f}% '

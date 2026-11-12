@@ -78,6 +78,8 @@ def summarize_run(run_dir, *, write=False):
                              for protocol, rows in histories.items()}, final_reports=finals)
     if (run_dir/'selection.json').is_file():
         result['checkpoint_selection'] = json.loads((run_dir/'selection.json').read_text())
+    if (run_dir/'ss_best.json').is_file():
+        result['ss_best_checkpoint_selection'] = json.loads((run_dir/'ss_best.json').read_text())
     if write:
         atomic_json(run_dir/'results_summary.json', result)
     return result
