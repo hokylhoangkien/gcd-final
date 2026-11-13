@@ -17,6 +17,26 @@ class DataOnlyUnpickler(pickle.Unpickler):
         raise ValueError('Split must contain only primitive data')
 
 
+class HerbariumSplitUnpickler(DataOnlyUnpickler):
+    """The hash-pinned upstream Old list additionally stores numpy int64s."""
+    def find_class(self, module, name):
+        import numpy as np
+        if module == 'numpy' and name == 'dtype':
+            return np.dtype
+        if module in ('numpy.core.multiarray', 'numpy._core.multiarray') and name == 'scalar':
+            return np.core.multiarray.scalar
+        return super().find_class(module, name)
+
+
+def read_class_split(path, dataset_name):
+    spec = dataset_spec(dataset_name)
+    if hashlib.sha256(path.read_bytes()).hexdigest() != spec.split_sha256:
+        raise ValueError('Official pinned split checksum mismatch')
+    loader = HerbariumSplitUnpickler if dataset_name == 'herbarium_19' else DataOnlyUnpickler
+    with path.open('rb') as handle:
+        return loader(handle).load()
+
+
 def check_split(path, dataset_name='scars'):
     spec = dataset_spec(dataset_name)
     if dataset_name == 'cifar100':
@@ -29,11 +49,14 @@ def check_split(path, dataset_name='scars'):
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     if digest != spec.split_sha256:
         raise ValueError('Official pinned split checksum mismatch')
-    with path.open('rb') as handle:
-        split = DataOnlyUnpickler(handle).load()
-    known = split['known_classes']
-    groups = split['unknown_classes']
-    novel = groups['Hard'] + groups['Medium'] + groups['Easy']
+    split = read_class_split(path, dataset_name)
+    if dataset_name == 'herbarium_19':
+        known, novel = list(map(int, split['Old'])), list(map(int, split['New']))
+        groups = {'New': novel}
+    else:
+        known = split['known_classes']
+        groups = split['unknown_classes']
+        novel = groups['Hard'] + groups['Medium'] + groups['Easy']
     if len(known) != len(set(known)) or len(novel) != len(set(novel)):
         raise ValueError('Duplicate classes')
     if set(known) & set(novel) or set(known + novel) != set(range(spec.num_classes)):
@@ -90,8 +113,8 @@ def main():
             parser.error('CIFAR-100 array membership is audited by remote preflight, not a file-image manifest')
         if not args.data_root:
             parser.error('--data-root is required with --manifest')
-        with path.open('rb') as handle:
-            known = DataOnlyUnpickler(handle).load()['known_classes']
+        split = read_class_split(path, args.dataset)
+        known = split['Old'] if args.dataset == 'herbarium_19' else split['known_classes']
         report['image_integrity'] = check_membership(
             json.loads(args.manifest.read_text()), set(known), args.data_root,
             num_classes=dataset_spec(args.dataset).num_classes)

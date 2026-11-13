@@ -60,7 +60,7 @@ def build(output):
                     methods=['crish', 'baseline'], cuda_verified=False, benchmark_status='not_run',
                     entrypoint='bash scripts/train_selex.sh', default_profile='selex_200',
                     default_config='configs/selex_scars_crish_200.json',
-                    datasets=['scars', 'cub', 'aircraft'], optional_datasets=['cifar100'],
+                    datasets=['scars', 'cub', 'aircraft'], optional_datasets=['cifar100', 'herbarium_19'],
                     historical_entrypoint='bash scripts/train_crish.sh',
                     files={str(p.relative_to(ROOT)): sha256(p) for p in files})
     with tarfile.open(destination, 'x:gz') as archive:

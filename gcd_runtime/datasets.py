@@ -28,6 +28,8 @@ DATASETS = {
     'aircraft': DatasetSpec('aircraft', 'aircraft/fgvc-aircraft-2013b', 'aircraft_osr_splits.pkl',
         '2a2481307cec7821721d6a73c1a3ca77db7e657649e043d1a83aa7dd81a5a194', 100,
         ('data/images_variant_trainval.txt', 'data/images_variant_test.txt'), 0),
+    'herbarium_19': DatasetSpec('herbarium_19', 'herbarium_19', 'herbarium_19_class_splits.pkl',
+        '6ddd0b23888e9d9d8bd7150cafb608ddcf1804a1a1d601444e96edd499225170', 683, (), 0),
 }
 
 
@@ -43,12 +45,12 @@ def image_paths(dataset, name):
         raise ValueError('CIFAR-100 stores pixel arrays; use sample IDs, not invented image paths')
     if name == 'scars':
         return tuple(map(str, dataset.data))
-    if name == 'aircraft':
-        base = (Path(dataset.root)/'data/images').resolve()
+    if name in ('aircraft', 'herbarium_19'):
+        base = (Path(dataset.root)/'data/images').resolve() if name == 'aircraft' else Path(dataset.root).resolve()
         # Index path only: never unpack/read an unlabeled sample's target.
         paths = tuple(Path(row[0]).resolve() for row in dataset.samples)
         if any(not path.is_relative_to(base) for path in paths):
-            raise ValueError('Aircraft image path escapes the images directory')
+            raise ValueError(f'{name} image path escapes the images directory')
         return tuple(map(str, paths))
     # Access no target column, attribute array or target transform here. The
     # unlabeled training adapter calls only this path/ID accessor.
@@ -64,7 +66,7 @@ def raw_targets(dataset, name):
     dataset_spec(name)
     if name == 'cifar100':
         return dataset.targets
-    if name == 'aircraft':
+    if name in ('aircraft', 'herbarium_19'):
         return [row[1] for row in dataset.samples]
     return dataset.target if name == 'scars' else dataset.data['target'].tolist()
 
@@ -103,6 +105,9 @@ def configure_modules(config_module):
     # without reloading modules or changing any sample ordering/split function.
     cub.cub_root = config_module.cub_root
     stanford_cars.car_root = config_module.car_root
+    if hasattr(config_module, 'herbarium_dataroot'):
+        from data import herbarium_19
+        herbarium_19.herbarium_dataroot = config_module.herbarium_dataroot
 
     def offline_cub(self):
         validate_cub_metadata(self.root)
@@ -165,11 +170,29 @@ def validate_aircraft_metadata(root):
         raise ValueError('Aircraft trainval/test variant class mappings differ')
 
 
+def validate_herbarium_layout(root):
+    """ImageFolder sorts class directory names independently in both pools."""
+    mappings = []
+    for pool in ('small-train', 'small-validation'):
+        path = Path(root)/pool
+        if not path.is_dir():
+            raise ValueError(f'Missing Herbarium19 directory: {path}; prepare data offline')
+        names = sorted(p.name for p in path.iterdir() if p.is_dir())
+        if len(names) != 683:
+            raise ValueError(f'Herbarium19 requires 683 class directories in {pool}')
+        mappings.append(names)
+    if mappings[0] != mappings[1]:
+        raise ValueError('Herbarium19 train/validation class directory mappings differ')
+
+
 def whole_training_dataset(name, root):
     if name == 'scars':
         from data.stanford_cars import CarsDataset
         return CarsDataset(train=True, data_dir=str(root))
     dataset_spec(name)
+    if name == 'herbarium_19':
+        from data.herbarium_19 import HerbariumDataset19
+        return HerbariumDataset19(root=str(Path(root)/'small-train'))
     if name == 'cifar100':
         from data.cifar import CustomCIFAR100
         return CustomCIFAR100(root=str(root), train=True, download=False)

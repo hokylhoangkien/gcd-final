@@ -16,8 +16,15 @@ def validate_config(cfg, *, eval_every_epochs=None):
         raise ValueError('SelEx method must be baseline or crish')
     if type(cfg.get('require_intervention_smoke', False)) is not bool:
         raise ValueError('require_intervention_smoke must be boolean')
-    if cfg.get('dataset_name') not in ('scars', 'cub', 'aircraft', 'cifar100') or cfg.get('dino') not in ('v1', 'v2'):
-        raise ValueError('SelEx supports scars, cub, aircraft, cifar100 and DINO v1/v2')
+    if cfg.get('dataset_name') not in ('scars', 'cub', 'aircraft', 'cifar100', 'herbarium_19') or cfg.get('dino') not in ('v1', 'v2'):
+        raise ValueError('Unsupported SelEx dataset or DINO backbone')
+    # Do not insert new keys into historical profiles: existing resume snapshots
+    # retain their exact configs. Herbarium explicitly declares its native mode.
+    if cfg['dataset_name'] == 'herbarium_19':
+        if cfg.get('unbalanced') is not True:
+            raise ValueError('Herbarium19 requires unbalanced=True in hierarchy and SS')
+    elif cfg.get('unbalanced', False) is not False:
+        raise ValueError('Existing SelEx datasets require balanced clustering')
     cfg.setdefault('train_report_interval', 200)
     cfg.setdefault('report_best_old_test', False)
     if type(cfg['report_best_old_test']) is not bool:

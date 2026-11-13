@@ -41,7 +41,8 @@ def preflight(cfg):
     torch.optim.SGD(list(model.parameters())+list(head.parameters()), lr=cfg['lr']).step()
     # Exercise the exact pinned fitter, not the historical Hyp-SelEx adapter.
     points = torch.tensor([[1., 0.], [0., 1.]], device='cuda')
-    fit = K_Means(k=2, n_init=1, max_iterations=2, cluster_size=2, random_state=0)
+    fit = K_Means(k=2, n_init=1, max_iterations=2,
+                  cluster_size=None if cfg.get('unbalanced', False) else 2, random_state=0)
     fit.fit_mix(points.clone(), points.clone(), torch.arange(2, device='cuda'))
     if not torch.isfinite(fit.cluster_centers_).all():
         raise FloatingPointError('Pinned SelEx fitter readiness failed')

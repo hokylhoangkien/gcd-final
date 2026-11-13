@@ -227,15 +227,18 @@ def evaluate_ss(model, dataset, args, runtime):
     before_fit = rng_digest()
     fit = K_Means(k=k, tolerance=1e-4, max_iterations=args.ss_max_iter, init='k-means++',
         n_init=args.ss_n_init, random_state=None, n_jobs=None, pairwise_batch_size=1024,
-        mode=None, protos=None, cluster_size=math.ceil(len(truth)/k))
+        mode=None, protos=None,
+        cluster_size=None if getattr(args, 'unbalanced', False) else math.ceil(len(truth)/k))
     fit.fit_mix(features[~mask].cuda(), features[mask].cuda(), truth[mask].cuda())
     predictions = restore_input_order(fit.labels_, mask).cpu().numpy()[~mask.numpy()]
     known = np.isin(truth[~mask].numpy(), np.arange(args.num_labeled_classes))
     all_acc, old_acc, new_acc = split_cluster_acc_v2(truth[~mask].numpy(), predictions, known)
+    clustering_metadata = (dict(unbalanced=True, cluster_size=None)
+                           if getattr(args, 'unbalanced', False) else {})
     runtime.evaluation(dict(all_acc=float(all_acc), old_acc=float(old_acc), new_acc=float(new_acc),
         n_unlabeled=int((~mask).sum()), n_old=int(known.sum()), n_new=int((~known).sum()),
         ss_n_init=args.ss_n_init, ss_max_iter=args.ss_max_iter, clustering_seed=0,
         evaluation_seed=0, evaluation_rng=runtime.config['evaluation_rng'],
         rng_before_fit_sha256=before_fit,
         seed_stage='before_dataset_setup' if upstream_policy(runtime.config) else 'before_fit',
-        baseline_family='selex', upstream_sha=args.upstream_sha))
+        baseline_family='selex', upstream_sha=args.upstream_sha, **clustering_metadata))

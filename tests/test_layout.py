@@ -31,7 +31,7 @@ class LayoutTests(unittest.TestCase):
         for target in re.findall(r'\]\(([^)]+)\)', text):
             if '://' not in target:
                 self.assertTrue((ROOT/target.split('#')[0]).is_file(), target)
-        self.assertIn('bash scripts/train_crish.sh', text)
+        self.assertIn('bash scripts/train_selex.sh', text)
         self.assertIn('GCD_PYTHON=python3 bash scripts/bootstrap.sh cuda', text)
         self.assertIn('devkit/', text)
 

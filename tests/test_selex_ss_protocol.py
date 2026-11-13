@@ -66,7 +66,8 @@ seed_ss_setup()
 start=capture_rng()
 cached=F.normalize(images,dim=-1)
 expected=scope['test_kmeans_semi_sup'](
- DataLoader(TensorDataset(cached,truth,ids,mask),batch_size=args.batch_size),args)
+ DataLoader(TensorDataset(cached,truth,ids,mask),batch_size=args.batch_size),args,
+ unbalanced=getattr(args,'unbalanced',False))
 expected_rng=rng_digest()
 restore_rng(start)
 with patch.object(torch.Tensor,'cuda',lambda self,*unused,**kwargs:self), \
@@ -95,10 +96,12 @@ with patch.object(torch.Tensor,'cuda',lambda self,*unused,**kwargs:self), \
 np.testing.assert_allclose([records[-1][k] for k in ('all_acc','old_acc','new_acc')],expected[:3])
 print('Synthetic CPU final SS: pinned evaluator parity, legal anchors, RNG, row mapping and weighted global-v2 metrics passed')
 '''
-        with tempfile.TemporaryDirectory() as tmp:
-            result = subprocess.run([sys.executable, '-c', code, tmp], cwd=ROOT,
-                                    capture_output=True, text=True, timeout=20)
-        self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+        for dataset in ('cifar100', 'herbarium_19'):
+            with self.subTest(dataset=dataset), tempfile.TemporaryDirectory() as tmp:
+                program = code.replace('selex_cifar100_baseline_200.json', f'selex_{dataset}_baseline_200.json')
+                result = subprocess.run([sys.executable, '-c', program, tmp], cwd=ROOT,
+                                        capture_output=True, text=True, timeout=20)
+                self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
 
 
 if __name__ == '__main__':

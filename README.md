@@ -1,6 +1,6 @@
 # SelEx + CRiSH — hướng dẫn train
 
-**Đọc file này là đủ để chạy Stanford Cars, CUB và FGVC-Aircraft.**
+**Đọc file này để chạy Stanford Cars, CUB, FGVC-Aircraft và Herbarium19.**
 Baseline là **SelEx**; phương pháp cần kiểm chứng là **SelEx + CRiSH local
 Keep / Abstain / Move**. Train trên Linux NVIDIA; Mac chỉ phát triển/test nhỏ.
 
@@ -11,7 +11,8 @@ Keep / Abstain / Move**. Train trên Linux NVIDIA; Mac chỉ phát triển/test 
 | CRiSH-P thử nghiệm riêng | `--variant policy` | Không, chỉ Keep/Abstain toàn tập |
 
 **Luôn ghi `--variant local` khi train thuật toán của bạn.** JSON 200 epoch
-hiện vẫn mặc định policy để bảo toàn config lịch sử; bỏ flag sẽ chọn nhầm.
+Cars/CUB/Aircraft hiện vẫn mặc định policy để bảo toàn config lịch sử; bỏ flag sẽ chọn nhầm.
+Profile Herbarium19 mới mặc định local; vẫn ghi flag rõ ràng khi chạy.
 `local` chỉ cơ chế sửa giám sát, không có nghĩa chạy trên CPU/Mac.
 Các biến thể online/hybrid và nhánh Hyp-SelEx cũ không thuộc quickstart này.
 
@@ -63,6 +64,9 @@ datasets/
     data/images/
     data/images_variant_trainval.txt
     data/images_variant_test.txt
+  herbarium_19/
+    small-train/<class_directory>/<image>
+    small-validation/<class_directory>/<image>
 weights/dinov2_vitb14_reg4_pretrain.pth
 ```
 
@@ -75,6 +79,7 @@ SSB split đã ghim trong upstream. Aircraft dùng bài toán **100 variant**,
 | Stanford Cars | `scars` | 98 / 98 | 50% |
 | CUB-200-2011 | `cub` | 100 / 100 | 50% |
 | FGVC-Aircraft | `aircraft` | 50 / 50 | 50% |
+| Herbarium19 | `herbarium_19` | 341 / 342 | 50% |
 
 Có thể dùng data gốc nhóm đã có. Nguồn Cars tải gộp:
 [stanford_cars.zip](https://huggingface.co/zhengli97/prompt_learning_dataset/tree/main).
@@ -84,6 +89,65 @@ cần đặt bản sao vào `devkit/`. Không dùng split Zhou trong archive tha
 Nguồn Aircraft: [trang phát hành FGVC-Aircraft](https://www.robots.ox.ac.uk/~vgg/data/fgvc-aircraft/).
 CUB cần bản phát hành CUB-200-2011 đầy đủ đúng cây thư mục trên, không chỉ ảnh.
 Runtime không tự tải/giải nén dataset; preflight sẽ kiểm tra file và protocol.
+
+### Herbarium19 — CRiSH local / SelEx baseline, 200 epoch
+
+Chuẩn bị bản [Herbarium 2019 FGVC6](https://www.kaggle.com/c/herbarium-2019-fgvc6)
+vào `datasets/herbarium_19/` theo cây trên. Giữ nguyên tên class directory:
+loader ImageFolder sắp xếp tên thư mục để gán ID, mỗi pool cần đủ 683 lớp và
+cùng mapping. Không dùng Herbarium 2020/2021/2022, không tự chia random lớp,
+không đổi tên folder thành known/novel. Việc tải từ Kaggle có thể yêu cầu tài
+khoản/chấp nhận điều khoản; runtime không tự đăng nhập hoặc tải dataset.
+
+Split Old/New lấy nguyên từ `upstream/SelEx/data/ssb_splits/herbarium_19_class_splits.pkl`
+(341 known / 342 novel, checksum ghim). Train chỉ nhận nhãn của phần labeled;
+`small-validation` dùng để đánh giá riêng. `unbalanced=true` dùng
+`cluster_size=None` ở **cả hierarchy và SS evaluation** theo source tác giả,
+không ép kích thước cụm bằng nhau. Các dataset cũ giữ nguyên chế độ balanced.
+
+Trên GPU riêng đã có data, weights và môi trường, chọn **một** lệnh:
+
+```bash
+# Chỉ kiểm tra plan, chưa dùng GPU
+bash scripts/train_selex.sh --dataset herbarium_19 --variant local --dry-run
+
+# Kiểm tra dữ liệu và CUDA; chạy trên GPU đang trống
+bash scripts/train_selex.sh check --dataset herbarium_19 --variant local
+
+# CRiSH local, 200 epoch, SS mỗi epoch
+bash scripts/train_selex.sh --dataset herbarium_19 --variant local --eval-every 1
+```
+
+Baseline đối chứng, chạy riêng:
+
+```bash
+bash scripts/train_selex.sh --dataset herbarium_19 --baseline --eval-every 1
+```
+
+Lệnh train tự chạy bounded smoke trước full. Profile mới có DINOv2 reg4,
+seed 1, batch 128, head 65536, LR .1/cosine T_max=200, smoothing .75,
+temperature .5, grad_from_block 9, 8 workers; local warmup 10, refresh 5,
+max_accepted 1, ngân sách mỗi refresh 120s. B0 giữ cùng optimizer/schedule,
+sampler, dataset, evaluation và chỉ tắt local; policy/online đều tắt.
+Deadline training 172800s (48 giờ) và mỗi evaluator 7200s là **giới hạn**,
+không phải ETA hay bảo đảm hoàn thành trong hạn thuê GPU. Không chạy chung
+với CUB/Aircraft trên một GPU. Chưa có phép đo CUDA, thời gian hoặc VRAM
+Herbarium19 trong dự án; phải kiểm tra preflight/smoke và đo run thực trước.
+
+Protocol SS ghi `unbalanced_ss_kmeans_train_unlabeled`, Hungarian v2 trên
+unlabeled train pool; vẫn lưu `ss_best.json`, best All/Old/New riêng, epoch và
+cả bộ ba chỉ số, cùng final-last. Best được chọn bằng nhãn đánh giá nên báo
+riêng với fixed last. Script `analyze_crish_interventions.py` đọc được cả
+balanced và unbalanced SS, không trộn hai protocol.
+
+**200 epoch là lịch mở rộng của thí nghiệm này**; bảng repo SelEx cập nhật
+báo Herbarium19 50 epoch, DINOv2 All/Old/New **50.9±0.5 / 67.6±0.6 / 41.9±0.6**,
+last checkpoint, 3 seed. Không gán kết quả 50 epoch của tác giả cho lịch 200.
+
+Source mới phải được clone/pull **trước khi train trên GPU Herb19 riêng**.
+Không pull, đổi config hay sửa runtime trong checkout CUB/Cars đang chạy;
+resume kiểm tra code fingerprint nên cập nhật source cũng có thể chặn resume
+các checkpoint cũ. Bộ test CPU dùng fixture, không chứng minh benchmark CUDA.
 
 Nếu chưa có weights, tải mirror công khai và kiểm tra SHA256 trước khi dùng:
 
@@ -343,4 +407,4 @@ Các báo cáo dưới đây chỉ để tra cứu thêm, **không cần đọc 
 [local scoring-support fix](reports/15_local_scoring_support.md).
 Nhánh Hyp-SelEx cũ được lưu trong lịch sử Git và các báo cáo baseline lịch sử;
 `scripts/train_crish.sh` không dùng cho cặp SelEx/local trong README này.
-Giấy phép và nguồn gốc: [NOTICE](NOTICE), [LICENSES](LICENSES/).
+Giấy phép và nguồn gốc: [NOTICE](NOTICE), [HypCD MIT license](LICENSES/HypCD-MIT.txt).

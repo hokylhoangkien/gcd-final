@@ -14,7 +14,7 @@ def main():
     parser.add_argument('mode', nargs='?', default='train', choices=['train', 'check', 'smoke', 'evaluate'])
     parser.add_argument('--baseline', action='store_true', help='Updated SelEx without CRiSH')
     parser.add_argument('--config', type=Path, help='Exact SelEx config snapshot; also supports other seeds')
-    parser.add_argument('--dataset', choices=['scars', 'cub', 'aircraft', 'cifar100'],
+    parser.add_argument('--dataset', choices=['scars', 'cub', 'aircraft', 'cifar100', 'herbarium_19'],
                         help='Dataset for the matched 200-epoch DINOv2 profiles; default scars')
     parser.add_argument('--resume', type=Path)
     parser.add_argument('--checkpoint', type=Path)
@@ -104,6 +104,7 @@ def main():
     print(json.dumps(dict(baseline_family='selex', method=name, primary='fixed-final SS-v2',
         dataset_name=cfg['dataset_name'], dino=cfg['dino'],
         epochs=cfg['epochs'], seed=cfg['seed'], head_dimension=cfg['mlp_out_dim'],
+        unbalanced=cfg.get('unbalanced', False),
         pair_reliability=cfg.get('pair_reliability', dict(enabled=False)),
         discrete_repair=name == 'crish' and cfg['crish']['enabled'],
         population_policy=cfg.get('population_policy', dict(enabled=False)),

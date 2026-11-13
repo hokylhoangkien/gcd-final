@@ -10,6 +10,7 @@ import math
 from pathlib import Path
 
 PROTOCOL = 'balanced_ss_kmeans_train_unlabeled'
+SS_PROTOCOLS = (PROTOCOL, 'unbalanced_ss_kmeans_train_unlabeled')
 METRICS = ('all_acc', 'old_acc', 'new_acc')
 
 
@@ -30,7 +31,7 @@ def ss_history(run_dir):
         records.append(json.loads(final.read_text()))
     result = {}
     for row in records:
-        if (row.get('protocol') != PROTOCOL or row.get('purpose') not in ('monitor_only', 'final')
+        if (row.get('protocol') not in SS_PROTOCOLS or row.get('purpose') not in ('monitor_only', 'final')
                 or row.get('status') != 'observed'):
             continue
         if row.get('unit') != 'fraction':
@@ -41,6 +42,8 @@ def ss_history(run_dir):
         if epoch in result and any(result[epoch][k] != row[k] for k in METRICS):
             raise ValueError(f'Conflicting SS reports at zero-based epoch {epoch}')
         result[epoch] = row
+    if len({r['protocol'] for r in result.values()}) > 1:
+        raise ValueError('Cannot mix balanced and unbalanced SS histories')
     return result
 
 
@@ -105,7 +108,8 @@ def audit(run_dir):
                         after-before if before is not None and after is not None else None)
             entry['attribution'] = 'temporal_association_not_causal_effect'
             events.append(entry)
-    result = dict(run_id=run_dir.name, protocol=PROTOCOL, events=events, refreshes=summaries,
+    protocol = next(iter(history.values()))['protocol'] if history else None
+    result = dict(run_id=run_dir.name, protocol=protocol, events=events, refreshes=summaries,
         missing_values='null means not evaluated/available; never imputed',
         interpretation='Before/after changes include ordinary SGD, hierarchy and clustering changes. '
                        'Keep/Abstain epochs are observational controls, not no-Move counterfactuals. '

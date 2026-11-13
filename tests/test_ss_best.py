@@ -16,6 +16,20 @@ from tests.test_crish_training import training_config
 
 
 class SsBestTests(unittest.TestCase):
+    def test_unbalanced_metrics_save_and_restore_all_three_best_checkpoints(self):
+        from gcd_runtime.ss_best import UNBALANCED_PROTOCOL
+        cfg = dict(training_config('baseline'), ss_eval_every_epochs=1, unbalanced=True)
+        with tempfile.TemporaryDirectory() as src, tempfile.TemporaryDirectory() as dst:
+            for epoch, values in enumerate(((.7, .8, .6), (.8, .7, .9))):
+                self.emit(src, cfg, epoch, values)
+            index = json.loads((Path(src)/'ss_best.json').read_text())
+            self.assertEqual(index['protocol'], UNBALANCED_PROTOCOL)
+            self.assertEqual({k: r['epoch'] for k, r in index['best'].items()}, dict(all=1, old=0, new=1))
+            restore_best(src, dst, cfg, 1)
+            rows = [json.loads(line) for line in (Path(dst)/'epoch_metrics.jsonl').read_text().splitlines()]
+            self.assertEqual(len(rows), 2)
+            self.assertTrue(all(row['protocol'] == UNBALANCED_PROTOCOL for row in rows))
+
     def test_selex_resume_replays_missing_ss_before_next_sgd(self):
         from selex_runtime.trainer import SelExRuntime
         with tempfile.TemporaryDirectory() as tmp:

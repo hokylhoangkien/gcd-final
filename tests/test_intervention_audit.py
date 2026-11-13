@@ -28,6 +28,17 @@ def write(directory, name, records):
 
 
 class InterventionAuditTests(unittest.TestCase):
+    def test_unbalanced_ss_history_is_analyzed_without_mixing_protocols(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            protocol = 'unbalanced_ss_kmeans_train_unlabeled'
+            write(tmp, 'crish.jsonl', [event()])
+            write(tmp, 'epoch_metrics.jsonl', [ss(9,(.5,.6,.4),protocol=protocol),
+                                              ss(10,(.51,.61,.41),protocol=protocol)])
+            self.assertEqual(audit(tmp)['protocol'], protocol)
+            write(tmp, 'epoch_metrics.jsonl', [ss(9,(.5,.6,.4)), ss(10,(.51,.61,.41),protocol=protocol)])
+            with self.assertRaisesRegex(ValueError, 'mix'):
+                audit(tmp)
+
     def test_zero_based_action_matches_display_epoch_11_not_10(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(tmp, 'crish.jsonl', [event()])

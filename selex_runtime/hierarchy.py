@@ -112,7 +112,8 @@ def extract_state(model, loader, args, runtime):
         raise ValueError('SelEx requires legal anchors for every contiguous known class')
     fit = K_Means(k=k, tolerance=1e-4, max_iterations=10, init='k-means++',
                   n_init=1, random_state=None, n_jobs=None, pairwise_batch_size=1024,
-                  mode=None, protos=None, cluster_size=math.ceil(len(ids)/k))
+                  mode=None, protos=None,
+                  cluster_size=None if getattr(args, 'unbalanced', False) else math.ceil(len(ids)/k))
     fit.fit_mix(features[~mask].to(device), features[mask].to(device), legal.to(device))
     base = restore_input_order(fit.labels_, mask).cpu()
     centers = fit.cluster_centers_.cpu().float().clone()

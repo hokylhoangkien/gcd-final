@@ -9,7 +9,12 @@ from .metrics import atomic_json, read_rows, write_epoch
 from .readiness import sha256
 
 PROTOCOL = 'balanced_ss_kmeans_train_unlabeled'
+UNBALANCED_PROTOCOL = 'unbalanced_ss_kmeans_train_unlabeled'
 METRICS = dict(all='all_acc', old='old_acc', new='new_acc')
+
+
+def ss_protocol(config):
+    return UNBALANCED_PROTOCOL if config.get('unbalanced', False) else PROTOCOL
 
 
 def enabled(config):
@@ -27,7 +32,8 @@ def copy_verified(source, destination, digest):
 
 def update_best(run_dir, config, record):
     """Rank scheduled SS + fixed last only; earliest epoch wins exact ties."""
-    if (not enabled(config) or record['protocol'] != PROTOCOL
+    protocol = ss_protocol(config)
+    if (not enabled(config) or record['protocol'] != protocol
             or record['purpose'] not in ('monitor_only', 'final')):
         return
     for metric in METRICS.values():
@@ -43,8 +49,10 @@ def update_best(run_dir, config, record):
     run_dir = Path(run_dir)
     index = run_dir/'ss_best.json'
     summary = json.loads(index.read_text()) if index.is_file() else dict(
-        protocol=PROTOCOL, rule='max_each_ss_metric_earliest_epoch_on_ties',
+        protocol=protocol, rule='max_each_ss_metric_earliest_epoch_on_ties',
         uses_evaluation_labels=True, candidates='scheduled_ss_and_fixed_last', best={})
+    if summary['protocol'] != protocol:
+        raise ValueError('Cannot mix balanced and unbalanced SS best histories')
     for name, metric in METRICS.items():
         old = summary['best'].get(name)
         improved = (old is None or record[metric] > old[metric]
@@ -76,12 +84,14 @@ def restore_best(source, destination, config, epoch):
     source, destination = Path(source), Path(destination)
     index = source/'ss_best.json'
     rows = [row for row in read_rows(source/'epoch_metrics.jsonl')
-            if row['protocol'] == PROTOCOL and row['purpose'] in ('monitor_only', 'final')]
+            if row['protocol'] == ss_protocol(config) and row['purpose'] in ('monitor_only', 'final')]
     if not index.is_file():
         if rows:
             raise ValueError('Missing SS best artifacts for existing SS history')
         return
     summary = json.loads(index.read_text())
+    if summary['protocol'] != ss_protocol(config):
+        raise ValueError('Cannot restore a different SS clustering protocol')
     if set(summary['best']) != set(METRICS):
         raise ValueError('Incomplete SS best index; restore original run artifacts')
     for name, best in summary['best'].items():

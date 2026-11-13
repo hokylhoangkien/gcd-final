@@ -39,7 +39,7 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(manifest['default_profile'], 'selex_200')
             self.assertEqual(manifest['default_config'], 'configs/selex_scars_crish_200.json')
             self.assertEqual(manifest['datasets'], ['scars', 'cub', 'aircraft'])
-            self.assertEqual(manifest['optional_datasets'], ['cifar100'])
+            self.assertEqual(manifest['optional_datasets'], ['cifar100', 'herbarium_19'])
             for path, digest in manifest['files'].items():
                 self.assertEqual(hashlib.sha256((root/path).read_bytes()).hexdigest(), digest, path)
             for path in ('README.md', 'AGENTS.md', 'NOTICE', 'reports/04_method_and_research_plan.md',

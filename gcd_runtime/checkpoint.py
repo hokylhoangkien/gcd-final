@@ -102,6 +102,7 @@ class EpochRuntime:
         from .metrics import atomic_json, summarize_run, write_epoch
         from .selection import TEST_PROTOCOL, enabled, select_checkpoint
         from selex_runtime.selection import enabled as selex_best_enabled
+        from .ss_best import ss_protocol
         secondary_best = selex_best_enabled(self.config)
         for key in ('all_acc', 'old_acc', 'new_acc'):
             if not math.isfinite(metrics[key]) or not 0 <= metrics[key] <= 1:
@@ -110,7 +111,7 @@ class EpochRuntime:
         is_test = self.evaluation_kind == 'test'
         role = 'selection_test' if is_test else self.evaluation_role
         record = dict(status='synthetic_fixture' if self.config.get('synthetic_fixture') else 'observed',
-            unit='fraction', protocol=TEST_PROTOCOL if is_test else 'balanced_ss_kmeans_train_unlabeled',
+            unit='fraction', protocol=TEST_PROTOCOL if is_test else ss_protocol(self.config),
             matching='hungarian_v2_global',
             epoch=epoch, epoch_number=epoch+1, seed=self.config['seed'],
             evaluation_seed=metrics.pop('evaluation_seed', evaluation_seed(self.config, epoch, 'disjoint_test' if is_test else 'final_ss')),

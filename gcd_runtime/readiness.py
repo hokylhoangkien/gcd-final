@@ -68,6 +68,9 @@ def inspect_inputs(cfg=None):
     variant = (cfg or {}).get('dino', 'v1')
     weight = weights / ('dinov2_vitb14_reg4_pretrain.pth' if variant == 'v2' else 'dino_vitb16_pretrain.pth')
     root = data/spec.folder
+    if name == 'herbarium_19':
+        from .datasets import validate_herbarium_layout
+        validate_herbarium_layout(root)
     annotations = [root/relative for relative in spec.metadata]
     required = annotations+[weight]
     missing = [str(p) for p in required if not p.is_file()]
@@ -90,6 +93,9 @@ def audit_dataset(cfg=None):
     from data.get_datasets import get_class_splits, get_datasets
     name = (cfg or {}).get('dataset_name', 'scars')
     spec = dataset_spec(name)
+    if name == 'herbarium_19':
+        from .datasets import validate_herbarium_layout
+        validate_herbarium_layout(paths()[0]/spec.folder)
     args = get_class_splits(argparse.Namespace(dataset_name=name, use_ssb_splits=True,
                                               prop_train_labels=0.5))
     merged, test, _, _ = get_datasets(name, None, None, args)
