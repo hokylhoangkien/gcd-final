@@ -229,6 +229,21 @@ lại từ đầu. Mask/assignment sửa chỉ sống trong epoch đó, ảnh h�
 vào weights vẫn giữ. Probe gain là chênh lệch loss sau SGD thử, **không phải
 % accuracy tăng**. Accepted nhiều hay đổi nhiều quan hệ không chứng minh tốt hơn.
 
+Đối chiếu action đã nhận với SS trước–trong–sau epoch, chỉ đọc log:
+
+```bash
+.venv/bin/python scripts/analyze_crish_interventions.py "$RUN_DIR" --output /tmp/crish_action_ss.csv
+```
+
+Xuất CSV và JSON cùng tên, đủ action/gain/dose và bộ All/Old/New trước, trong,
+sau can thiệp. `epoch=10` là can thiệp trong epoch thứ 11, so SS epoch 10 → 11
+→ 12. Báo thiếu SS là `NA`, không lấy best hoặc plain thay thế. Danh sách Move
+đi kèm SS giảm chỉ là liên hệ theo thời gian, không chứng minh Move gây giảm.
+Nếu nhiều action cùng epoch thì chúng chia sẻ một SS delta, không cộng delta
+mỗi action. Câu hỏi “không Move thì sao” vẫn cần baseline matched/replay.
+Script chỉ dùng stdlib; trên máy đang train có thể copy riêng script vào `/tmp`
+rồi chạy bằng `.venv/bin/python`, không cập nhật source runtime hoặc dừng job.
+
 ## 6. Đọc SS, best All/Old/New và thời gian
 
 | Dòng log | Ý nghĩa |
