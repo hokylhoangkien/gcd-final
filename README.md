@@ -147,7 +147,78 @@ có đánh giá SS cuối. Nó trích/clustering toàn bộ pool. Gate yêu cầ
 chấm được counterfactual; Keep hợp lệ, fallback/no-scoring sẽ chặn full train.
 Smoke hoàn tất báo **`Status=completed`**. Điểm smoke không phải benchmark.
 
-## 4. Train 200 epoch trong tmux
+## 4. Chọn lịch train và chạy trong tmux
+
+### CUB-200 — 50 epoch theo SelEx mới
+
+Profile riêng trên branch **`experiments/cub50-selex`**, giữ nguyên mọi config
+200 epoch và runtime. Đây là **CRiSH local Keep/Abstain/Move**, không phải policy.
+Clone branch trên **máy mới**, không pull/chuyển branch trên máy đang train:
+
+```bash
+git clone --branch experiments/cub50-selex --recurse-submodules https://github.com/hokylhoangkien/gcd-final.git
+cd gcd-final
+```
+
+Chuẩn bị môi trường/data CUB/weights theo mục 1–2 (nếu đã có thì không cài/tải
+lại). Kiểm tra riêng, chưa train dài:
+
+```bash
+bash scripts/train_selex.sh check --dataset cub --config configs/selex_cub_crish_50.json --variant local
+bash scripts/train_selex.sh smoke --dataset cub --config configs/selex_cub_crish_50.json --variant local
+```
+
+Sau khi smoke đạt và GPU rảnh, mở tmux (nếu session đã có thì attach lại),
+rồi chọn một arm:
+
+```bash
+tmux new -s cub50
+```
+
+```bash
+# Phương pháp: CUB CRiSH local 50 epoch, SS mỗi epoch + ba best SS
+bash scripts/train_selex.sh --dataset cub --config configs/selex_cub_crish_50.json --variant local
+```
+
+```bash
+# Đối chứng riêng: CUB SelEx 50 epoch, cùng lịch/seed/SS
+bash scripts/train_selex.sh --dataset cub --config configs/selex_cub_baseline_50.json --baseline
+```
+
+**Phải có `--config ..._50.json`:** chỉ `--dataset cub --variant local` vẫn chọn
+200 epoch. Profile 50 đã bật `ss_eval_every_epochs=1`, không cần thêm flag SS.
+Seed mặc định 1; thêm `--seed 2`/`3` cho từng run riêng khi đủ compute.
+Full command vẫn tự lặp bounded smoke trước full 50, không resume từ smoke.
+
+| Cấu hình CUB 50 | Giá trị |
+|---|---|
+| Backbone / input | DINOv2 ViT-B/14 reg4 / 224 |
+| Head / batch / workers | 65536 / 128 / 4 |
+| Epoch / LR ban đầu | 50 / 0,1 |
+| SGD / momentum / weight decay | SGD / 0,9 / 0,0001 |
+| Scheduler | Cosine `T_max=50`, `eta_min=0,0001`, step cuối mỗi epoch |
+| Smoothing / temperature / supervised weight | 0,75 / 0,25 / 0,35 |
+| Fine-tune | Từ block 10 (blocks 10–11) |
+| Hierarchy | SelEx đã sửa; thêm tầng loss mỗi 10 epoch |
+| Data | CUB SSB 100 known / 100 novel; 50% ảnh known được labeled |
+| SS | BSSK, 10 restarts / 10 iterations mỗi phase, global Hungarian-v2 |
+| Local CRiSH | Warmup 10, refresh 5, tối đa 1 action/refresh, budget 120s |
+| Deadline | Full 86400s; mỗi evaluator 7200s (giới hạn, không phải ETA) |
+
+Đối chiếu source ghim `d8107b5`: các setting train nền trên khớp cấu hình CUB
+của **SelEx đã sửa**, không phải bảng paper 2024. Hai arm chỉ khác method và
+bật/tắt local repair; policy/online đều tắt. Không thay schedule thành 200 rồi
+dừng sớm ở 50. Mỗi run bắt đầu từ cùng pretrained weights, không lấy model Cars.
+
+Mốc tham khảo của [README SelEx mới](https://github.com/SarahRastegar/SelEx#update-november-2026-fix-for-issue-11):
+CUB DINOv2 **All 83,5 ± 0,6 / Old 85,6 ± 0,4 / New 82,5 ± 0,8**, **last 50
+epoch**, mean ± std seeds 1–3, do tác giả báo cáo; không phải kết quả của repo
+này. Muốn đối chiếu dùng `evaluation_last.json`; best SS báo riêng. Compatibility
+environment của project (Python 3.9–3.11 / Torch 2.4.1) khác upstream mới
+(Python 3.12 / dependency mới), nên chưa gọi là tái lập bit-exact hoặc fair
+gain chỉ dựa vào bảng công bố. Baseline 50 matched ở trên là đối chứng trực tiếp.
+
+### Lịch 200 epoch cho ba dataset (giữ nguyên)
 
 ```bash
 tmux new -s train
