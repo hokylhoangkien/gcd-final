@@ -1579,3 +1579,33 @@ B0/policy smokes. Actual All/Old/New and novelty remain unvalidated.
 - Handoff instructions: reports/18_local_adaptive_handoff.md; portable receipt
   results/local_adaptive_validation.json. No old default config/upstream file
   changed. Manuscript edits remain outside the feature commit.
+
+## 2026-11-15 — one-epoch Move/batch exposure experiment
+
+- User requests an opt-in, paired one-epoch experiment and push on the same
+  branch. Starting at a9985b5; existing manuscript/audit edits preserved.
+- Rechecked process list: no local Python training observed; no remote process
+  access or stop. Mac M5/16GB, no local CUDA. Searched configured data/weights/
+  runs roots for checkpoints and accepted-repair logs; no compatible checkpoint
+  or real accepted Move available. Do not invent a remote result.
+- Reviewed training, weighted replacement sampler, drop_last, epoch-end resume
+  and actual pseudo-SSE masks. Checkpoint epoch=e is after SGD of zero-based e;
+  next epoch is e+1; repair schedule applies to that next index.
+- Implement isolated opt-in batch-plan permutation and common-state A/B runner.
+  Preserve per-image multiplicity and exact per-batch labeled quotas. Run a
+  bounded synthetic mechanism fixture, explicitly not a CRiSH-accepted Move.
+  Real one-epoch comparison remains blocked on real checkpoint/data/Move.
+
+### A/B verification and bounded execution
+
+- Added isolated active_plan/run_ab adapter and fixture CLI; no runtime source
+  or default sampler changed. Eight new tests and SelEx regressions: 19 passed
+  in 2.90s with shared-memory access after sandbox OpenMP failure.
+- Ran foreground smoke, then explicitly authorized background fixture with
+  epoch deadline30s and parent subprocess timeout60s. Wrapper PID82558, run
+  move-batch-background-20261115T100825Z-04a2d2; one startup/completion check,
+  no continuous monitoring. Both arms completed one synthetic epoch, 2 steps.
+  A:0 changed batches/0 lost/0 added; B:1 changed batch/1 lost/1 added pair.
+- No real accepted Move/benchmark claim. reports/19 documents results, logs,
+  checkpoint epoch numbering, adapter boundary and missing real pipeline.
+  No remote launch, process stop, image/weight download or original overwrite.

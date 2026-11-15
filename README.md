@@ -29,6 +29,10 @@ Herbarium19 và đối chứng cap=1 cùng context, đọc
 Profile local cũ vẫn giữ trần 1. Không đổi checkout/runtime của job đang chạy;
 checkpoint nguồn cũ cần source/config cũ để resume.
 
+Thử nghiệm tùy chọn [một epoch Move và batch exposure](reports/19_move_batch_experiment.md)
+đã có fixture CPU A/B và bộ hoán đổi batch giữ multiplicity/quota. Chưa có
+so sánh dữ liệu thật; không bật trong trainer mặc định.
+
 ## 1. Cài môi trường một lần
 
 Nếu máy đã có repo, môi trường và data/weights thì bỏ qua phần cài/tải.
