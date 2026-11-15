@@ -1642,21 +1642,3 @@ B0/policy smokes. Actual All/Old/New and novelty remain unvalidated.
   dry-run passed. Layout tests:3 passed in0.02s; git diff --check passed.
   No runtime, upstream or existing config modified; no CUDA/data/weights or
   benchmark verified on the proposed new host. Documentation only.
-
-## 2026-11-15 — read-only adaptive intervention inspection
-
-- User supplied remote run `20261115T112441Z-0ec6f014` logs through displayed
-  epoch11/200: SS All76.92/Old91.05/New70.09 percent, monitor83.591s and
-  `epoch_complete=10` resume write. This is supplied evidence, not direct
-  inspection of the remote process or checkpoint.
-- Local checkout HEAD `fdd81ce`; pre-existing manuscript/report/checker changes
-  preserved. Host reports Darwin arm64. Sandbox denied `ps` and `sysctl`;
-  current local training process state and hardware capacity were not verified.
-  No process was stopped, no training/evaluation job was started.
-- Reviewed local analyzer, engine applied-action accounting and supervision
-  dose schema. Next safe remote action is read-only:
-  `.venv/bin/python scripts/analyze_crish_interventions.py runs/20261115T112441Z-0ec6f014`.
-  Inspect `intervention_diagnostics.jsonl` for actual changed IDs/positive
-  relations; SS output alone does not establish whether an action was applied.
-- No runtime code change or tests required for this command lookup. Full
-  baseline readiness and remote hardware were not revalidated in this task.
