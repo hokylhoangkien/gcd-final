@@ -28,6 +28,24 @@ Không dừng giữa plain evaluation, vì best bundle có thể mới hơn resu
 Chưa có sự đồng ý dừng job ở thời điểm chuẩn bị tài liệu này; không có
 remote job nào được agent dừng hoặc khởi động lại.
 
+### Controller dừng ở checkpoint mới
+
+`scripts/stop_after_checkpoint.py` được chuẩn bị cho người dùng tự chạy với
+`--confirm-stop`. Controller kiểm PID, process-group và start-time khớp đúng
+run; chờ metrics ghi epoch mới (tối đa600s), freeze group để kiểm resume/best
+history nhất quán, rồi gửi TERM và CONT để kết thúc group. Nếu validation
+thất bại thì CONT cho job tiếp tục, không gửi TERM, không force-kill. Chỉ
+đọc file checkpoint, không sửa source/checkpoint của job đang chạy.
+
+Có thể tải riêng controller ra /tmp trước khi dừng; không git pull dưới job
+đang chạy. Sau khi dừng mới cập nhật script và tạo migration bundle. PID phải
+được xác nhận từ launcher; không dùng một PID cũ nếu helper báo mismatch.
+Run nguồn có thể ghi Worker exited -15 khi chủ động dừng; ghi rõ đây là
+checkpoint-boundary interruption để đổi cadence, không phải lỗi training.
+Ba test controller dùng mocked signals, không dừng bất kỳ process thật nào.
+Controller + migration: **6 passed in 1.80s**; không có remote signal được
+agent gửi.
+
 Sau khi dừng và xác nhận source job/evaluator đã thoát, trên máy GPU lấy
 commit có helper (runtime fingerprint không đổi), rồi:
 
