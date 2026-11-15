@@ -16,6 +16,19 @@ Profile Herbarium19 mới mặc định local; vẫn ghi flag rõ ràng khi ch�
 `local` chỉ cơ chế sửa giám sát, không có nghĩa chạy trên CPU/Mac.
 Các biến thể online/hybrid và nhánh Hyp-SelEx cũ không thuộc quickstart này.
 
+**Adaptive local (profile mới, chưa có benchmark):** model chọn số action nhận
+từ 0–8 mỗi refresh qua discovery/confirmation; không ép đủ 8. Lệnh chọn profile:
+
+```bash
+bash scripts/train_selex.sh --config configs/selex_scars_local_adaptive_200.json --variant local --dry-run
+```
+
+Để lấy branch mới, kiểm data/GPU, chạy smoke/train hoặc tạo profile CUB/Aircraft/
+Herbarium19 và đối chứng cap=1 cùng context, đọc
+[hướng dẫn bàn giao adaptive local](reports/18_local_adaptive_handoff.md).
+Profile local cũ vẫn giữ trần 1. Không đổi checkout/runtime của job đang chạy;
+checkpoint nguồn cũ cần source/config cũ để resume.
+
 ## 1. Cài môi trường một lần
 
 Nếu máy đã có repo, môi trường và data/weights thì bỏ qua phần cài/tải.

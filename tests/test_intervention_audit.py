@@ -28,6 +28,18 @@ def write(directory, name, records):
 
 
 class InterventionAuditTests(unittest.TestCase):
+    def test_adaptive_stop_and_applied_counts_are_exposed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            record = dict(event(), stop_reason='time_budget', budget_exhausted=True,
+                          acceptance_cap=8, cap_reached=False, applied_actions=1,
+                          confirmation_folds_reserved=8, confirmation_folds_used=1)
+            write(tmp, 'crish.jsonl', [record])
+            summary = audit(tmp)['refreshes'][0]
+            self.assertEqual(summary['stop_reason'], 'time_budget')
+            self.assertEqual(summary['applied_actions'], 1)
+            self.assertEqual(summary['acceptance_cap'], 8)
+            self.assertEqual(summary['confirmation_folds_reserved'], 8)
+
     def test_unbalanced_ss_history_is_analyzed_without_mixing_protocols(self):
         with tempfile.TemporaryDirectory() as tmp:
             protocol = 'unbalanced_ss_kmeans_train_unlabeled'

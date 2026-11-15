@@ -17,7 +17,7 @@ import torch.nn.functional as F
 from crish.candidates import propose_actions
 from crish.ids import rows_for_ids
 from crish.lookahead import clone_snapshot, exact_sgd_comparison, gradient_gain, preserve_rng
-from crish.policy import DecisionEvidence, sequential_repair
+from crish.policy import DecisionEvidence, RepairBudgetExhausted, sequential_repair
 from crish.probe import LegalProbe, ProbeWeights
 from crish.rebuild import target_drift
 from crish.reliability import blockwise_euclidean_knn, sparse_evidence
@@ -60,7 +60,7 @@ def projector_optimizer(head, optimizer):
 
 def _check_deadline(deadline):
     if time.monotonic() >= deadline:
-        raise RuntimeError('CRiSH refresh budget exhausted; remaining actions Keep')
+        raise RepairBudgetExhausted('CRiSH refresh budget exhausted; remaining actions Keep')
 
 
 @torch.no_grad()
@@ -86,7 +86,7 @@ def cached_views(model, dataset, ids, device, deadline, batch_size=16):
 
 
 def _draw_context(state, settings, generator, deadline=None, *, fold_count=None):
-    fold_count = fold_count or 1+min(settings.max_accepted, settings.boundaries)
+    fold_count = settings.probe_fold_count if fold_count is None else fold_count
     known = state.labeled.nonzero().flatten()
     other = (~state.labeled).nonzero().flatten()
     if len(known) < fold_count*settings.probe_known or len(other) < fold_count*settings.probe_unlabeled:
@@ -108,9 +108,14 @@ def _draw_context(state, settings, generator, deadline=None, *, fold_count=None)
     if len(available) <= settings.k:
         raise ValueError('Insufficient disjoint evidence support; refresh Keep')
     if settings.evidence_sampling == 'global_neighbors':
-        pool = global_neighbor_pool(state, available, settings.evidence_samples, settings.k,
-                                    generator, reference_block=settings.neighbor_reference_block,
-                                    deadline=deadline)
+        try:
+            pool = global_neighbor_pool(state, available, settings.evidence_samples, settings.k,
+                                        generator, reference_block=settings.neighbor_reference_block,
+                                        deadline=deadline)
+        except RuntimeError as exc:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise RepairBudgetExhausted(str(exc)) from exc
+            raise
     else:
         pool = available[torch.randperm(len(available), generator=generator)[:settings.evidence_samples]]
     return folds, pool
@@ -200,6 +205,10 @@ class CrishEngine:
         seed = (self.runtime.config['seed']*1000003+epoch*103+7) % (2**32)
         record = dict(epoch=epoch, lookahead_scope='projector', evidence_space='normalized_backbone_euclidean',
                       seed=seed, accepted=0, decisions=[], gains=[], status='keep',
+                      run_id=self.runtime.run_dir.name, acceptance_cap=settings.max_accepted,
+                      stop_reason=None, cap_reached=False, budget_exhausted=False,
+                      accepted_proposals=0, applied_actions=0, rolled_back=False,
+                      confirmation_folds_reserved=0, confirmation_folds_used=0,
                       evidence_sampling=settings.evidence_sampling, probe_sampling=settings.probe_sampling,
                       use_target_normalization=getattr(args, 'use_target_normalization', 'legacy'))
         try:
@@ -208,6 +217,7 @@ class CrishEngine:
                 np.random.seed(seed)
                 torch.manual_seed(seed)
                 folds, pool = _draw_context(state, settings, torch.Generator().manual_seed(seed), deadline)
+                record['confirmation_folds_reserved'] = len(folds)-1
                 record['evidence_cache_rows'] = len(pool)
                 record['evidence_reference_rows'] = (len(state.ids)-sum(len(k)+len(u) for k, u in folds)
                                                      if settings.evidence_sampling == 'global_neighbors' else len(pool))
@@ -231,8 +241,10 @@ class CrishEngine:
                 record['stability'] = stability
                 actions, adjacency = _shortlist(state, pool, evidence, settings, stability)
                 record['candidate_count'] = len(actions)
+                record['candidate_samples'] = len({a.sample_id for a in actions})
                 if not actions:
                     record['reason'] = 'No measured supported boundaries'
+                    record['stop_reason'] = 'no_candidates'
                     return state
                 reserved = torch.cat([torch.cat([k, u]) for k, u in folds])
                 batch_ids, record['scoring_batch'] = scoring_ids(
@@ -321,24 +333,49 @@ class CrishEngine:
                 def confirm(current, proposed, action):
                     nonlocal confirmation_index
                     _check_deadline(deadline)
+                    if confirmation_index >= len(probes):
+                        raise RepairBudgetExhausted('No unused independent confirmation fold', reason='probe_budget')
                     g0, ga, entry = candidates[action]
-                    comparison = exact_sgd_comparison(frozen, virtual_optimizer, g0, ga, probes[confirmation_index])
                     entry['confirmation_fold'] = confirmation_index
+                    probe = probes[confirmation_index]
                     confirmation_index += 1
+                    record['confirmation_folds_used'] += 1
+                    comparison = exact_sgd_comparison(frozen, virtual_optimizer, g0, ga, probe)
                     entry['confirmation'] = comparison
                     return comparison
+                selection = {}
                 repaired, trace = sequential_repair(state, actions, scorer, max_accepted=settings.max_accepted,
                                                     threshold=settings.acceptance_gain, agreement=1.,
                                                     known_tolerance=settings.known_tolerance, min_support=settings.min_support,
-                                                    confirmer=confirm)
-                record.update(decisions=trace, accepted=sum(x['status'] == 'accepted' for x in trace), status='completed')
+                                                    confirmer=confirm,
+                                                    budget_check=lambda: _check_deadline(deadline),
+                                                    diagnostics=selection)
+                count = sum(x['status'] == 'accepted' for x in trace)
+                record.update(decisions=trace, accepted=count, accepted_proposals=count,
+                              applied_actions=count, status='completed', selection=selection,
+                              stop_reason=selection['stop_reason'], cap_reached=selection['cap_reached'],
+                              budget_exhausted=selection['budget_exhausted'])
+                repaired.validate()
+                from crish.diagnostics import supervision_dose
+                record['dose'] = supervision_dose(state, repaired)
                 return repaired
+        except RepairBudgetExhausted as exc:
+            record.update(status='fallback_keep', reason=str(exc), stop_reason=exc.reason,
+                          budget_exhausted=True, accepted=0, applied_actions=0)
+            return state
         except (ValueError, RuntimeError) as exc:
             # Proposal failure never damages the baseline snapshot. Training
             # still validates the original loss; it never masks baseline NaN.
-            record.update(status='fallback_keep', reason=str(exc))
+            record.update(status='fallback_keep', reason=str(exc), stop_reason='refresh_error',
+                          accepted=0, applied_actions=0, rolled_back=bool(record['accepted_proposals']))
+            record.pop('dose', None)
+            for decision in record['decisions']:
+                if decision['status'] == 'accepted':
+                    decision.update(status='rolled_back', applied=False)
             return state
         finally:
+            record['scored_actions'] = len(record['gains'])
+            record['pre_scoring_rejections'] = len(record.get('scoring_rejections', []))
             record['seconds'] = time.monotonic()-start
             self.runtime.last_local_record = record
             self._append(record)

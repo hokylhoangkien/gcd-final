@@ -1542,3 +1542,40 @@ CUDA/real data/weights still absent locally; no GPU run, download or process
 stop was initiated. No commit/push performed. First remote action remains
 `bash scripts/train_selex.sh check --dataset scars --baseline`, then bounded
 B0/policy smokes. Actual All/Old/New and novelty remain unvalidated.
+
+## 2026-11-15 — adaptive local implementation and branch handoff
+
+- User explicitly requests implementation and push to a new GitHub branch.
+  Created `feat/local-adaptive-acceptance` from `4d54cca`; existing manuscript,
+  build/PDF, historical report and manuscript-checker edits remain untouched
+  and will not be included in the implementation commit.
+- Repeated process read: Codex and IDE helper processes only, no local Python
+  training observed. No processes stopped or remote jobs inspected. Host
+  remains macOS arm64 Apple M5/16GB without nvidia-smi; no benchmark data,
+  weights or checkpoints in the inspected local directories.
+- Existing runtime has bounded sequential multi-action selection but ships
+  cap1, small context, and no structured stop/budget outcome. Need preserve
+  already confirmed edits on deadline, distinguish applied/rolled-back edits,
+  reserve independent folds and expose an opt-in Cars adaptive profile plus
+  cap1 context control. Keep default configs and upstream unchanged.
+- Plan: policy/engine integration, matched profile controls, deterministic
+  bounded CPU tests/smoke and portable handoff docs; verify clean staged diff,
+  commit only task files, push new branch and verify its remote SHA. No GPU
+  training or long sweep is started locally.
+
+### Implementation and verification
+
+- Added opt-in Cars adaptive/cap1-context profiles, confirmation-budget
+  reservation, explicit selection stops and transaction-correct applied counts.
+  Deadline after confirmed commits keeps those edits. Added multi-action
+  policy/engine/backward/rollback/context/resume tests and a dataset-agnostic
+  profile preparer. CLI/analyzer expose the chosen budgets and stop reasons.
+- Full bounded CPU smoke: **285 passed, 90 warnings in 42.17s**; upstream,
+  split-definition, protocol and static checks passed. Run ID
+  `crish-v21-20261115T094308Z-b534e520`; config/log/metadata/XML under logs/.
+  Runner used --code-only and per-command timeout <=60s. Initial sandbox
+  OpenMP SHM failure was resolved by reviewed shared-memory execution; no
+  GPU, real-data training, benchmark accuracy or novelty is claimed.
+- Handoff instructions: reports/18_local_adaptive_handoff.md; portable receipt
+  results/local_adaptive_validation.json. No old default config/upstream file
+  changed. Manuscript edits remain outside the feature commit.

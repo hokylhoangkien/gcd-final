@@ -13,6 +13,14 @@ from .rebuild import rebuild
 from .state import SupervisionState
 
 
+class RepairBudgetExhausted(RuntimeError):
+    """A bounded stop, distinct from an invalid counterfactual or scorer error."""
+
+    def __init__(self, message, *, reason='time_budget'):
+        super().__init__(message)
+        self.reason = reason
+
+
 @dataclass(frozen=True)
 class DecisionEvidence:
     fold_gains: Tuple[float, ...]
@@ -34,14 +42,37 @@ def sequential_repair(initial: SupervisionState, actions: Sequence[Action],
                       scorer: Callable[[SupervisionState, SupervisionState, Action], DecisionEvidence], *,
                       max_accepted: int, threshold: float, agreement: float,
                       known_tolerance: float, min_support: int = 1, enabled: bool = True,
-                      confirmer=None):
+                      confirmer=None, budget_check=None, diagnostics=None):
     if type(max_accepted) is not int or max_accepted < 0 or not all(math.isfinite(x) for x in (threshold, agreement, known_tolerance)) or not 0 <= agreement <= 1 or known_tolerance < 0:
         raise ValueError('Invalid predeclared acceptance/budget settings')
-    if not enabled or max_accepted == 0:
-        return initial, []
     current, pending, trace = initial, list(actions), []
+    summary = diagnostics if diagnostics is not None else {}
+    summary.update(stop_reason=None, rounds=0, scoring_attempts=0, confirmation_attempts=0,
+                   accepted=0, cap_reached=False, budget_exhausted=False)
+
+    def finish(reason, detail=None):
+        summary.update(stop_reason=reason, accepted=current.version-initial.version,
+                       cap_reached=reason == 'acceptance_cap',
+                       budget_exhausted=reason in ('time_budget', 'probe_budget'))
+        if detail is not None:
+            summary['stop_detail'] = str(detail)
+        return current, trace
+
+    def check_budget():
+        if budget_check is not None:
+            budget_check()
+
+    if not enabled or max_accepted == 0:
+        return finish('disabled')
     # Each scoring round starts from current, never independently scored updates.
-    for _ in range(max_accepted):
+    for round_index in range(max_accepted):
+        if not any(a.kind != 'keep' for a in pending):
+            return finish('no_candidates' if not trace else 'candidates_exhausted')
+        try:
+            check_budget()
+        except RepairBudgetExhausted as exc:
+            return finish(exc.reason, exc)
+        summary['rounds'] += 1
         ranked = []
         for action in pending:
             if action.kind == 'keep':
@@ -55,9 +86,12 @@ def sequential_repair(initial: SupervisionState, actions: Sequence[Action],
             # version is refreshed; validate_action still checks source/support.
             fresh = replace(action, version=current.version)
             try:
+                check_budget()
                 trial, record = rebuild(current, fresh, min_support=min_support)
                 # Scorer receives disposable copies; failures cannot mutate state.
+                summary['scoring_attempts'] += 1
                 evidence = scorer(current.copy(), trial.copy(), fresh)
+                check_budget()
                 accepted = evidence.passes(threshold, agreement, known_tolerance)
                 finite_or_none = lambda value: float(value) if math.isfinite(value) else None
                 record.update(status='eligible' if accepted else 'rejected',
@@ -67,34 +101,47 @@ def sequential_repair(initial: SupervisionState, actions: Sequence[Action],
                               changed_mass=finite_or_none(evidence.changed_mass))
                 if accepted:
                     ranked.append((sum(evidence.fold_gains) / len(evidence.fold_gains), fresh, trial, record))
+            except RepairBudgetExhausted as exc:
+                return finish(exc.reason, exc)
             except (ValueError, RuntimeError) as exc:
                 record = dict(kind=fresh.kind, sample_id=fresh.sample_id, level=fresh.level,
                               version=current.version, status='failed', reason=str(exc))
+            record['round'] = round_index
             trace.append(record)
         if not ranked:
-            break
+            return finish('no_eligible_candidates')
         _, chosen, trial, record = max(ranked, key=lambda item: item[0])
         if confirmer is not None:
             try:
+                check_budget()
+                summary['confirmation_attempts'] += 1
                 confirmation = confirmer(current.copy(), trial.copy(), chosen)
                 gain, known = confirmation['gain'], confirmation['known_increase']
                 record['confirmation_gain'] = float(gain) if math.isfinite(gain) else None
                 record['confirmation_known_increase'] = float(known) if math.isfinite(known) else None
                 if not math.isfinite(known) or known > known_tolerance:
                     record.update(status='rejected', reason='Independent confirmation known guard failed')
-                    break
+                    return finish('confirmation_known_guard')
+                check_budget()
+            except RepairBudgetExhausted as exc:
+                record.update(status='uncommitted', reason=str(exc))
+                return finish(exc.reason, exc)
             except (ValueError, RuntimeError) as exc:
                 record.update(status='failed', reason=str(exc))
-                break
+                return finish('confirmation_error', exc)
         # Inspect the independent confirmation value only for the top discovery
         # candidate. If it fails, stop; never search runners-up on that fold.
         if record['confirmation_gain'] is None or record['confirmation_gain'] <= threshold:
             record.update(status='rejected', reason='Independent confirmation failed; refresh stopped')
-            break
-        trial.validate()
+            return finish('confirmation_failed')
+        try:
+            trial.validate()
+        except (ValueError, RuntimeError) as exc:
+            record.update(status='failed', reason=str(exc))
+            return finish('invalid_trial', exc)
         current = trial  # atomic commit; initial is untouched
         record['status'] = 'accepted'
         pending = [a for a in pending if a.sample_id != chosen.sample_id]
         # All remaining actions are rebuilt and rescored, including global USE
         # dependencies. No cached independently accepted gains are composed.
-    return current, trace
+    return finish('acceptance_cap')

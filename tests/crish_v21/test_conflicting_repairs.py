@@ -40,6 +40,52 @@ class SequentialRepairTests(unittest.TestCase):
         self.assertLess(objective(theta + delta), objective(theta))
         self.assertGreater(objective(theta + 2 * delta), objective(theta))
 
+    def test_shared_cap_allows_zero_or_multiple_evidence_selected_acceptances(self):
+        # Controlled scores test stopping semantics, not learned score quality.
+        for beneficial_rounds in range(4):
+            with self.subTest(beneficial_rounds=beneficial_rounds):
+                state = state_fixture()
+                actions = [Action('abstain', 91, 0, 0), Action('abstain', 22, 0, 2),
+                           Action('abstain', 80, 0, 3)]
+                confirmations = []
+
+                def scorer(current, trial, action):
+                    gain = 1. if current.version < beneficial_rounds else -1.
+                    return DecisionEvidence((gain,), 0., 0., 1.)
+
+                def confirmer(current, trial, action):
+                    confirmations.append((current.version, action.sample_id))
+                    return dict(gain=1., known_increase=0.)
+
+                final, trace = self.run_policy(state, actions, scorer, confirmer=confirmer)
+                accepted = [r for r in trace if r['status'] == 'accepted']
+                self.assertEqual(len(accepted), beneficial_rounds)
+                self.assertEqual(final.version, beneficial_rounds)
+                self.assertEqual(final.abstained[0].sum().item(), beneficial_rounds)
+                self.assertEqual([v for v, _ in confirmations], list(range(beneficial_rounds)))
+                self.assertEqual(len({sample for _, sample in confirmations}), beneficial_rounds)
+                self.assertFalse(state.abstained[0].any())
+
+    def test_failed_later_confirmation_preserves_earlier_commit_and_stops(self):
+        state = state_fixture()
+        actions = [Action('abstain', 91, 0, 0), Action('abstain', 22, 0, 2),
+                   Action('abstain', 80, 0, 3)]
+        confirmations = []
+
+        def confirmer(current, trial, action):
+            confirmations.append(current.version)
+            return dict(gain=1. if current.version == 0 else -1., known_increase=0.)
+
+        final, trace = self.run_policy(state, actions,
+            lambda *args: DecisionEvidence((1.,), 0., 0., 1.), confirmer=confirmer)
+        self.assertEqual(final.version, 1)
+        self.assertEqual(final.abstained[0].sum().item(), 1)
+        self.assertEqual(sum(r['status'] == 'accepted' for r in trace), 1)
+        self.assertEqual(confirmations, [0, 1])
+        self.assertTrue(any(r.get('reason') == 'Independent confirmation failed; refresh stopped'
+                            for r in trace))
+        self.assertFalse(state.abstained[0].any())
+
     def test_empty_source_and_stale_initial_actions_do_not_get_committed(self):
         state = state_fixture()
         actions = [Action('move', 22, 0, 2, 3), Action('move', 66, 0, 2, 3),

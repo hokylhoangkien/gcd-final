@@ -77,7 +77,12 @@ def audit(run_dir):
         summaries.append(dict(epoch_log=epoch, epoch_number=epoch+1, group=group,
                               status=r.get('status'), accepted=len(accepted),
                               candidates=r.get('candidate_count'), scored=len(r.get('gains', [])),
-                              seconds=r.get('seconds'), reason=r.get('reason')))
+                              seconds=r.get('seconds'), reason=r.get('reason'),
+                              stop_reason=r.get('stop_reason'), acceptance_cap=r.get('acceptance_cap'),
+                              cap_reached=r.get('cap_reached'), budget_exhausted=r.get('budget_exhausted'),
+                              applied_actions=r.get('applied_actions', len(accepted)),
+                              confirmation_folds_reserved=r.get('confirmation_folds_reserved'),
+                              confirmation_folds_used=r.get('confirmation_folds_used')))
         for d in accepted:
             g = gains.get(identity(d))
             if g is None:
@@ -136,6 +141,9 @@ def main():
     if not args.run_dir.is_dir():
         parser.error('Run directory does not exist')
     report = audit(args.run_dir)
+    for r in report['refreshes']:
+        print(f'REFRESH epoch={r["epoch_number"]} accepted={r["accepted"]} '
+              f'cap={r["acceptance_cap"]} stop={r["stop_reason"]} seconds={r["seconds"]}')
     print('Epoch(log/display) Action Sample  Discovery Confirmation  All before/during/next  dAll(pp) dNew(pp)')
     for e in report['events']:
         print(f'{e["epoch_log"]:3}/{e["epoch_number"]:<3} {e["action"]:7} {e["sample_id"]:6} '

@@ -18,6 +18,7 @@ class CrishSettings:
     boundaries: int = 2
     max_targets: int = 1
     max_accepted: int = 1
+    confirmation_budget: int = 0
     min_support: int = 2
     min_edges: int = 1
     min_reliability: float = 0.5
@@ -48,7 +49,7 @@ class CrishSettings:
         for name in ('enabled', 'save_partitions'):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f'crish.{name} must be bool')
-        for name in ('warmup_epochs', 'stability_trials'):
+        for name in ('warmup_epochs', 'stability_trials', 'confirmation_budget'):
             if type(getattr(self, name)) is not int or getattr(self, name) < 0:
                 raise ValueError(f'crish.{name} must be a nonnegative integer')
         for name in ('refresh_every', 'evidence_samples', 'evidence_trials', 'k', 'boundaries',
@@ -61,6 +62,8 @@ class CrishSettings:
             raise ValueError('Probe needs >=2 unlabeled rows; evidence_samples must exceed k')
         if self.boundaries > self.train_batch:
             raise ValueError('Boundary budget must fit the scoring train_batch')
+        if self.confirmation_budget and self.confirmation_budget < min(self.max_accepted, self.boundaries):
+            raise ValueError('confirmation_budget must cover all possible accepted actions')
         if self.probe_known_per_class > 1 and (self.probe_sampling != 'class_balanced'
                 or self.probe_known % self.probe_known_per_class
                 or self.probe_known // self.probe_known_per_class < 2):
@@ -78,6 +81,11 @@ class CrishSettings:
 
     def due(self, epoch):
         return self.enabled and epoch >= self.warmup_epochs and (epoch-self.warmup_epochs) % self.refresh_every == 0
+
+    @property
+    def probe_fold_count(self):
+        """Reserve a fixed context for cap controls; zero keeps historical sizing."""
+        return 1 + (self.confirmation_budget or min(self.max_accepted, self.boundaries))
 
 
 @dataclass(frozen=True)
