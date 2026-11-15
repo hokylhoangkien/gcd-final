@@ -1609,3 +1609,17 @@ B0/policy smokes. Actual All/Old/New and novelty remain unvalidated.
 - No real accepted Move/benchmark claim. reports/19 documents results, logs,
   checkpoint epoch numbering, adapter boundary and missing real pipeline.
   No remote launch, process stop, image/weight download or original overwrite.
+
+## 2026-11-15 — requested SS cadence correction
+
+- User requested every-epoch SS, contrary to assistant's earlier eval-every10
+  command. Supplied remote run110206-a01d46fa metrics show epoch2 completed
+  (three zero-based epochs), steps63, train-loop137.44s, peak allocated15.83GB.
+  This is user-provided evidence, not direct remote inspection.
+- Preserve active training: no remote stop, pull, signal or competing job.
+  Prepare a scripts-only explicit cadence migration so runtime fingerprints
+  and all optimization state remain unchanged. Original resume/config/best
+  artifacts untouched; copied best bundle receives the new config metadata.
+- Three bounded CPU tests passed in1.66s, including momentum/scheduler and
+  best-history restore. Details and post-stop commands in report20. Actual
+  migration remains pending safe checkpoint-boundary stop with user approval.
