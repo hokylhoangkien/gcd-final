@@ -33,6 +33,11 @@ Thử nghiệm tùy chọn [một epoch Move và batch exposure](reports/19_move
 đã có fixture CPU A/B và bộ hoán đổi batch giữ multiplicity/quota. Chưa có
 so sánh dữ liệu thật; không bật trong trainer mặc định.
 
+Máy GPU mới để chạy Aircraft: dùng
+[hướng dẫn Aircraft từ đầu đến cuối](reports/21_aircraft_gpu_quickstart.md),
+gồm tải archive chính thức/checksum, data layout, môi trường, adaptive0–8,
+SS mỗi epoch và log/tmux. Không dùng checkout/GPU Cars đang chạy.
+
 ## 1. Cài môi trường một lần
 
 Nếu máy đã có repo, môi trường và data/weights thì bỏ qua phần cài/tải.
