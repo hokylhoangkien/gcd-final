@@ -1642,3 +1642,16 @@ B0/policy smokes. Actual All/Old/New and novelty remain unvalidated.
   dry-run passed. Layout tests:3 passed in0.02s; git diff --check passed.
   No runtime, upstream or existing config modified; no CUDA/data/weights or
   benchmark verified on the proposed new host. Documentation only.
+
+
+## 2026-11-16 — CUB GPU quickstart documentation
+
+- Branch feat/local-adaptive-acceptance at c1930ad; existing manuscript,
+  protocol, audit and checker edits preserved. Darwin arm64; sandbox denied
+  ps, so local process status is unverified. No process changed or launched.
+- Read pinned upstream CUB loader, native metadata validator, CUB config,
+  profile generator and Aircraft guide. Verified official Caltech dataset
+  page and archive MD5. Added CUB guide and README entry only.
+- Readiness on rented GPU remains unverified; no local dataset/weight
+  downloads, CUDA install or benchmark. Next action: follow report22 on
+  a separate Linux GPU checkout, including data validator/preflight/smoke.

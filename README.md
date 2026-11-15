@@ -38,6 +38,10 @@ Máy GPU mới để chạy Aircraft: dùng
 gồm tải archive chính thức/checksum, data layout, môi trường, adaptive0–8,
 SS mỗi epoch và log/tmux. Không dùng checkout/GPU Cars đang chạy.
 
+Máy GPU mới để chạy CUB-200-2011: dùng
+[hướng dẫn CUB từ đầu đến cuối](reports/22_cub_gpu_quickstart.md),
+gồm archive Caltech, kiểm tra ảnh/attributes và adaptive0–8 với SS mỗi epoch.
+
 ## 1. Cài môi trường một lần
 
 Nếu máy đã có repo, môi trường và data/weights thì bỏ qua phần cài/tải.
