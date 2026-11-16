@@ -120,10 +120,6 @@ def main():
         if not args.dry_run:
             if platform.system() != 'Linux':
                 raise RuntimeError('Only bounded CPU synthetic tests on this Mac; train on Linux NVIDIA')
-            busy = subprocess.run(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'],
-                                   capture_output=True, text=True, timeout=10, check=True)
-            if any(line.strip().isdigit() for line in busy.stdout.splitlines()):
-                raise RuntimeError('GPU process present; inspect before starting. No job was stopped.')
         command = [sys.executable, '-m', 'gcd_runtime.launch', mode, '--config', str(config)]
         if checkpoint:
             command += ['--checkpoint', str(checkpoint)]

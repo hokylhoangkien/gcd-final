@@ -217,8 +217,9 @@ Plan local phải có `baseline_family=selex`, `method=crish`,
 false, `epochs=200`, head 65536. Baseline dùng `method=baseline` và bypass
 mọi controller. `TRAIN method=crish` đơn lẻ không phân biệt local với policy.
 
-Kiểm tra GPU trống bằng `nvidia-smi`. Nếu có job đang chạy, xem chủ sở hữu và
-log trước; không tự kill hoặc mở job cạnh tranh. Sau đó:
+Xem GPU và VRAM đang dùng bằng `nvidia-smi`; có thể chọn GPU bằng
+`CUDA_VISIBLE_DEVICES`. Launcher cho phép chạy khi GPU có process khác;
+preflight CUDA/data/weights và bounded smoke vẫn bắt buộc. Kiểm tra preflight:
 
 ```bash
 bash scripts/train_selex.sh check --dataset "$GCD_DATASET" --variant local

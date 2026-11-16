@@ -52,10 +52,6 @@ def main():
         if not args.dry_run:
             if platform.system() != 'Linux':
                 raise RuntimeError('Run training on Linux NVIDIA; use --dry-run or CPU smoke tests on this Mac')
-            processes = subprocess.run(['nvidia-smi', '--query-compute-apps=pid', '--format=csv,noheader'],
-                                       capture_output=True, text=True, timeout=10, check=True)
-            if any(line.strip().isdigit() for line in processes.stdout.splitlines()):
-                raise RuntimeError('GPU process already present; inspect it before starting. No process was stopped.')
         command = [sys.executable, '-m', 'gcd_runtime.launch', mode, '--config', str(path)]
         if override is not None:
             command.extend(['--eval-every', str(override)])
