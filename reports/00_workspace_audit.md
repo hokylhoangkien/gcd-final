@@ -1703,3 +1703,18 @@ Source/split checks, AST parsing, archive/figure hashes and diff whitespace pass
 GPU readiness and semantic K5 remain unverified; next safe action on a prepared
 Linux/NVIDIA host: train_selex.sh check with generated full_seed2 config. G1,
 seed execution, final aggregation≥3 seeds and G2 cross-check remain human/GPU work.
+
+## 2026-11-18 — Consolidated user-facing runbook
+
+User requested one complete README instead of multiple handoff documents.
+Rewrote README around setup/data, adaptive configuration, fresh and continued
+seeds, five ablations, monitoring, final evaluation, registry/curves/posthoc,
+resume and K/A checklist. Corrected stale cap1/no-completed-run wording and
+moved operational content from reports23/24 into README, removing those two
+redundant files; their earlier versions remain in Git history. Older research
+reports remain historical evidence. No runtime/config/manuscript change.
+Verification:55 focused CPU tests passed in5.42s;24 Bash blocks passed bash-n;
+actual adaptive check/smoke/train CLI dry-runs passed with15s deadlines.
+Eval cadence override is documented only for train, as the CLI requires.
+Only README, removed handoff docs and this audit addition belong in this commit;
+all unrelated existing dirty manuscript/reports/figure work stays local.
