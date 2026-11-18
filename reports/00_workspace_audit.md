@@ -1655,3 +1655,51 @@ B0/policy smokes. Actual All/Old/New and novelty remain unvalidated.
 - Readiness on rented GPU remains unverified; no local dataset/weight
   downloads, CUDA install or benchmark. Next action: follow report22 on
   a separate Linux GPU checkout, including data validator/preflight/smoke.
+
+## 2026-11-18 — CRiSH completion-plan implementation
+
+Read AGENTS.md and the full CRiSH-GCD_Ke_hoach_Codex.md (actual filename).
+Initial HEAD c12dc96754b63dc80fc3e8ab201c3645c33f45c8. Existing dirty
+manuscript/PDF/build metadata, reports, plotting script/tests and figures
+are preserved. No checkpoint/data/log overwritten; no upstream edits planned.
+Read-only process inventory required sandbox escalation and succeeded: Codex,
+VS Code Python helpers, no matching local training worker. Remote state unknown.
+Host Apple M5, 16 GB, 10 CPU cores, macOS arm64, no nvidia-smi. CPU bounded
+tests only; new NVIDIA/data/weights readiness is NOT VERIFIED. Existing imported
+single-seed artifacts are evidence for analysis, not permission to start jobs.
+Current adaptive local engine has cap8/boundaries16/scoring128, reserved fresh
+confirmation folds, append-only decisions/gains/timing and final evaluation.
+Missing: requested five-way ablation switch, unified final-only registry and
+explicit plan checklist. Next: add opt-in variants preserving full defaults,
+CPU regression/isolation tests, offline exports and GPU command preparation.
+No baseline rerun, push, PR, manuscript edits or long training authorized here.
+
+### Completion-plan outcome — 2026-11-18
+
+Added opt-in full/five ablations without default config-key insertion; full
+trace parity, real objective backward/CF/rebuild, independent RNG, known-label
+protection and policy-aware evidence-only smoke verified on CPU. Added final-only
+registry with archive input, partial-history handling, offline-only semantic
+join/audit, plot renderer and matched config preparer. Canonical handoff lives
+in reports/23_adaptive_configuration.md and reports/24_paper_plan_implementation.md.
+No upstream, manuscript, dataset, checkpoint or prior log overwritten; no push,
+PR, training or remote process action. Existing unrelated dirty files preserved.
+
+Prepared Cars18 configs plus CUB/Aircraft full seeds2–3 from observed configs,
+including ss_eval_every_epochs=1. All jobs remain prepared_not_executed. New
+code fingerprint differs from historical runs; keep old checkout for resume.
+Observed final metrics and source hashes exported from original Cars tar.gz and
+CUB/Aircraft ZIPs under results/paper-plan-verified-20261118. Cars logs cover38
+refreshes,117 edits (65 Move/52 Abstain); recorded CUB225 (1/224) and Aircraft121
+(62/59) edits have missing early refresh records, marked partial. Three static
+PDF/SVG/PNG learning-curve sets exported; no multi-seed performance claim.
+
+Verification: regression180+154 pass in bounded separate batches; final focused
+55 pass after last small changes; release1 pass after correcting the existing
+PDF-figure test contract. Distinct test coverage337, receipts in result folder,
+JUnit/logs under logs/paper-plan-*. Initial sandbox OpenMP failures and60s full
+suite timeout resolved through shared-memory permission and bounded batches.
+Source/split checks, AST parsing, archive/figure hashes and diff whitespace pass.
+GPU readiness and semantic K5 remain unverified; next safe action on a prepared
+Linux/NVIDIA host: train_selex.sh check with generated full_seed2 config. G1,
+seed execution, final aggregation≥3 seeds and G2 cross-check remain human/GPU work.

@@ -435,3 +435,27 @@ Các báo cáo dưới đây chỉ để tra cứu thêm, **không cần đọc 
 Nhánh Hyp-SelEx cũ được lưu trong lịch sử Git và các báo cáo baseline lịch sử;
 `scripts/train_crish.sh` không dùng cho cặp SelEx/local trong README này.
 Giấy phép và nguồn gốc: [NOTICE](NOTICE), [HypCD MIT license](LICENSES/HypCD-MIT.txt).
+## Bàn giao kế hoạch paper ngày 18/11/2026
+
+Cấu hình adaptive, đủ 5 ablation và lệnh chạy:
+[reports/23_adaptive_configuration.md](reports/23_adaptive_configuration.md).
+Checklist K1–K6/A1–A6, registry final, action/timing, hậu kiểm offline và curves:
+[reports/24_paper_plan_implementation.md](reports/24_paper_plan_implementation.md).
+Các config mới chưa chạy GPU; kết quả hiện có chỉ một seed/dataset. Không dùng
+best-All chọn bằng nhãn unlabeled làm số chính.
+
+Chuẩn bị full +5 ablation (chỉ tạo config và lệnh, không train):
+
+```bash
+.venv/bin/python scripts/prepare_paper_plan.py \
+  --base configs/selex_scars_local_adaptive_200.json \
+  --seeds 1 2 3 --output runs/plans/paper-cars-NEW
+bash scripts/train_selex.sh --config runs/plans/paper-cars-NEW/full_seed1.json --variant local --dry-run
+```
+
+Để tiếp nối seed từ run cũ, dùng config/archive thực làm `--base` và giữ lịch
+đánh giá; xem báo cáo23. Archive/log gốc và plans trong `runs/` không đưa lên Git.
+[Kết quả phân tích đã xuất](results/paper-plan-verified-20261118/README.md)
+có final metrics, action counts, timing và curves; không thay thế model checkpoint.
+Nếu cần vẽ lại, cài dependency phân tích riêng bằng
+`.venv/bin/python -m pip install -r environments/requirements-figures.txt`.

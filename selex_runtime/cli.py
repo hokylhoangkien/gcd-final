@@ -102,7 +102,7 @@ def main():
     elif args.mode == 'evaluate':
         stages.append(('evaluate', full, args.checkpoint))
     print(json.dumps(dict(baseline_family='selex', method=name, primary='fixed-final SS-v2',
-        dataset_name=cfg['dataset_name'], dino=cfg['dino'],
+        dataset_name=cfg['dataset_name'], dino=cfg['dino'], crish_ablation=cfg.get('crish_ablation', 'full'),
         epochs=cfg['epochs'], seed=cfg['seed'], head_dimension=cfg['mlp_out_dim'],
         unbalanced=cfg.get('unbalanced', False),
         pair_reliability=cfg.get('pair_reliability', dict(enabled=False)),

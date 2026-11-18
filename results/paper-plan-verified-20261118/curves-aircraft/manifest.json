@@ -1,0 +1,12 @@
+{
+  "source": "runs/downloads/aircraft-results-20261116T002008Z-ce74b2d9.zip",
+  "config_sha256": "008870ff518a7392b09f9e8ed211495549e5a07b3c7926e4991f6a15c03a2160",
+  "checkpoint_sha256": "2256e821ac391ecbfba527cda9273a828b7fbba5eb1bacf56b2c4289e78bcca8",
+  "outputs": {
+    "learning_curves.pdf": "2f955a5c478d50809cc2828d909b637ca3d8e4381d72f857c0ef68eb38650d33",
+    "learning_curves.png": "584615335c2892efe5424b9f10a83af857bea1984a8c04dae1cf1f56b6a6b59a",
+    "learning_curves.svg": "3390f1d6cface7f6e58caf91ad9824884166f692d4012f0c07760c4a86c3cc48",
+    "data.json": "f3c3d17ce32ad6dad509c1ca333d3f2bcb39346ac255fa035da99661e8eacb2a",
+    "caption.txt": "b62dfd310f5ac46fc526f766157d90e65cb38b06a83f19ff52a0a01bdeb77f27"
+  }
+}

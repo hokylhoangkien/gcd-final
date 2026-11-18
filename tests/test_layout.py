@@ -15,7 +15,9 @@ class LayoutTests(unittest.TestCase):
                      'scripts/train_proposed_linux.sh', 'scripts/start_dinov2_linux.sh',
                      'configs/revision2', 'configs/final_only', 'configs/train'):
             self.assertFalse((ROOT/path).exists(), path)
-        self.assertEqual({p.name for p in ROOT.glob('*.md')}, {'README.md', 'AGENTS.md'})
+        root_documents = {p.name for p in ROOT.glob('*.md')}
+        self.assertTrue({'README.md', 'AGENTS.md'} <= root_documents)
+        self.assertTrue(root_documents <= {'README.md', 'AGENTS.md', 'CRiSH-GCD_Ke_hoach_Codex.md'})
         self.assertFalse((ROOT/'presentation').exists())
         self.assertTrue((ROOT/'reports/04_method_and_research_plan.md').is_file())
         self.assertTrue((ROOT/'paper/manuscript.tex').is_file())

@@ -1,0 +1,197 @@
+{
+  "run_id": "paper-plan-20261118",
+  "status": "cpu_checks_passed_gpu_not_run",
+  "timestamp_utc": "2026-11-18T16:09:36.720055+00:00",
+  "git_sha": "c12dc96754b63dc80fc3e8ab201c3645c33f45c8",
+  "working_tree_modified": true,
+  "python": "3.9.6 (default, May 22 2026, 11:13:45) \n[Clang 21.0.0 (clang-2100.1.1.101)]",
+  "platform": "macOS-26.6-arm64-arm-64bit",
+  "device": "cpu",
+  "cuda_verified": false,
+  "code_fingerprint": {
+    "gcd_runtime/__init__.py": "403cb0751e0f994e30e3af86c04d5c1fa9bc87aeed94b13163e9fb6df1864337",
+    "gcd_runtime/checkpoint.py": "8e98c1583e164c3e722bad47f6e80dcb74aabd8c92865796ca24f8388d7afe42",
+    "gcd_runtime/cluster_alignment.py": "ba3f022887e59a25892a6803ce487971e9573d716cf44c0d93c21915b8ce1847",
+    "gcd_runtime/config.py": "039341e15bb3a9f5baa774e3a7d4ba18086a81fd752e864f558a20ce405f6eed",
+    "gcd_runtime/datasets.py": "00bce76d5bbc758f3f86cccea714e0d46200cfc6001a16be1d8583d41ba0288c",
+    "gcd_runtime/disjoint_evaluation.py": "5fef28a84c1db98365d1b99014871a487e8f9eef4859bb87d45391c728e15980",
+    "gcd_runtime/evaluation_policy.py": "ac79fc8545a181a0d2bfc518959762be8e792e1f2b8efdfc01237bcf937fffd7",
+    "gcd_runtime/kmeans.py": "e82f00de6521a11a2e9911c466719e83f536e674c1ad908575bc8628d4d34c08",
+    "gcd_runtime/launch.py": "78ee04e9fa1eee800cd60247742d0f60111c7309109562429d4d33616d9fd994",
+    "gcd_runtime/metrics.py": "c2ca25cf7c3715d6c61b9622954825ffea3bbd0e16cab36bc941bae2f3155e19",
+    "gcd_runtime/monitoring.py": "425156370f6386680deb58cccbbb9fd1d41e2786105fa03669fbce89f9b64996",
+    "gcd_runtime/probe.py": "49eed1eb4c3ba27398999df4a3b1da79c044617907e1381c921eb0daab60ea33",
+    "gcd_runtime/readiness.py": "39f195d0b7bdab784a66b474f294398c4035d83bf78c9753739340fa9d50fc9d",
+    "gcd_runtime/remote_gate.py": "3d37f7b7af06cb3f656c0e2c7d9342c07d8719b3913b2da6412700cf00f4813e",
+    "gcd_runtime/selection.py": "5064ecd91a5690df37b68d73cd1ff9f50a9682bb0c61b39ebbe59b89e0509621",
+    "gcd_runtime/ss_best.py": "6efc2fd41df63ee83b5f5869e807dc238d92cef8c787de7440d4dde8ae6a4f3d",
+    "gcd_runtime/train_cli.py": "65302f65352a863350e201a84baa979e4b03fe836b1b0050224c4d28b50f43f5",
+    "gcd_runtime/trainer.py": "98f1d560d8698ef74efbb975cbcf4e61c997759895d5d9d4a6d223f9976b610e",
+    "gcd_runtime/training_data.py": "9e746c808429b88de235b54da9ce7c6818d03714f50ad92a389cbbda254adb6f",
+    "gcd_runtime/training_diagnostics.py": "fcf49e5c4628c159f9f239f88de4f89ab1d55b23ab019986dc5ade0bf24afe83",
+    "gcd_runtime/worker.py": "cc27e9e1cb2860aebbd913d74bd9a4676a85ce0b2a0b190d8fe264b718877e53",
+    "crish/__init__.py": "2bd09accc54a18553868c67dc852e54cce0165467de861b15757d7a64572d31f",
+    "crish/ablation.py": "03de59a35291fc60477d9e1391c08c9aa77033e8cda28b5cca29d1b9721ca1cf",
+    "crish/candidates.py": "fa1d8870e58f735bd4f9439bfc54c62e329247982adf389d52afa6e39b910453",
+    "crish/config.py": "5ad0ee3228de968242e573f8bd82b593ca7d6a57f7e8fd35dee74d2b2677d4a2",
+    "crish/diagnostics.py": "a2ee9ec76ffb914495f0257db1ade464dd43bbbcc453b00bfcadc4524a3d2051",
+    "crish/engine.py": "97350d44ebfee8304dbbdacfc0f7f54c5cbedb3ab0b9b0b33c220ff327d2d739",
+    "crish/ids.py": "cdb5f49214b48b007a5df0c6ed8590d5a5baca37364efbc22e16987c281f9e0a",
+    "crish/logging.py": "34acb0c4111c152b80fb0ebef3d48692a91ed2b3a9c436d695d2e585c394e640",
+    "crish/lookahead.py": "f59994a818a036be195c66182e2cb8e83282373884a4994048e920f5a144a800",
+    "crish/loss.py": "6484ae713c1be115c49a2aa57867733044e21332422909e31915d60499275af2",
+    "crish/online_pairs.py": "0f79d0588fa867f8bb5530b87ca9a1e26db611cf8eeae6ebc1f3416476febb06",
+    "crish/partition_audit.py": "d67e4dc9f25c2d949698a5e4c36ae57767e4730efb9959e87c297fb6c4b05122",
+    "crish/policy.py": "538f4bb6e0462a7418cf5e42907e30db576fd136ec1fd4d4040e882a0c934ea5",
+    "crish/population.py": "4854e7b6f55fe34a3e2cd252a6c14f83c4b83bf1989cdead74343e225f4aae81",
+    "crish/population_settings.py": "a607ef441e55b76d5561985b11012db77e4361ab757e7b452f6dbeff91a5daec",
+    "crish/probe.py": "e681e31868f365863e255c8acbc1c01400778240f852bfbba287c67d31036da2",
+    "crish/rebuild.py": "8c9f115d5bd7af3119308bb0e5a91329c53517c402acb88348547a7143d7e6e2",
+    "crish/reliability.py": "249ef88258c1ebbb04239460180ee1a4b5188f0c9f2aa63e7588ee3da1f5abd2",
+    "crish/sampling.py": "a36a3868c99b394a0131a5db77ffc92e91c6625884e837449003841810be93b7",
+    "crish/scoring_batch.py": "7a46e2d2ebccf858d04979153ee6c74412109f95cf23d9a7266ff641783f9e6b",
+    "crish/smoke.py": "aebf901ff7e044046524b4b7c8965754bea93bf7f90a75d57c4404dce40ea753",
+    "crish/stability.py": "0e8c9768d5dea874798f26075edf05b70b577b77038d52be647f73eed60bf45d",
+    "crish/state.py": "74f8ea27f3030a1c7245507f89b34e463d4c964bd10d3a1f2595cbbbe2cd37f2",
+    "crish/training.py": "b1f33307b6f9fd9b225a07415617bd8b825d04292f8aff586fbce065b41c725d",
+    "selex_runtime/__init__.py": "80c4e028d55d9ba29905ce4a1841ccb4824fb3c57046b24ebbba10ddbeb09d89",
+    "selex_runtime/cli.py": "24ec5546a127f0f1a2d419d1ae5ae53e10da231e134498563d9f0b41224a729d",
+    "selex_runtime/config.py": "42bb04cd2182a24f7947495537e11fb11495eb61bd89dfbfae6f638c1b07558a",
+    "selex_runtime/hierarchy.py": "78223a7ee2daa9ce1e005e992266e91a36769330b701941f9c610244d0f45970",
+    "selex_runtime/monitoring.py": "99bd86782de4b6a475e342421b63ffe6c0eb7bbd6222203c8fdbe4bf862cc7b0",
+    "selex_runtime/objective.py": "f971dc3be1dc923fa1d28610822c4275c4060f9ddc227552bc9ab54a1c502422",
+    "selex_runtime/preflight.py": "94d74b2ed815b62f35c6902950dd0d7c65ae637c6763b75a24588acddff0547c",
+    "selex_runtime/reference.py": "f2ba230afb1080ccb34ef12ba8d9c33cad26e5df58807ca9c9c6ff76feb5d169",
+    "selex_runtime/rng.py": "a4119ecc5ffb013dacf1f34018a8545c561dcfc8332326b6320bad993518b530",
+    "selex_runtime/selection.py": "cb1b36f3e9eb4db185216fb8f03fafa1b255347b4a40410e0419b687af9657c2",
+    "selex_runtime/trainer.py": "c41f282e1aaa65b47dfcaf7aaa2882fa37da8b3e99059abf27f46c1dd63d6779"
+  },
+  "files_sha256": {
+    "crish/ablation.py": "03de59a35291fc60477d9e1391c08c9aa77033e8cda28b5cca29d1b9721ca1cf",
+    "crish/engine.py": "97350d44ebfee8304dbbdacfc0f7f54c5cbedb3ab0b9b0b33c220ff327d2d739",
+    "crish/policy.py": "538f4bb6e0462a7418cf5e42907e30db576fd136ec1fd4d4040e882a0c934ea5",
+    "crish/training.py": "b1f33307b6f9fd9b225a07415617bd8b825d04292f8aff586fbce065b41c725d",
+    "selex_runtime/config.py": "42bb04cd2182a24f7947495537e11fb11495eb61bd89dfbfae6f638c1b07558a",
+    "selex_runtime/cli.py": "24ec5546a127f0f1a2d419d1ae5ae53e10da231e134498563d9f0b41224a729d",
+    "scripts/prepare_paper_plan.py": "a622d45b9df6af1f809091180ceae0a60b3f57dddaa4abc47b3df069a2b99338",
+    "scripts/paper_registry.py": "553ff57da4ac37c9d3a88f512bfc8700641cd42b0a78e813b726f02f8ec45864",
+    "scripts/paper_posthoc.py": "31333aa5ddfe8635bcd1d4dab677d4c55c7b377c1986d8501d3a6ced14755aef",
+    "scripts/prepare_posthoc_snapshots.py": "6a02b4c80413d8329c8d68566b289599b5f3dfb2754b53dd9ad843acb054bdca",
+    "scripts/plot_paper_curves.py": "2ede7756bcf70a4a9ca124b4d8c84b524dabbd52ed69365706348c8e7f3a462f",
+    "tests/test_paper_ablation.py": "deda054f0da27b5f660eb2ad29ba9e6d3682f46300813be22a2dce5321e1c14c",
+    "tests/test_paper_registry.py": "76901e03c788ef18c032ef74648927a3e381fb36afede4b73676be0deb2cd997",
+    "tests/test_layout.py": "fabeaab1525071916a6ae228e8010806c60a4ccd612219a1087da8297b466861",
+    "tests/test_release.py": "566adcbe00b5bb137b5d6af7cb576ddff022d90b80580894dec3e002d66c83ff"
+  },
+  "verification": [
+    {
+      "junit": "logs/paper-plan-batch1-20261118.xml",
+      "tests": 180,
+      "sha256": "e79aa1ff8510144fae79675f7ddf51992be15226dbb0be0ddd7e3e6cfbefad12"
+    },
+    {
+      "junit": "logs/paper-plan-batch2-20261118.xml",
+      "tests": 154,
+      "sha256": "d03b0b13afdbf24bd6e0d717be2986f97fc60841ff1be557aa8e337a7c3a2a34"
+    },
+    {
+      "junit": "logs/paper-plan-final-20261118.xml",
+      "tests": 55,
+      "sha256": "4483b6d1bebd480f5b859b8ce7007c2b7e83622562a39c35f6443a63760b7f2d"
+    },
+    {
+      "junit": "logs/paper-plan-release-20261118.xml",
+      "tests": 1,
+      "sha256": "6ac5bcd63ae70528823660bd355fba7fe9b8f667604349bbc1ba1877063dc917"
+    }
+  ],
+  "unique_test_cases_covered": 337,
+  "timeout_seconds_per_batch": 60,
+  "benchmark_metrics": null,
+  "limitations": [
+    "Split regression batches plus final focused rerun; counts overlap.",
+    "No NVIDIA verification, model training or new benchmark run.",
+    "K5 semantic metrics blocked by missing offline labels/partition tensors.",
+    "CUB/Aircraft early refresh history incomplete; recorded edits are partial."
+  ],
+  "launcher_dry_runs": [
+    {
+      "variant": "full",
+      "command": [
+        "bash",
+        "scripts/train_selex.sh",
+        "--config",
+        "runs/plans/paper-cars-observed-20261118/full_seed1.json",
+        "--variant",
+        "local",
+        "--dry-run"
+      ],
+      "status": "dry_run_passed_no_training"
+    },
+    {
+      "variant": "evidence_only",
+      "command": [
+        "bash",
+        "scripts/train_selex.sh",
+        "--config",
+        "runs/plans/paper-cars-observed-20261118/evidence_only_seed1.json",
+        "--variant",
+        "local",
+        "--dry-run"
+      ],
+      "status": "dry_run_passed_no_training"
+    },
+    {
+      "variant": "no_confirmation",
+      "command": [
+        "bash",
+        "scripts/train_selex.sh",
+        "--config",
+        "runs/plans/paper-cars-observed-20261118/no_confirmation_seed1.json",
+        "--variant",
+        "local",
+        "--dry-run"
+      ],
+      "status": "dry_run_passed_no_training"
+    },
+    {
+      "variant": "no_abstain",
+      "command": [
+        "bash",
+        "scripts/train_selex.sh",
+        "--config",
+        "runs/plans/paper-cars-observed-20261118/no_abstain_seed1.json",
+        "--variant",
+        "local",
+        "--dry-run"
+      ],
+      "status": "dry_run_passed_no_training"
+    },
+    {
+      "variant": "no_move",
+      "command": [
+        "bash",
+        "scripts/train_selex.sh",
+        "--config",
+        "runs/plans/paper-cars-observed-20261118/no_move_seed1.json",
+        "--variant",
+        "local",
+        "--dry-run"
+      ],
+      "status": "dry_run_passed_no_training"
+    },
+    {
+      "variant": "random_proposal",
+      "command": [
+        "bash",
+        "scripts/train_selex.sh",
+        "--config",
+        "runs/plans/paper-cars-observed-20261118/random_proposal_seed1.json",
+        "--variant",
+        "local",
+        "--dry-run"
+      ],
+      "status": "dry_run_passed_no_training"
+    }
+  ]
+}

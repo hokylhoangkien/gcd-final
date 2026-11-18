@@ -29,7 +29,9 @@ class ReleaseTests(unittest.TestCase):
                          'legacy', 'docs', 'presentation', '__pycache__')))
                     self.assertNotIn(target.suffix, ('.pt', '.pth', '.ckpt'))
                     if target.suffix == '.pdf':
-                        self.assertEqual(Path(member.name).parts[-2:], ('paper', 'manuscript.pdf'))
+                        relative = Path(*Path(member.name).parts[1:])
+                        self.assertTrue(relative == Path('paper/manuscript.pdf') or
+                                        relative.parts[:2] == ('paper', 'figures'), relative)
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(archive.extractfile(member).read())
             root = Path(tmp)/names[0].split('/')[0]

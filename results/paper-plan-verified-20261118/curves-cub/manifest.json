@@ -1,0 +1,12 @@
+{
+  "source": "runs/downloads/cub-results-20261116T002137Z-056eafad.zip",
+  "config_sha256": "606822b7cde0d10c7773658eaa0c036e1a759326ab086802a334cc342b9238f6",
+  "checkpoint_sha256": "35f45d48efc00e2328472a86273473448cca2d20647999333f003cb03c877939",
+  "outputs": {
+    "learning_curves.pdf": "d95a4f504b0f01ef9955bc8360b2922d7c1750b86515f1afa4004a5f4a6dcc77",
+    "learning_curves.png": "a56f966f83e38c3a4bb0d50b3f137a618a1d646184361efeb03f080374b4745c",
+    "learning_curves.svg": "88720828009c7df659ee1c539b801636f185c662f3177553462a789e3eb6e169",
+    "data.json": "d0a37d923a67f79ef49adfc7c06d3a588d3231e597ffbbf56a75816801b64fb5",
+    "caption.txt": "b62dfd310f5ac46fc526f766157d90e65cb38b06a83f19ff52a0a01bdeb77f27"
+  }
+}

@@ -71,11 +71,12 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
                 exercised = any('discovery' in c for c in record.get('candidates', []))
             elif settings.due(epoch):
                 record = getattr(runtime, 'last_local_record', {})
-                exercised = bool(record.get('gains'))
+                exercised = bool(record.get('decisions') if runtime.config.get('crish_ablation') == 'evidence_only'
+                                 else record.get('gains'))
             else:
                 record, exercised = {}, True
             if record.get('status') == 'fallback_keep' or not exercised:
-                raise RuntimeError('Bounded intervention smoke did not execute a counterfactual: '+
+                raise RuntimeError('Bounded intervention smoke did not exercise the selected repair policy: '+
                                    record.get('reason', 'no scored candidate; inspect support/cache/budget'))
         dose = supervision_dose(before_intervention, state)
         with (runtime.run_dir/'intervention_diagnostics.jsonl').open('a') as handle:

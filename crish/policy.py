@@ -42,7 +42,7 @@ def sequential_repair(initial: SupervisionState, actions: Sequence[Action],
                       scorer: Callable[[SupervisionState, SupervisionState, Action], DecisionEvidence], *,
                       max_accepted: int, threshold: float, agreement: float,
                       known_tolerance: float, min_support: int = 1, enabled: bool = True,
-                      confirmer=None, budget_check=None, diagnostics=None):
+                      confirmer=None, budget_check=None, diagnostics=None, require_confirmation=True):
     if type(max_accepted) is not int or max_accepted < 0 or not all(math.isfinite(x) for x in (threshold, agreement, known_tolerance)) or not 0 <= agreement <= 1 or known_tolerance < 0:
         raise ValueError('Invalid predeclared acceptance/budget settings')
     current, pending, trace = initial, list(actions), []
@@ -131,9 +131,11 @@ def sequential_repair(initial: SupervisionState, actions: Sequence[Action],
                 return finish('confirmation_error', exc)
         # Inspect the independent confirmation value only for the top discovery
         # candidate. If it fails, stop; never search runners-up on that fold.
-        if record['confirmation_gain'] is None or record['confirmation_gain'] <= threshold:
+        if require_confirmation and (record['confirmation_gain'] is None or record['confirmation_gain'] <= threshold):
             record.update(status='rejected', reason='Independent confirmation failed; refresh stopped')
             return finish('confirmation_failed')
+        if not require_confirmation:
+            record['confirmation_gain'] = None
         try:
             trial.validate()
         except (ValueError, RuntimeError) as exc:

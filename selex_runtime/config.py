@@ -9,6 +9,14 @@ from crish.population_settings import PopulationSettings
 
 def validate_config(cfg, *, eval_every_epochs=None):
     cfg = dict(cfg)
+    from crish.ablation import VARIANTS
+    if cfg.get('crish_ablation', 'full') not in VARIANTS:
+        raise ValueError('Invalid crish_ablation')
+    if cfg.get('crish_ablation', 'full') != 'full' and (cfg.get('method') != 'crish'
+            or not cfg.get('crish', {}).get('enabled')
+            or cfg.get('population_policy', {}).get('enabled')
+            or cfg.get('pair_reliability', {}).get('enabled')):
+        raise ValueError('Ablations require local CRiSH only')
     if (cfg.get('baseline_family') != 'selex' or cfg.get('upstream_sha') != COMMIT
             or cfg.get('training_protocol') != 'selex_updated_crish_v1'):
         raise ValueError('Expected pinned updated SelEx protocol')

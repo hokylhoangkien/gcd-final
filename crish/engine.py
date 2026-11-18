@@ -26,6 +26,7 @@ from crish.scoring_batch import scoring_ids
 from crish.stability import partition_stability
 from .config import CrishSettings
 from .loss import hypselex_loss
+from .ablation import order_boundaries, filter_actions, evidence_repair
 
 
 @contextmanager
@@ -145,7 +146,7 @@ def _optional_stability(state, pool, settings, seed):
     return result
 
 
-def _shortlist(state, pool, evidence, settings, stability):
+def _shortlist(state, pool, evidence, settings, stability, *, variant='full', proposal_seed=0):
     boundaries = []
     pool_ids = set(state.ids[pool].tolist())
     adjacency = {sample: [] for sample in pool_ids}
@@ -174,7 +175,7 @@ def _shortlist(state, pool, evidence, settings, stability):
             if level in stability:
                 score += 1-stability[level]['stability'].get(source, 1.)
             boundaries.append((score, sample, level, candidates))
-    boundaries.sort(key=lambda item: (-item[0], item[1], item[2]))
+    boundaries = order_boundaries(boundaries, variant, proposal_seed)
     chosen, used_samples = [], set()
     for _, sample, level, candidates in boundaries:
         if sample in used_samples:
@@ -198,13 +199,14 @@ class CrishEngine:
 
     def prepare(self, state, model, head, optimizer, dataset, args, epoch):
         settings = self.settings
+        variant = self.runtime.config.get('crish_ablation', 'full')
         if self.runtime.config['method'] != 'crish' or not settings.due(epoch):
             return state
         start = time.monotonic()
         deadline = start+settings.max_refresh_seconds
         seed = (self.runtime.config['seed']*1000003+epoch*103+7) % (2**32)
         record = dict(epoch=epoch, lookahead_scope='projector', evidence_space='normalized_backbone_euclidean',
-                      seed=seed, accepted=0, decisions=[], gains=[], status='keep',
+                      seed=seed, ablation=variant, accepted=0, decisions=[], gains=[], status='keep',
                       run_id=self.runtime.run_dir.name, acceptance_cap=settings.max_accepted,
                       stop_reason=None, cap_reached=False, budget_exhausted=False,
                       accepted_proposals=0, applied_actions=0, rolled_back=False,
@@ -239,7 +241,12 @@ class CrishEngine:
                 _check_deadline(deadline)
                 stability = _optional_stability(state, pool, settings, seed)
                 record['stability'] = stability
-                actions, adjacency = _shortlist(state, pool, evidence, settings, stability)
+                options = dict(variant=variant, proposal_seed=seed+7919) if variant == 'random_proposal' else {}
+                actions, adjacency = _shortlist(state, pool, evidence, settings, stability, **options)
+                record['candidate_count_before_action_filter'] = len(actions)
+                actions = filter_actions(actions, variant)
+                record['proposals'] = [dict(kind=a.kind, sample_id=a.sample_id, level=a.level,
+                    source=a.source, target=a.target, version=a.version) for a in actions]
                 record['candidate_count'] = len(actions)
                 record['candidate_samples'] = len({a.sample_id for a in actions})
                 if not actions:
@@ -259,6 +266,25 @@ class CrishEngine:
                 metadata_rows = rows_for_ids(state.ids, batch_ids)
                 membership = state.labeled[metadata_rows]
                 targets = state.labels[0][metadata_rows][membership]
+                if variant == 'evidence_only':
+                    def structural_guard(current, trial, action):
+                        drift = target_drift(current, trial, batch_ids, flat,
+                            smoothing=args.unsupervised_smoothing, strategy=args.strategy,
+                            normalization=getattr(args, 'use_target_normalization', 'legacy'))
+                        if max(x['protected_coefficient_shift_max'] for x in drift['sse_levels']) > settings.max_protected_shift:
+                            raise ValueError('Protected-coefficient shift cap')
+                        if sum(x['coefficient_half_l1_mean'] for x in drift['sse_levels']) <= 0:
+                            raise ValueError('No pseudo-SSE change in scoring batch')
+                    repaired, trace, selection = evidence_repair(state, actions, evidence, settings,
+                        lambda: _check_deadline(deadline), structural_guard)
+                    count = repaired.version-state.version
+                    record.update(decisions=trace, accepted=count, accepted_proposals=count,
+                        applied_actions=count, status='completed', selection=selection,
+                        stop_reason=selection['stop_reason'], cap_reached=selection['cap_reached'],
+                        budget_exhausted=selection['budget_exhausted'])
+                    from crish.diagnostics import supervision_dose
+                    record['dose'] = supervision_dose(state, repaired)
+                    return repaired
                 # Clone once for the frozen refresh snapshot; all scoring stays
                 # off the live head/model, with the actual current SGD state.
                 frozen, virtual_optimizer = clone_snapshot(head, projector_optimizer(head, optimizer))
@@ -347,7 +373,8 @@ class CrishEngine:
                 repaired, trace = sequential_repair(state, actions, scorer, max_accepted=settings.max_accepted,
                                                     threshold=settings.acceptance_gain, agreement=1.,
                                                     known_tolerance=settings.known_tolerance, min_support=settings.min_support,
-                                                    confirmer=confirm,
+                                                    confirmer=None if variant == 'no_confirmation' else confirm,
+                                                    require_confirmation=variant != 'no_confirmation',
                                                     budget_check=lambda: _check_deadline(deadline),
                                                     diagnostics=selection)
                 count = sum(x['status'] == 'accepted' for x in trace)
@@ -374,6 +401,21 @@ class CrishEngine:
                     decision.update(status='rolled_back', applied=False)
             return state
         finally:
+            applied = [d for d in record['decisions'] if d['status'] == 'accepted']
+            touched = {d['sample_id'] for d in applied}
+            record['action_counts'] = dict(move=sum(d['kind'] == 'move' for d in applied),
+                abstain=sum(d['kind'] == 'abstain' for d in applied),
+                keep=record.get('candidate_samples', 0)-len(touched))
+            record['keep_denominator'] = 'unique shortlisted unlabeled sample IDs'
+            record['touched_unlabeled_fraction'] = len(touched)/max(1, int((~state.labeled).sum()))
+            accepted_keys = {(d['sample_id'], d['level'], d['kind'], d.get('target')) for d in applied}
+            record['proposal_outcomes'] = [dict(p, outcome='accepted' if
+                (p['sample_id'], p['level'], p['kind'], p.get('target')) in accepted_keys else 'not_applied',
+                reason=None if (p['sample_id'], p['level'], p['kind'], p.get('target')) in accepted_keys else
+                next((d.get('reason', d['status']) for d in reversed(record['decisions']) if
+                      all(d.get(k) == p.get(k) for k in ('sample_id', 'level', 'kind', 'target'))),
+                     record.get('stop_reason') or record.get('reason') or 'alternative_not_selected'))
+                for p in record.get('proposals', [])]
             record['scored_actions'] = len(record['gains'])
             record['pre_scoring_rejections'] = len(record.get('scoring_rejections', []))
             record['seconds'] = time.monotonic()-start

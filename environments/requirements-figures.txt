@@ -1,0 +1,2 @@
+# Optional offline analysis only; keep the CUDA training environment unchanged.
+matplotlib==3.7.5

@@ -1,0 +1,12 @@
+{
+  "source": "btl-dl/cars-paper-light-20261115T112441Z-0ec6f014.tar.gz",
+  "config_sha256": "6aca45260eaab82b512ca9b8aae334f3f969793a713a4791384ff78d04538021",
+  "checkpoint_sha256": "0337d9929596819a2d5976a3a44d631ad07fa7bce3898c064d0d359ec03256e9",
+  "outputs": {
+    "learning_curves.pdf": "e5faac35bbabf443488859bfed64fe25fd361f4195409f28cfd4529e7d67cc3f",
+    "learning_curves.png": "461035d434edcfa223986fe749571cc69cfa4ceee2cddde3f96fdab1b20c909d",
+    "learning_curves.svg": "8e49ba3a649962782281270921e1bc00392cef21ce6121efab9410d60f3c6d24",
+    "data.json": "7c377c9524c7e13d592849707b20f586787512a527d8dfa9370b9093714a81ff",
+    "caption.txt": "b62dfd310f5ac46fc526f766157d90e65cb38b06a83f19ff52a0a01bdeb77f27"
+  }
+}
