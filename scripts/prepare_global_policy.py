@@ -18,7 +18,7 @@ PROFILES = ('g_fixed', 'g_cf', 'g_cf_move', 'g_random', 'g_cf_nopersist')
 OPTIONAL = ('g_cf_local',)
 
 
-def common(template):
+def common(template, known_guard=True):
     if template.get('baseline_family') != 'selex':
         raise ValueError('CRiSH-G profiles require the pinned SelEx path')
     cfg = copy.deepcopy(template)
@@ -32,13 +32,14 @@ def common(template):
                   persist=True, warmup_epochs=10, refresh_every=5, scoring_batches=4,
                   scoring_sampling='train_sampler', probe_float64=True, save_arrays=True,
                   thresholds=[0., .3, .5, .7], fixed_threshold=.5, sample_choice='evidence',
-                  actions='abstain', gate='counterfactual', mode='counterfactual', compose_local=False)
+                  actions='abstain', gate='counterfactual', mode='counterfactual', compose_local=False,
+                  known_guard=known_guard)
     cfg['population_policy'] = policy
     return cfg
 
 
-def global_variants(template, profiles=PROFILES):
-    base = common(template)
+def global_variants(template, profiles=PROFILES, known_guard=True):
+    base = common(template, known_guard)
     out = {}
     def make(**changes):
         cfg = copy.deepcopy(base)
@@ -67,7 +68,7 @@ def local(cfg):
     return cfg
 
 
-def prepare(base, output, seeds=None, profiles=PROFILES):
+def prepare(base, output, seeds=None, profiles=PROFILES, known_guard=True):
     template = load_config(base)
     seeds = [template['seed']] if not seeds else list(seeds)
     if len(set(seeds)) != len(seeds) or any(type(s) is not int or s < 0 for s in seeds):
@@ -76,7 +77,7 @@ def prepare(base, output, seeds=None, profiles=PROFILES):
     output.mkdir(parents=True, exist_ok=False)
     entries = []
     for seed in seeds:
-        for name, cfg in global_variants(dict(template, seed=seed), profiles).items():
+        for name, cfg in global_variants(dict(template, seed=seed), profiles, known_guard).items():
             path = output/f'{name}_seed{seed}.json'
             payload = json.dumps(cfg, indent=2)+'\n'
             path.write_text(payload)
@@ -89,7 +90,7 @@ def prepare(base, output, seeds=None, profiles=PROFILES):
         text=True, timeout=10).stdout.strip() or 'source_archive'
     manifest = dict(status='prepared_not_executed', timestamp_utc=datetime.now(timezone.utc).isoformat(),
         git_sha=version, code_fingerprint=code_fingerprint(), base=str(base), seeds=seeds,
-        profiles=list(profiles), entries=entries, dataset=template['dataset_name'],
+        profiles=list(profiles), known_guard=known_guard, entries=entries, dataset=template['dataset_name'],
         epochs=template['epochs'], cuda_verified=False, benchmark_metrics=None)
     (output/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     (output/'commands.txt').write_text('\n\n'.join(
@@ -105,6 +106,8 @@ if __name__ == '__main__':
     parser.add_argument('--seeds', type=int, nargs='+')
     parser.add_argument('--profiles', nargs='+', choices=PROFILES+OPTIONAL, default=list(PROFILES))
     parser.add_argument('--with-local', action='store_true', help='Also write optional g_cf_local')
+    parser.add_argument('--known-guard', choices=['on', 'off'], default='on',
+                        help='off: counterfactual gates on total probe gain only (known_increase still logged)')
     args = parser.parse_args()
     profiles = tuple(args.profiles)+(OPTIONAL if args.with_local and 'g_cf_local' not in args.profiles else ())
-    print(json.dumps(prepare(args.base, args.output, args.seeds, profiles), indent=2))
+    print(json.dumps(prepare(args.base, args.output, args.seeds, profiles, args.known_guard == 'on'), indent=2))

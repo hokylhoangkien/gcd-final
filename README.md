@@ -593,7 +593,7 @@ hướng dẫn này. Giấy phép và nguồn gốc: [NOTICE](NOTICE),
 bash scripts/train_selex.sh --config runs/plans/cars-global-NEW/g_cf_seed1.json --variant global --dry-run
 ```
 
-Profile: `g_fixed` (τ=0,5, không probe), `g_cf` (counterfactual), `g_cf_move` (`g_cf` + Move), `g_random` (cùng liều, chọn ngẫu nhiên), `g_cf_nopersist` (chỉ áp ở epoch due); `--with-local` thêm `g_cf_local` (chạy bằng `--variant global_local`).
+Profile: `g_fixed` (τ=0,5, không probe), `g_cf` (counterfactual), `g_cf_move` (`g_cf` + Move), `g_random` (cùng liều, chọn ngẫu nhiên), `g_cf_nopersist` (chỉ áp ở epoch due); `--with-local` thêm `g_cf_local` (chạy bằng `--variant global_local`). `--known-guard off` (mặc định `on`) bỏ điều kiện known_increase ≤ known_tolerance ở cả discovery lẫn confirmation, chỉ xét gain tổng của probe; known_increase vẫn được log. Không tạo profile mới: dùng thư mục output riêng.
 Dry-run kỳ vọng: `discrete_repair=false` (trừ `g_cf_local`), `pair_reliability.enabled=false`, `population_policy` có `ranking=knn_agreement`, `selection=threshold`, `levels=active`, `persist=true` (trừ nopersist), `gate=counterfactual` (`g_cf*`) hoặc `none` (`g_fixed`, `g_random`), `scoring_batches=4`, `scoring_sampling=train_sampler`, `probe_float64=true`, `save_arrays=true`, epochs200; smoke có `warmup_epochs=0`.
 
 **Sàng lọc trên Cars seed 1.**

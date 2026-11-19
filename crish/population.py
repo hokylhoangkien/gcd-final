@@ -297,6 +297,17 @@ class PopulationEngine:
         private = torch.Generator().manual_seed((seed+2) % (2**32))
         return available[torch.multinomial(weights, count, replacement=False, generator=private)]
 
+    def _guard(self, gain, known):
+        """Reason the comparison fails, else None. known_increase is always logged;
+        with known_guard=false it no longer gates discovery or confirmation."""
+        if not math.isfinite(gain) or not math.isfinite(known):
+            return 'nonfinite gain/known'
+        if gain <= self.probe_settings.acceptance_gain:
+            return 'gain guard failed'
+        if self.settings.known_guard and known > self.probe_settings.known_tolerance:
+            return 'known guard failed'
+        return None
+
     def _select_threshold(self, state, model, head, optimizer, dataset, args, epoch):
         """Counterfactual dose choice over tau; Keep (tau=0) is always the reference."""
         cfg, settings = self.runtime.config, self.settings
@@ -306,6 +317,7 @@ class PopulationEngine:
                       chosen_threshold=0., chosen_fraction=0., candidates=[], ranking='global_knn_agreement',
                       levels_scope=settings.levels, actions=settings.actions, sample_choice=settings.sample_choice,
                       persist=settings.persist, lookahead_scope='projector', probe_float64=settings.probe_float64,
+                      known_guard=settings.known_guard,
                       scoring_sampling=('train_sampler_weights_without_replacement'
                                         if settings.scoring_sampling == 'train_sampler'
                                         else 'uniform_nonprobe_without_replacement'))
@@ -437,9 +449,9 @@ class PopulationEngine:
                     comparison = exact_sgd_comparison(frozen, virtual_optimizer, g0, ga, probes[0])
                     entry['discovery'] = comparison
                     gain, known = comparison['gain'], comparison['known_increase']
-                    if (not math.isfinite(gain) or not math.isfinite(known)
-                            or gain <= self.probe_settings.acceptance_gain or known > self.probe_settings.known_tolerance):
-                        entry['reason'] = 'Discovery gain/known guard failed'; continue
+                    failure = self._guard(gain, known)
+                    if failure:
+                        entry['reason'] = 'Discovery '+failure; continue
                     entry['status'] = 'eligible'
                     if best is None or gain > best[0]: best = (gain, threshold, proposed, coverage, ga, entry)
                 if best is None:
@@ -450,9 +462,9 @@ class PopulationEngine:
                 comparison = exact_sgd_comparison(frozen, virtual_optimizer, g0, ga, probes[1])
                 entry['confirmation'] = comparison
                 gain, known = comparison['gain'], comparison['known_increase']
-                if (not math.isfinite(gain) or not math.isfinite(known)
-                        or gain <= self.probe_settings.acceptance_gain or known > self.probe_settings.known_tolerance):
-                    entry.update(status='rejected', reason='Winner confirmation failed; no runner-up search')
+                failure = self._guard(gain, known)
+                if failure:
+                    entry.update(status='rejected', reason=f'Winner confirmation failed ({failure}); no runner-up search')
                     record['reason'] = entry['reason']
                     return 0., state, keep_coverage, evidence
                 _check_deadline(deadline)

@@ -302,13 +302,13 @@ def recording_apply(state, evidence, tau, *args, **kwargs):
     return apply_threshold(state, evidence, tau, *args, **kwargs)
 
 
-def scripted(gains, confirmation):
+def scripted(gains, confirmation, confirmation_known=0.):
     """Gains keyed by the threshold whose proposal is being compared."""
     calls = []
     def compare(model, opt, g0, ga, probe):
         calls.append(tuple(probe.known_ids.tolist()))
         if len(calls) > 1 and calls[-1] != calls[0]:
-            return dict(gain=confirmation, known_increase=0.)
+            return dict(gain=confirmation, known_increase=confirmation_known)
         gain, known = gains[LAST_TAU[-1]]
         return dict(gain=gain, known_increase=known)
     return compare, calls
@@ -325,6 +325,24 @@ def test_counterfactual_keeps_keep_reference_and_picks_largest_eligible_gain():
     assert record['chosen_threshold'] == .7 and engine.policy['tau'] == .7 and outcome is not state
     assert len(calls) == 4 and calls[-1] != calls[0]
     assert record['scoring_rows'] == 24 and record['scoring_chunks'] == 3
+
+
+@pytest.mark.parametrize('known_guard', [True, False])
+def test_known_guard_flag_gates_discovery_and_confirmation_but_always_logs(known_guard):
+    compare, calls = scripted({.3: (1., 0.), .5: (3., 1.), .7: (2., 0.)}, confirmation=.5,
+                              confirmation_known=2.)
+    with tempfile.TemporaryDirectory() as directory:
+        state, outcome, record, engine = run_select(directory, compare, known_guard=known_guard)
+    assert record['known_guard'] is known_guard
+    by_tau = {c['threshold']: c for c in record['candidates']}
+    assert by_tau[.5]['discovery']['known_increase'] == 1.
+    if known_guard:
+        # .5 fails discovery on known; winner .7 then fails confirmation on known.
+        assert by_tau[.5]['status'] == 'rejected' and 'known guard' in by_tau[.5]['reason']
+        assert record['chosen_threshold'] == 0. and outcome is state and 'known guard' in record['reason']
+    else:
+        assert record['chosen_threshold'] == .5 and by_tau[.5]['status'] == 'accepted' and outcome is not state
+        assert by_tau[.5]['confirmation']['known_increase'] == 2.
 
 
 def test_failed_confirmation_returns_keep_without_runner_up():
@@ -485,6 +503,7 @@ def test_selex_loss_changes_only_pairs_with_abstained_rows_per_level():
 # 10. Parity ----------------------------------------------------------------
 def test_historical_population_snapshots_keep_their_exact_keys():
     assert list(PopulationSettings().to_dict()) == HISTORICAL_KEYS
+    assert 'known_guard' in GLOBAL_FIELDS and global_policy().to_dict()['known_guard'] is True
     for path in sorted(ROOT.glob('configs/selex_*.json')):
         raw = json.loads(path.read_text())
         if 'population_policy' in raw:
@@ -545,7 +564,8 @@ def test_default_training_order_is_unchanged_and_compose_runs_global_first():
     dict(ranking='knn_agreement', selection='threshold', scoring_sampling='weighted'),
     dict(ranking='knn_agreement', selection='threshold', mode='fixed', gate='none', sample_choice='random',
          actions='abstain_move'),
-    dict(actions='abstain_move'),
+    dict(actions='abstain_move'), dict(known_guard=False),
+    dict(ranking='knn_agreement', selection='threshold', known_guard='off'),
     dict(persist=True), dict(levels='active'), dict(save_arrays=True), dict(compose_local=True)])
 def test_invalid_global_combinations_are_rejected_with_named_fields(change):
     with pytest.raises(ValueError, match='population_policy'):
@@ -605,6 +625,13 @@ def test_preparer_profiles_manifest_and_commands_without_launching(tmp_path):
     assert commands.count('--variant global --eval-every 1') == 2*len(PROFILES)
     assert json.loads((tmp_path/'plan/g_cf_seed2.json').read_text())['seed'] == 2
     assert not list(tmp_path.rglob('*.pt'))
+    assert all(json.loads((tmp_path/'plan'/e['config']).read_text())['population_policy']['known_guard'] is True
+               for e in manifest['entries']) and manifest['known_guard'] is True
+    off = prepare(ROOT/'configs/selex_scars_crish_200.json', tmp_path/'off', [1], known_guard=False)
+    assert off['jobs'] == len(PROFILES)
+    for entry in json.loads((tmp_path/'off/manifest.json').read_text())['entries']:
+        cfg = json.loads((tmp_path/'off'/entry['config']).read_text())
+        assert cfg['population_policy']['known_guard'] is False and load_config(tmp_path/'off'/entry['config'])
     hybrid = global_variants(template, ('g_cf_local',))['g_cf_local']
     assert hybrid['crish']['enabled'] and hybrid['population_policy']['compose_local']
     assert hybrid['crish']['max_accepted'] == 8 and hybrid['crish']['boundaries'] == 16

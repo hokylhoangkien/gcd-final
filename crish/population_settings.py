@@ -11,7 +11,7 @@ import math
 GLOBAL_FIELDS = ('ranking', 'selection', 'thresholds', 'fixed_threshold', 'gate', 'sample_choice',
                  'persist', 'levels', 'actions', 'knn_k', 'nonreciprocal_weight', 'move_min_share',
                  'move_target_cap', 'scoring_batches', 'scoring_sampling', 'probe_float64',
-                 'save_arrays', 'compose_local')
+                 'save_arrays', 'compose_local', 'known_guard')
 
 
 @dataclass(frozen=True)
@@ -48,6 +48,7 @@ class PopulationSettings:
     probe_float64: bool = False
     save_arrays: bool = False
     compose_local: bool = False
+    known_guard: bool = True
 
     def __post_init__(self):
         if type(self.enabled) is not bool or self.mode not in ('counterfactual', 'fixed', 'scheduled', 'random'):
@@ -77,7 +78,7 @@ class PopulationSettings:
         for name, allowed in choices.items():
             if getattr(self, name) not in allowed:
                 raise ValueError(f'population_policy.{name} must be one of {allowed}')
-        for name in ('persist', 'probe_float64', 'save_arrays', 'compose_local'):
+        for name in ('persist', 'probe_float64', 'save_arrays', 'compose_local', 'known_guard'):
             if type(getattr(self, name)) is not bool:
                 raise ValueError(f'population_policy.{name} must be bool')
         object.__setattr__(self, 'thresholds', tuple(self.thresholds))
@@ -108,7 +109,7 @@ class PopulationSettings:
                               actions=self.actions != 'abstain', compose_local=self.compose_local,
                               scoring_sampling=self.scoring_sampling != 'uniform',
                               scoring_batches=self.scoring_batches != 1, probe_float64=self.probe_float64,
-                              save_arrays=self.save_arrays)
+                              save_arrays=self.save_arrays, known_guard=not self.known_guard)
         if self.selection != 'threshold':
             used = [name for name, active in threshold_only.items() if active]
             if used:
