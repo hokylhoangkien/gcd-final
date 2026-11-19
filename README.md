@@ -620,6 +620,15 @@ bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant global --eval-every
 - `intervention_diagnostics.jsonl`: số ID/positive relations thực đổi mỗi epoch.
 - `crish_g_epoch_NNNN.npz` (`save_arrays`): ids, labeled, nhãn trước can thiệp, r^ℓ (float16), abstained sau can thiệp, moved, move_target; `partitions_epoch_NNNN.npz` ở epoch due.
 
+**Hậu kiểm (offline, dùng nhãn đánh giá; không import từ đường train).** Trên máy có data (CPU):
+
+```bash
+.venv/bin/python scripts/export_offline_labels.py --dataset scars --output /tmp/scars_labels.csv
+.venv/bin/python scripts/audit_global_policy.py "$RUN_DIR" --labels /tmp/scars_labels.csv   --output results/global-audit-RUN_ID.json --epochs 10 15 20
+```
+
+Output có `uses_evaluation_labels: true`; mỗi tỷ lệ kèm numerator/denominator: abstain theo level, tỷ lệ cặp positive sai bị gỡ so với được giữ, lỗi nhãn giả cơ sở (leave-one-out majority), AUROC của 1−r^0, error trong tập abstain, và Move đúng theo majority cụm đích so với cụm nguồn.
+
 **Luật G1.**
 
 **Mốc so sánh.** Run local adaptive Cars seed 1 hiện có, `20261115T112441Z-0ec6f014`, đánh số theo `epoch_number` (1-based). Tính lại từ `results/paper-plan-verified-20261118/curves-cars/data.json` để xác nhận.

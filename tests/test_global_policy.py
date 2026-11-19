@@ -8,6 +8,7 @@ import random
 import sys
 import tempfile
 import subprocess
+from collections import Counter
 from contextlib import nullcontext, redirect_stdout
 from unittest.mock import patch
 
@@ -789,3 +790,84 @@ def test_move_counterfactual_and_epoch_arrays_record_moves():
     assert np.array_equal(arrays['move_target'][arrays['moved']], outcome.labels[0][moved].numpy())
     assert (arrays['move_target'][~arrays['moved']] == -1).all()
     assert np.array_equal(arrays['label_0'], state.labels[0].numpy())
+
+
+# Phase 3: offline-only audit tools ----------------------------------------
+def test_offline_tools_are_not_reachable_from_training_code():
+    for package in ('crish', 'selex_runtime', 'gcd_runtime'):
+        for path in (ROOT/package).glob('*.py'):
+            text = path.read_text(encoding='utf8')
+            assert 'audit_global_policy' not in text and 'export_offline_labels' not in text, path
+    code = ('import sys; import crish.training, crish.population, selex_runtime.trainer, selex_runtime.cli, '
+            'gcd_runtime.launch, gcd_runtime.worker; '
+            'assert not any(m.endswith(("audit_global_policy", "export_offline_labels")) for m in sys.modules)')
+    result = subprocess.run([sys.executable, '-c', code], cwd=ROOT, capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr
+
+
+def test_offline_label_rows_apply_offset_and_transform_without_duplicates():
+    from types import SimpleNamespace
+    from scripts.export_offline_labels import label_rows
+    remap = {3: 0, 1: 1, 0: 2, 2: 3}.get
+    merged = SimpleNamespace(
+        labelled_dataset=SimpleNamespace(uq_idxs=[10, 11], target=[4, 2], target_transform=remap),
+        unlabelled_dataset=SimpleNamespace(uq_idxs=[12, 13], target=[1, 3], target_transform=remap))
+    assert label_rows(merged, 'scars') == [(10, 0), (11, 1), (12, 2), (13, 3)]
+    merged.unlabelled_dataset.uq_idxs = [12, 10]
+    with pytest.raises(ValueError, match='Duplicate'):
+        label_rows(merged, 'scars')
+
+
+def test_audit_matches_brute_force_pairs_auroc_and_move_majority(tmp_path):
+    from scripts.audit_global_policy import audit
+    generator = np.random.default_rng(3)
+    n = 60
+    ids = np.arange(n)*7+2
+    truth = generator.integers(0, 4, n)
+    labeled = np.zeros(n, dtype=bool); labeled[:12] = True
+    base = np.where(generator.random(n) < .7, truth, generator.integers(0, 4, n))
+    base[labeled] = truth[labeled]
+    coarse = np.array([0, 0, 1, 1])[base]
+    r0 = generator.random(n).astype(np.float16)
+    abstained = (r0 < .3) & ~labeled
+    moved = np.zeros(n, dtype=bool); moved[[20, 21]] = True; abstained[moved] = False
+    target = np.full(n, -1); target[[20, 21]] = (base[[20, 21]]+1) % 4
+    np.savez_compressed(tmp_path/'crish_g_epoch_0012.npz', ids=ids, labeled=labeled, label_0=base, label_1=coarse,
+                        reliability_0=r0, reliability_1=r0, abstained_0=abstained, abstained_1=abstained & (r0 < .1),
+                        moved=moved, move_target=target)
+    labels = tmp_path/'labels.csv'
+    labels.write_text('sample_id,true_label\n'+''.join(f'{i},{y}\n' for i, y in zip(ids, truth)))
+    report = audit(tmp_path, labels)
+    assert report['uses_evaluation_labels'] is True and len(report['epochs']) == 1
+    epoch = report['epochs'][0]
+    assert epoch['epoch'] == 12 and epoch['labeled_anchor_agreement']['fraction'] == 1.
+    for level, (clusters, mask) in enumerate(((base, abstained), (coarse, abstained & (r0 < .1)))):
+        removed = retained = removed_wrong = retained_wrong = 0
+        for i in range(n):
+            for j in range(i+1, n):
+                if clusters[i] != clusters[j]: continue
+                gone = mask[i] or mask[j]
+                bad = truth[i] != truth[j]
+                removed += gone; retained += not gone
+                removed_wrong += gone and bad; retained_wrong += (not gone) and bad
+        got = epoch['levels'][level]
+        assert (got['removed_pair_wrong_rate']['numerator'], got['removed_pair_wrong_rate']['denominator']) == (
+            removed_wrong, removed)
+        assert (got['retained_pair_wrong_rate']['numerator'], got['retained_pair_wrong_rate']['denominator']) == (
+            retained_wrong, retained)
+        assert got['abstained_unlabeled']['numerator'] == int(mask.sum())
+    # Leave-one-out majority error and brute-force AUROC.
+    wrong, scores = [], []
+    for i in np.flatnonzero(~labeled):
+        others = [truth[j] for j in range(n) if j != i and base[j] == base[i]]
+        counts = Counter(others).most_common()
+        if not counts or (len(counts) > 1 and counts[0][1] == counts[1][1]): continue
+        wrong.append(counts[0][0] != truth[i]); scores.append(1-float(r0[i]))
+    wrong, scores = np.array(wrong), np.array(scores)
+    level0 = epoch['level0']
+    assert level0['pseudo_label_error']['numerator'] == int(wrong.sum())
+    assert level0['pseudo_label_error']['denominator'] == len(wrong)
+    pairs = [(a > b)+.5*(a == b) for a in scores[wrong] for b in scores[~wrong]]
+    assert level0['auroc_one_minus_r0']['value'] == pytest.approx(sum(pairs)/len(pairs))
+    assert epoch['move']['moved'] == 2
+    assert epoch['move']['target_majority_correct']['denominator'] <= 2
