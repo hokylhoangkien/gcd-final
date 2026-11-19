@@ -25,8 +25,9 @@ def main():
                         help='Online base pseudo-SSE ablation; default from the selected config')
     parser.add_argument('--no-repair', action='store_true',
                         help='Disable local and population repair for a weighting-only control')
-    parser.add_argument('--variant', choices=['local', 'online', 'policy', 'hybrid'],
-                        help='Explicit experiment variant; default comes from config')
+    parser.add_argument('--variant', choices=['local', 'online', 'policy', 'hybrid', 'global', 'global_local'],
+                        help='Explicit experiment variant; default comes from config. global/global_local '
+                             'require a CRiSH-G (knn_agreement threshold) population_policy')
     parser.add_argument('--probe-known-per-class', type=int,
                         help='1: historical sampling; >=2: exact structured legal class quotas')
     args = parser.parse_args()
@@ -50,11 +51,20 @@ def main():
         from crish.population_settings import PopulationSettings
         from crish.config import PairReliabilitySettings
         from dataclasses import asdict
-        cfg['population_policy'] = PopulationSettings(**dict(cfg.get('population_policy', {}),
-            enabled=args.variant in ('policy', 'hybrid'))).to_dict()
+        policy = dict(cfg.get('population_policy', {}),
+                      enabled=args.variant in ('policy', 'hybrid', 'global', 'global_local'))
+        if args.variant in ('global', 'global_local'):
+            if policy.get('selection') != 'threshold' or policy.get('ranking') != 'knn_agreement':
+                parser.error('--variant global/global_local needs a CRiSH-G config '
+                             '(population_policy ranking=knn_agreement, selection=threshold); '
+                             'see scripts/prepare_global_policy.py')
+            policy['compose_local'] = args.variant == 'global_local'
+        cfg['population_policy'] = PopulationSettings(**policy).to_dict()
         cfg['pair_reliability'] = asdict(PairReliabilitySettings(**dict(cfg.get('pair_reliability', {}),
             enabled=args.variant in ('online', 'hybrid'))))
-        cfg['crish']['enabled'] = args.variant == 'local'
+        cfg['crish']['enabled'] = args.variant in ('local', 'global_local')
+        from .config import validate_config
+        cfg = validate_config(cfg)
     if args.probe_known_per_class is not None:
         cfg['crish']['probe_known_per_class'] = args.probe_known_per_class
         from dataclasses import asdict
@@ -74,6 +84,7 @@ def main():
         cfg['crish']['enabled'] = False
         if 'population_policy' in cfg:
             cfg['population_policy']['enabled'] = False
+    from crish.population_settings import PopulationSettings
     if cfg.get('baseline_family') != 'selex' or cfg['method'] != name:
         parser.error('Config must match SelEx and the selected baseline/CRiSH arm')
     # Derive smoke from the selected dataset/arm, never a Cars-only preset.
@@ -111,7 +122,8 @@ def main():
             boundaries=cfg['crish']['boundaries'], train_batch=cfg['crish']['train_batch'],
             confirmation_budget=cfg['crish']['confirmation_budget'],
             max_refresh_seconds=cfg['crish']['max_refresh_seconds']),
-        population_policy=cfg.get('population_policy', dict(enabled=False)),
+        population_policy=(PopulationSettings(**cfg['population_policy']).full_dict()
+                           if 'population_policy' in cfg else dict(enabled=False)),
         secondary='SS-v2 of best plain-test Old-v1' if cfg['report_best_old_test'] else None,
         protocol='matched_extended_200_epochs' if cfg['epochs'] == 200 else 'explicit_config_schedule',
         status='dry_run' if args.dry_run else 'readiness_pending'), indent=2), flush=True)

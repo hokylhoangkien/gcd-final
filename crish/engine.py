@@ -245,6 +245,10 @@ class CrishEngine:
                 actions, adjacency = _shortlist(state, pool, evidence, settings, stability, **options)
                 record['candidate_count_before_action_filter'] = len(actions)
                 actions = filter_actions(actions, variant)
+                if any(mask.any() for mask in state.abstained):
+                    # Composed after CRiSH-G: never re-abstain an already abstained row.
+                    actions = [a for a in actions if a.kind != 'abstain' or not bool(
+                        state.abstained[a.level][rows_for_ids(state.ids, [a.sample_id])[0]])]
                 record['proposals'] = [dict(kind=a.kind, sample_id=a.sample_id, level=a.level,
                     source=a.source, target=a.target, version=a.version) for a in actions]
                 record['candidate_count'] = len(actions)

@@ -10,6 +10,7 @@ import torch
 
 from .config import CrishSettings
 from .diagnostics import base_target_mass, supervision_dose
+from .global_policy import apply_threshold, epoch_arrays, knn_evidence
 from .engine import (_check_deadline, _draw_context, cached_views, fixed_modes, projector_optimizer)
 from .ids import rows_for_ids
 from .lookahead import clone_snapshot, exact_sgd_comparison, preserve_rng
@@ -91,9 +92,17 @@ class PopulationEngine:
         self.runtime, self.objective = runtime, objective
         self.settings = PopulationSettings(**runtime.config.get('population_policy', {}))
         self.probe_settings = CrishSettings(**runtime.config['crish'])
+        # CRiSH-G persists the chosen threshold, never a list of sample IDs.
+        self.policy = dict(tau=0., selected_epoch=None, source=None)
+        restored = getattr(runtime, 'restored_population_policy', None)
+        if self.settings.is_global and restored is not None:
+            self.policy = dict(tau=float(restored['tau']), selected_epoch=restored.get('selected_epoch'),
+                               source=restored.get('source'))
 
     def prepare(self, state, model, head, optimizer, dataset, args, epoch):
         cfg, settings = self.runtime.config, self.settings
+        if settings.is_global:
+            return self._prepare_global(state, model, head, optimizer, dataset, args, epoch)
         if cfg['method'] != 'crish' or not settings.due(epoch): return state
         started = time.monotonic(); deadline = started+settings.max_refresh_seconds
         seed = (cfg['seed']*1000003+epoch*103+71) % (2**32)
@@ -197,4 +206,265 @@ class PopulationEngine:
             with (self.runtime.run_dir/'crish_p.jsonl').open('a') as handle:
                 handle.write(json.dumps(record, allow_nan=False)+'\n')
             print(f'CRISH_P epoch={epoch} status={record["status"]} q={record["chosen_fraction"]} '
+                  f'accepted={record["accepted"]} seconds={record["seconds"]:.2f}', flush=True)
+
+    # ----------------------------------------------------------------- CRiSH-G
+    def _evidence(self, state, device, deadline=None):
+        return knn_evidence(state, k=self.settings.knn_k, nonreciprocal_weight=self.settings.nonreciprocal_weight,
+                            device=device, query_block=self.settings.rank_block, deadline=deadline)
+
+    def _apply(self, state, evidence, tau, epoch):
+        return apply_threshold(state, evidence, tau, self.settings, min_support=self.probe_settings.min_support,
+                               random_seed=(self.runtime.config['seed'], epoch))
+
+    def _remember(self, tau, epoch):
+        self.policy = dict(tau=float(tau), selected_epoch=epoch, source='due')
+        self.runtime.checkpoint_extra = dict(getattr(self.runtime, 'checkpoint_extra', {}),
+                                             population_policy_state=dict(self.policy))
+
+    def _prepare_global(self, state, model, head, optimizer, dataset, args, epoch):
+        """Due epochs choose tau*; with persist, every later epoch re-applies pi_tau*.
+
+        Non-due epochs only recompute deterministic kNN evidence on the freshly
+        extracted features/partition: no probe, no RNG draw, no model forward.
+        """
+        cfg, settings = self.runtime.config, self.settings
+        if cfg['method'] != 'crish' or not settings.active(epoch):
+            return state
+        started = time.monotonic()
+        evidence = coverage = None
+        outcome, status, reason = state, 'completed', None
+        if settings.due(epoch):
+            tau, outcome, coverage, evidence = self._select_threshold(state, model, head, optimizer, dataset, args, epoch)
+            self._remember(tau, epoch)
+            source = 'due'
+            status = self.runtime.last_population_record['status']
+            reason = self.runtime.last_population_record.get('reason')
+        else:
+            tau, source = self.policy['tau'], 'persisted'
+            try:
+                device = next(head.parameters()).device if head is not None else 'cpu'
+                evidence = self._evidence(state, device)
+                outcome, coverage = self._apply(state, evidence, tau, epoch)
+            except (ValueError, RuntimeError) as error:
+                outcome, status, reason, coverage = state, 'fallback_keep', str(error), None
+        self._log_epoch(epoch, tau, source, state, outcome, evidence, coverage, status, reason,
+                        time.monotonic()-started)
+        return outcome
+
+    def _log_epoch(self, epoch, tau, source, before, after, evidence, coverage, status, reason, seconds):
+        applied = after is not before
+        levels = []
+        for entry in (coverage or {}).get('levels', []):
+            entry = {key: entry[key] for key in (
+                'level', 'scoped', 'candidates', 'abstained_unlabeled', 'fraction', 'cluster_capped',
+                'truncated_by_mass_floor', 'retained_mass', 'reliability_histogram',
+                'reliability_mean_unlabeled', 'random_shortfall') if key in entry}
+            if not applied:
+                entry.update(abstained_unlabeled=0, fraction=0., retained_mass=1.)
+            levels.append(entry)
+        moved = int((coverage or {}).get('moved', 0)) if applied else 0
+        record = dict(epoch=epoch, tau=float(tau), source=source, status=status, reason=reason,
+                      applied=applied, moved=moved, levels=levels, seconds=seconds,
+                      knn_seconds=None if evidence is None else evidence.seconds,
+                      mutual_fraction=None if evidence is None else evidence.mutual_fraction,
+                      knn_k=self.settings.knn_k, ranking='global_knn_agreement',
+                      sample_choice=self.settings.sample_choice, levels_scope=self.settings.levels,
+                      actions=self.settings.actions, persist=self.settings.persist)
+        self.runtime.last_policy_epoch_record = record
+        with (self.runtime.run_dir/'crish_policy_epochs.jsonl').open('a') as handle:
+            handle.write(json.dumps(record, allow_nan=False)+'\n')
+        if self.settings.save_arrays and evidence is not None:
+            np.savez_compressed(self.runtime.run_dir/f'crish_g_epoch_{epoch:04d}.npz',
+                                **epoch_arrays(before, after, evidence))
+        print(f'CRISH_G epoch={epoch} tau={float(tau)} source={source} '
+              f'abstained={[x["abstained_unlabeled"] for x in levels]} moved={moved} '
+              f'seconds={seconds:.2f}', flush=True)
+
+    def _scoring_rows(self, state, available, seed, generator):
+        settings = self.settings
+        count = min(len(available), settings.scoring_batches*settings.train_batch)
+        if settings.scoring_sampling == 'uniform':
+            return available[torch.randperm(len(available), generator=generator)[:count]]
+        # Same marginal weights as the training WeightedRandomSampler, drawn
+        # without replacement from a refresh-seeded private generator.
+        n_labeled = int(state.labeled.sum())
+        weights = torch.where(state.labeled[available], torch.ones((), dtype=torch.float64),
+                              torch.full((), n_labeled/len(state.ids), dtype=torch.float64))
+        private = torch.Generator().manual_seed((seed+2) % (2**32))
+        return available[torch.multinomial(weights, count, replacement=False, generator=private)]
+
+    def _select_threshold(self, state, model, head, optimizer, dataset, args, epoch):
+        """Counterfactual dose choice over tau; Keep (tau=0) is always the reference."""
+        cfg, settings = self.runtime.config, self.settings
+        started = time.monotonic(); deadline = started+settings.max_refresh_seconds
+        seed = (cfg['seed']*1000003+epoch*103+71) % (2**32)
+        record = dict(epoch=epoch, seed=seed, mode=settings.mode, gate=settings.gate, status='keep', accepted=0,
+                      chosen_threshold=0., chosen_fraction=0., candidates=[], ranking='global_knn_agreement',
+                      levels_scope=settings.levels, actions=settings.actions, sample_choice=settings.sample_choice,
+                      persist=settings.persist, lookahead_scope='projector', probe_float64=settings.probe_float64,
+                      scoring_sampling=('train_sampler_weights_without_replacement'
+                                        if settings.scoring_sampling == 'train_sampler'
+                                        else 'uniform_nonprobe_without_replacement'))
+        result = dict(tau=0., chosen=state, coverage=None, evidence=None)
+        try:
+            with preserve_rng(), fixed_modes(model):
+                random.seed(seed); np.random.seed(seed); torch.manual_seed(seed)
+                generator = torch.Generator().manual_seed(seed)
+                device = next(head.parameters()).device
+                evidence = result['evidence'] = self._evidence(state, device, deadline)
+                unlabeled = ~state.labeled
+                record.update(ranked_rows=len(state.ids), ranked_unlabeled=int(unlabeled.sum()),
+                              knn_seconds=evidence.seconds, mutual_fraction=evidence.mutual_fraction,
+                              reliability=[dict(level=level, min=float(r[unlabeled].min()),
+                                                max=float(r[unlabeled].max()), mean=float(r[unlabeled].mean()))
+                                           for level, r in enumerate(evidence.reliability)])
+                keep_coverage = result['coverage'] = self._apply(state, evidence, 0., epoch)[1]
+                if settings.gate == 'none':
+                    tau = settings.fixed_threshold
+                    chosen, coverage = self._apply(state, evidence, tau, epoch)
+                    record['candidates'].append(dict(threshold=float(tau), status='applied_without_probe',
+                                                     coverage=coverage))
+                    record.update(status='completed', accepted=int(chosen is not state), chosen_threshold=float(tau),
+                                  dose=supervision_dose(state, chosen))
+                    result.update(tau=float(tau), chosen=chosen, coverage=coverage)
+                    return result['tau'], result['chosen'], result['coverage'], evidence
+                folds, _ = _draw_context(state, self.probe_settings, generator, deadline, fold_count=2)
+                reserved = torch.cat([torch.cat([k, u]) for k, u in folds])
+                available = torch.ones(len(state.ids), dtype=torch.bool); available[reserved] = False
+                available = available.nonzero().flatten()
+                if len(available) < 4:
+                    raise ValueError('Insufficient disjoint policy-gradient rows')
+                rows = self._scoring_rows(state, available, seed, generator)
+                size = settings.train_batch
+                if len(rows) >= size:
+                    rows = rows[:len(rows)//size*size]
+                else:
+                    size = len(rows)
+                dtype = torch.float64 if settings.probe_float64 else None
+                views = cached_views(model, dataset, state.ids[rows], device, deadline)
+                chunks = []
+                for start in range(0, len(rows), size):
+                    part, v = rows[start:start+size], views[start:start+size]
+                    flat = torch.cat([v[:, 0], v[:, 1]]).detach()
+                    membership = state.labeled[part]
+                    chunks.append(dict(ids=state.ids[part], membership=membership, drift_views=flat,
+                                       flat=flat if dtype is None else flat.to(dtype),
+                                       targets=state.labels[0][part][membership]))
+                frozen, virtual_optimizer = clone_snapshot(head, projector_optimizer(head, optimizer))
+                frozen.eval()
+                if dtype is not None:
+                    # Cast the clone in place: optimizer references stay valid.
+                    frozen.to(dtype)
+                    for slot in virtual_optimizer.state.values():
+                        for key, value in list(slot.items()):
+                            if torch.is_tensor(value) and value.is_floating_point():
+                                slot[key] = value.to(dtype)
+                parameters = tuple(p for p in frozen.parameters() if p.requires_grad)
+                registry = dict(zip(state.ids[state.labeled].tolist(), state.known_targets.tolist()))
+                probes = []
+                for known, other in folds:
+                    probe_ids = torch.cat([state.ids[known], state.ids[other]])
+                    x = cached_views(model, dataset, probe_ids, device, deadline)
+                    if dtype is not None:
+                        x = x.to(dtype)
+                    with torch.no_grad(): teacher = frozen(x[len(known):].flatten(0, 1)).reshape(len(other), 2, -1)
+                    probes.append(LegalProbe(known_ids=state.ids[known], known_views=x[:len(known)],
+                        known_targets=state.labels[0][known], unlabeled_ids=state.ids[other],
+                        unlabeled_views=x[len(known):], teacher_views=teacher, proposal_ids=state.ids[rows],
+                        legal_labels=registry, weights=ProbeWeights(self.probe_settings.probe_known_weight,
+                            self.probe_settings.probe_view_weight, self.probe_settings.probe_variance_weight,
+                            self.probe_settings.probe_std_floor)))
+                probes[0].assert_disjoint(probes[1])
+                record.update(scoring_rows=len(rows), scoring_chunks=len(chunks), scoring_chunk_rows=size,
+                              scoring_labeled_rows=int(state.labeled[rows].sum()),
+                              probe_folds=[dict(known_fold_structure(state.labels[0][k]), unlabeled_rows=len(u))
+                                           for k, u in folds])
+
+                def mean_gradients(current):
+                    """Average of per-chunk gradients keeps SelEx's per-batch normalization."""
+                    total, weights = None, []
+                    for chunk in chunks:
+                        output = self.objective(frozen, chunk['flat'], chunk['ids'], chunk['membership'],
+                                                chunk['targets'], current, args, epoch)
+                        grads = torch.autograd.grad(output['loss'], parameters, allow_unused=True)
+                        weights.append(output.get('pseudo_pair_weights'))
+                        total = grads if total is None else tuple(
+                            b if a is None else a if b is None else a+b for a, b in zip(total, grads))
+                    return tuple(None if g is None else g/len(chunks) for g in total), weights
+
+                g0, pair_weights = mean_gradients(state)
+                best = None
+                for threshold in settings.threshold_candidates():
+                    if threshold == 0:
+                        # Exact Keep comparison: identical gradients, gain zero.
+                        record['candidates'].append(dict(threshold=0., status='keep_reference', gain=0.,
+                                                         known_increase=0., coverage=keep_coverage))
+                        continue
+                    _check_deadline(deadline)
+                    proposed, coverage = self._apply(state, evidence, threshold, epoch)
+                    entry = dict(threshold=float(threshold), status='rejected', coverage=coverage)
+                    record['candidates'].append(entry)
+                    if proposed is state:
+                        entry['reason'] = 'No admissible abstention/move at this threshold'; continue
+                    drifts = [target_drift(state, proposed, chunk['ids'], chunk['drift_views'],
+                                           smoothing=args.unsupervised_smoothing, strategy=args.strategy,
+                                           normalization=getattr(args, 'use_target_normalization', 'legacy'),
+                                           pair_weights=weights)
+                              for chunk, weights in zip(chunks, pair_weights)]
+                    levels = [dict(level=level,
+                                   coefficient_half_l1_mean=sum(d['sse_levels'][level]['coefficient_half_l1_mean']
+                                                                for d in drifts)/len(drifts),
+                                   remaining_mass_mean=sum(d['sse_levels'][level]['remaining_mass_mean']
+                                                           for d in drifts)/len(drifts),
+                                   protected_coefficient_shift_max=max(
+                                       d['sse_levels'][level]['protected_coefficient_shift_max'] for d in drifts))
+                              for level in range(len(state.labels))]
+                    entry['target_drift'] = dict(sse_levels=levels, chunks=len(drifts))
+                    if max(x['protected_coefficient_shift_max'] for x in levels) > self.probe_settings.max_protected_shift:
+                        raise ValueError('Population policy changed protected coefficients')
+                    if all(x['coefficient_half_l1_mean'] <= 0 for x in levels):
+                        entry['reason'] = 'Policy has no changed pseudo-SSE targets in the scoring rows'; continue
+                    ga, _ = mean_gradients(proposed)
+                    comparison = exact_sgd_comparison(frozen, virtual_optimizer, g0, ga, probes[0])
+                    entry['discovery'] = comparison
+                    gain, known = comparison['gain'], comparison['known_increase']
+                    if (not math.isfinite(gain) or not math.isfinite(known)
+                            or gain <= self.probe_settings.acceptance_gain or known > self.probe_settings.known_tolerance):
+                        entry['reason'] = 'Discovery gain/known guard failed'; continue
+                    entry['status'] = 'eligible'
+                    if best is None or gain > best[0]: best = (gain, threshold, proposed, coverage, ga, entry)
+                if best is None:
+                    record['reason'] = 'No eligible population threshold'
+                    return 0., state, keep_coverage, evidence
+                _check_deadline(deadline)
+                _, threshold, proposed, coverage, ga, entry = best
+                comparison = exact_sgd_comparison(frozen, virtual_optimizer, g0, ga, probes[1])
+                entry['confirmation'] = comparison
+                gain, known = comparison['gain'], comparison['known_increase']
+                if (not math.isfinite(gain) or not math.isfinite(known)
+                        or gain <= self.probe_settings.acceptance_gain or known > self.probe_settings.known_tolerance):
+                    entry.update(status='rejected', reason='Winner confirmation failed; no runner-up search')
+                    record['reason'] = entry['reason']
+                    return 0., state, keep_coverage, evidence
+                _check_deadline(deadline)
+                entry['status'] = 'accepted'
+                record.update(status='completed', accepted=1, chosen_threshold=float(threshold),
+                              dose=supervision_dose(state, proposed))
+                result.update(tau=float(threshold), chosen=proposed, coverage=coverage)
+                return result['tau'], proposed, coverage, evidence
+        except (ValueError, RuntimeError) as error:
+            record.update(status='fallback_keep', reason=str(error), accepted=0, chosen_threshold=0.)
+            result.update(tau=0., chosen=state)
+            return 0., state, result['coverage'], result['evidence']
+        finally:
+            record['seconds'] = time.monotonic()-started
+            applied = result['chosen'] is not state and record['chosen_threshold'] > 0
+            record['abstained_unlabeled'] = ([x['abstained_unlabeled'] for x in result['coverage']['levels']]
+                                             if applied and result['coverage'] else [])
+            record['moved'] = int(result['coverage'].get('moved', 0)) if applied and result['coverage'] else 0
+            self.runtime.last_population_record = record
+            with (self.runtime.run_dir/'crish_p.jsonl').open('a') as handle:
+                handle.write(json.dumps(record, allow_nan=False)+'\n')
+            print(f'CRISH_P epoch={epoch} status={record["status"]} tau={record["chosen_threshold"]} '
                   f'accepted={record["accepted"]} seconds={record["seconds"]:.2f}', flush=True)

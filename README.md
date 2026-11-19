@@ -574,3 +574,84 @@ hoặc account người báo thuộc nhóm, nên không dùng các chi tiết đ
 lịch sử Git. Các sửa manuscript/PDF cũ ở workspace không nằm trong đợt sửa
 hướng dẫn này. Giấy phép và nguồn gốc: [NOTICE](NOTICE),
 [HypCD MIT license](LICENSES/HypCD-MIT.txt).
+
+## 12. CRiSH-G (global reliability policy)
+
+**Cơ chế.**
+- Mỗi epoch, sau extraction: kNN chính xác (k=10) trên toàn bộ N ảnh train bằng feature backbone đã normalize; cạnh mutual trọng số 1, không mutual 0,5.
+- r_i^ℓ = tỷ lệ có trọng số láng giềng cùng cụm level ℓ; labeled dùng nhãn L0 hợp lệ, không đọc nhãn thật của unlabeled; luôn có r^ℓ ≥ r^0.
+- π_τ Abstain ảnh unlabeled có r^ℓ < τ ở từng level active, với quota cụm (≤50%, giữ ≥2), sàn retained mass 0,7, hoà theo sample ID.
+- Epoch due chọn τ* ∈ {0; 0,3; 0,5; 0,7} bằng SGD ảo trên projector (float64, 4×128 dòng theo trọng số sampler, discovery rồi confirmation); trượt/lỗi thì τ*=0.
+- `persist=true` áp lại π_τ* ở mọi epoch sau warmup trên feature/partition mới (giữ τ*, không giữ ID; không probe, không tiêu RNG). τ* được lưu trong `resume.pt`.
+
+**Chuẩn bị.** Preparer chỉ ghi config, `manifest.json` (Git SHA, fingerprint, hash từng config) và `commands.txt`; không train:
+
+```bash
+.venv/bin/python scripts/prepare_global_policy.py \
+  --base configs/selex_scars_crish_200.json --seeds 1 \
+  --output runs/plans/cars-global-NEW
+bash scripts/train_selex.sh --config runs/plans/cars-global-NEW/g_cf_seed1.json --variant global --dry-run
+```
+
+Profile: `g_fixed` (τ=0,5, không probe), `g_cf` (counterfactual), `g_random` (cùng liều, chọn ngẫu nhiên), `g_cf_nopersist` (chỉ áp ở epoch due); `--with-local` thêm `g_cf_local` (chạy bằng `--variant global_local`).
+Dry-run kỳ vọng: `discrete_repair=false` (trừ `g_cf_local`), `pair_reliability.enabled=false`, `population_policy` có `ranking=knn_agreement`, `selection=threshold`, `levels=active`, `persist=true` (trừ nopersist), `gate=counterfactual` (`g_cf*`) hoặc `none` (`g_fixed`, `g_random`), `scoring_batches=4`, `scoring_sampling=train_sampler`, `probe_float64=true`, `save_arrays=true`, epochs200; smoke có `warmup_epochs=0`.
+
+**Sàng lọc trên Cars seed 1.**
+- Chạy `g_fixed` và `g_cf` trước; mỗi run full 200 epoch với `--eval-every 1`, theo thứ tự check → smoke → full:
+
+```bash
+GCD_CONFIG=runs/plans/cars-global-NEW/g_fixed_seed1.json   # sau đó: g_cf_seed1.json
+bash scripts/train_selex.sh check --config "$GCD_CONFIG" --variant global
+bash scripts/train_selex.sh smoke --config "$GCD_CONFIG" --variant global
+bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant global --eval-every 1
+```
+
+- Quyết định ở epoch 100 theo luật G1; variant được chọn chạy tiếp tới 200.
+- Run sàng lọc cần làm hàng ablation cũng chạy tới 200: `g_fixed` khi chọn bản có counterfactual.
+- Các run còn lại dừng an toàn sau checkpoint (Linux, đúng PID worker):
+
+```bash
+.venv/bin/python scripts/stop_after_checkpoint.py --run "$RUN_DIR" --pid WORKER_PID --timeout 1800 --confirm-stop
+```
+
+**Log cần xem.**
+- `crish_policy_epochs.jsonl`: mỗi epoch có policy; τ đang áp, nguồn `due`/`persisted`, moved, giây, và theo level: `abstained_unlabeled`, fraction, `truncated_by_mass_floor`, `retained_mass`, histogram 10 bin của r^ℓ. Dòng log: `CRISH_G epoch=… tau=… abstained=[…] moved=…`.
+- `crish_p.jsonl`: epoch due; τ ứng viên, gain/known_increase (float64), coverage/guard, τ*, confirmation, giây.
+- `intervention_diagnostics.jsonl`: số ID/positive relations thực đổi mỗi epoch.
+- `crish_g_epoch_NNNN.npz` (`save_arrays`): ids, labeled, nhãn trước can thiệp, r^ℓ (float16), abstained sau can thiệp, moved, move_target; `partitions_epoch_NNNN.npz` ở epoch due.
+
+**Luật G1.**
+
+**Mốc so sánh.** Run local adaptive Cars seed 1 hiện có, `20261115T112441Z-0ec6f014`, đánh số theo `epoch_number` (1-based). Tính lại từ `results/paper-plan-verified-20261118/curves-cars/data.json` để xác nhận.
+
+| Thống kê | All | Old | New |
+|---|---|---|---|
+| Trung bình SS, ep61–100 | 81,35 | 92,81 | 75,82 |
+| Best trong ≤ ep100 | 82,80 (ep85) | 94,40 (ep52) | 77,19 (ep85) |
+
+**Thống kê dùng để quyết định:** trung bình SS trên ep61–100, vì ít nhiễu hơn best của từng epoch.
+
+- Best trong ≤ ep100 chỉ để tham khảo.
+- Cách báo số trong paper giữ nguyên: best riêng cho All, Old và New qua các epoch.
+
+**Nhận variant V khi đủ cả bốn điều kiện:**
+
+1. ΔAll ≥ +1,0.
+2. ΔNew ≥ +1,0.
+3. ΔOld ≥ −1,0.
+4. Liều đúng như thiết kế:
+   - ở level 0, trung bình 3–35% ảnh unlabeled bị abstain hoặc Move trên ep61–100;
+   - với variant có counterfactual, τ* > 0 ở ít nhất một nửa số refresh.
+
+**Các trường hợp còn lại:**
+
+- **Nhiều V đạt:** chọn V có ΔAll lớn nhất. Nếu `g_cf` hoặc `g_cf_move` chỉ kém `g_fixed` tối đa 0,3 điểm thì chọn bản có counterfactual.
+- **Không V nào đạt, nhưng có V với ΔAll ≥ +0,5:** chạy tiếp V tới 200 epoch và thêm seed 2 trước khi quyết định.
+- **Không V nào đạt ngưỡng nào:** giữ cấu hình local hiện tại và báo CRiSH-G như một kết quả âm.
+
+**Kiểm sớm (tuỳ chọn, khi đã có `labels.csv`; chỉ để chẩn đoán).** Ở khoảng ep20, cần đủ hai điều kiện:
+
+- AUROC ở level 0 ≥ 0,65;
+- error rate trong tập bị abstain ≥ 1,5 lần mức cơ sở.
+
+Không đạt thì dừng sớm.

@@ -58,6 +58,12 @@ class EpochRuntime:
             torch.cuda.set_rng_state_all(state['cuda_rng'])
         self.restored_epoch = state['epoch']
         self.restored_plain_rng_pending = state.get('plain_rng_pending', False)
+        if 'population_policy_state' in state:
+            # CRiSH-G persisted threshold; PopulationEngine reads it after restore
+            # and every later save (including SelEx's replay save) keeps it.
+            self.restored_population_policy = dict(state['population_policy_state'])
+            self.checkpoint_extra = dict(getattr(self, 'checkpoint_extra', {}),
+                                         population_policy_state=dict(self.restored_population_policy))
         if enabled(self.config):
             # A failure may have happened after saving SGD but before selecting
             # this epoch. Recover that evaluation before advancing any SGD.

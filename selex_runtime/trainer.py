@@ -102,7 +102,9 @@ class SelExRuntime(EpochRuntime):
     allow_completed_resume = True
 
     def save(self, epoch, model, head, optimizer, scheduler):
-        self.checkpoint_extra = dict(plain_rng_pending=getattr(self, 'plain_rng_pending', False))
+        # Merge: other controllers (CRiSH-G tau*) also persist resume state here.
+        self.checkpoint_extra = dict(getattr(self, 'checkpoint_extra', {}),
+                                     plain_rng_pending=getattr(self, 'plain_rng_pending', False))
         return super().save(epoch, model, head, optimizer, scheduler)
 
     def restore(self, model, head, optimizer, scheduler):

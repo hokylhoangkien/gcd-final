@@ -74,6 +74,10 @@ def validate_config(cfg, *, eval_every_epochs=None):
         cfg['pair_reliability'] = asdict(PairReliabilitySettings(**cfg['pair_reliability']))
     if 'population_policy' in cfg:
         cfg['population_policy'] = PopulationSettings(**cfg['population_policy']).to_dict()
-        if cfg['population_policy']['enabled'] and cfg['crish']['enabled']:
-            raise ValueError('Local and population repair are separate experiment variants')
+        if (cfg['population_policy']['enabled'] and cfg['crish']['enabled']
+                and not cfg['population_policy'].get('compose_local', False)):
+            raise ValueError('Local and population repair are separate experiment variants; '
+                             'only population_policy.compose_local=true (variant global_local) combines them')
+        if cfg['population_policy'].get('compose_local', False) and cfg['population_policy'].get('selection') != 'threshold':
+            raise ValueError('population_policy.compose_local requires the CRiSH-G threshold policy')
     return cfg

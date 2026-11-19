@@ -58,26 +58,37 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
         audit.update(epoch=epoch, kind='observed_partition_geometry_not_semantic_accuracy')
         with (runtime.run_dir/'partition_audit.jsonl').open('a') as handle:
             handle.write(json.dumps(audit, allow_nan=False)+'\n')
-        if settings.save_partitions and (epoch == start_epoch or settings.due(epoch)):
+        if settings.save_partitions and (epoch == start_epoch or settings.due(epoch)
+                                         or population.settings.due(epoch)):
             np.savez_compressed(runtime.run_dir/f'partitions_epoch_{epoch:04d}.npz',
                                 ids=state.ids.numpy(), labeled=state.labeled.numpy(),
                                 **{f'level_{i}': labels.numpy() for i, labels in enumerate(state.labels)})
         before_intervention = state
-        state = engine.prepare(state, model, head, optimizer, train_loader.dataset, args, epoch)
-        state = population.prepare(state, model, head, optimizer, train_loader.dataset, args, epoch)
+        if population.settings.compose_local:
+            # CRiSH-G + local: global policy first, local repairs the edited state.
+            state = population.prepare(state, model, head, optimizer, train_loader.dataset, args, epoch)
+            state = engine.prepare(state, model, head, optimizer, train_loader.dataset, args, epoch)
+        else:
+            state = engine.prepare(state, model, head, optimizer, train_loader.dataset, args, epoch)
+            state = population.prepare(state, model, head, optimizer, train_loader.dataset, args, epoch)
         if runtime.config.get('require_intervention_smoke') and runtime.config['method'] == 'crish':
+            checks = []
             if population.settings.due(epoch):
                 record = getattr(runtime, 'last_population_record', {})
-                exercised = any('discovery' in c for c in record.get('candidates', []))
-            elif settings.due(epoch):
+                if population.settings.is_global and population.settings.gate == 'none':
+                    exercised = sum(record.get('abstained_unlabeled', []))+record.get('moved', 0) > 0
+                else:
+                    exercised = any('discovery' in c for c in record.get('candidates', []))
+                checks.append((record, exercised))
+            if settings.due(epoch) and (not population.settings.due(epoch) or population.settings.compose_local):
                 record = getattr(runtime, 'last_local_record', {})
                 exercised = bool(record.get('decisions') if runtime.config.get('crish_ablation') == 'evidence_only'
                                  else record.get('gains'))
-            else:
-                record, exercised = {}, True
-            if record.get('status') == 'fallback_keep' or not exercised:
-                raise RuntimeError('Bounded intervention smoke did not exercise the selected repair policy: '+
-                                   record.get('reason', 'no scored candidate; inspect support/cache/budget'))
+                checks.append((record, exercised))
+            for record, exercised in checks:
+                if record.get('status') == 'fallback_keep' or not exercised:
+                    raise RuntimeError('Bounded intervention smoke did not exercise the selected repair policy: '+
+                                       (record.get('reason') or 'no scored candidate; inspect support/cache/budget'))
         dose = supervision_dose(before_intervention, state)
         with (runtime.run_dir/'intervention_diagnostics.jsonl').open('a') as handle:
             handle.write(json.dumps(dict(epoch=epoch, **dose), allow_nan=False)+'\n')
