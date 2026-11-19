@@ -113,8 +113,6 @@ class PopulationSettings:
             used = [name for name, active in threshold_only.items() if active]
             if used:
                 raise ValueError(f"population_policy.{used[0]} requires selection='threshold'")
-        if self.actions == 'abstain_move':
-            raise ValueError("population_policy.actions='abstain_move' (CRiSH-G Move) is not implemented yet")
         if self.actions == 'abstain_move' and self.sample_choice != 'evidence':
             raise ValueError("population_policy.actions='abstain_move' requires sample_choice='evidence'")
         if self.selection == 'threshold' and self.mode == 'counterfactual' and self.gate != 'counterfactual':

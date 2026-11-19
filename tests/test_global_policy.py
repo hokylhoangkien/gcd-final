@@ -416,7 +416,10 @@ def test_resume_between_refreshes_reproduces_masks_and_weights_exactly():
         # A fixed eligible comparison isolates persistence wiring from noisy gains.
         with patch('crish.population.exact_sgd_comparison', return_value=dict(gain=1., known_increase=0.)):
             train_strict(head, model, loader, loader, args, runtime, objective=selex_loss, extractor=extract)
-        masks = {int(p.stem.split('_')[-1]): np.load(p)['abstained_0'] for p in Path(directory).glob('crish_g_epoch_*.npz')}
+        masks = {}
+        for path in Path(directory).glob('crish_g_epoch_*.npz'):
+            with np.load(path, allow_pickle=False) as stored:
+                masks[int(path.stem.split('_')[-1])] = stored['abstained_0']
         epochs = [json.loads(x) for x in (Path(directory)/'crish_policy_epochs.jsonl').read_text().splitlines()]
         return model.state_dict(), head.state_dict(), masks, epochs
     with tempfile.TemporaryDirectory() as a, tempfile.TemporaryDirectory() as b, tempfile.TemporaryDirectory() as c:
@@ -539,6 +542,9 @@ def test_default_training_order_is_unchanged_and_compose_runs_global_first():
     dict(ranking='knn_agreement', selection='threshold', levels='all'),
     dict(ranking='knn_agreement', selection='threshold', persist=1),
     dict(ranking='knn_agreement', selection='threshold', scoring_sampling='weighted'),
+    dict(ranking='knn_agreement', selection='threshold', mode='fixed', gate='none', sample_choice='random',
+         actions='abstain_move'),
+    dict(actions='abstain_move'),
     dict(persist=True), dict(levels='active'), dict(save_arrays=True), dict(compose_local=True)])
 def test_invalid_global_combinations_are_rejected_with_named_fields(change):
     with pytest.raises(ValueError, match='population_policy'):
@@ -676,3 +682,110 @@ def test_smoke_gate_requires_exercised_global_policy(gate):
                 with failure, pytest.raises(RuntimeError, match='smoke'):
                     run()
                 assert not (Path(directory)/'resume.pt').exists()
+
+
+# 7. Move ------------------------------------------------------------------
+def blob_state():
+    """Tight blobs A,B,D (8 rows) and C (10 rows). In C, labeled row 16 and unlabeled
+    rows 18,19 carry cluster 1; with k=6 each of 18,19 has >=4 cluster-2 neighbors."""
+    generator = torch.Generator().manual_seed(7)
+    centers = torch.tensor([[0., 0.], [0., 10.], [10., 0.], [10., 10.]])
+    sizes = [8, 8, 10, 8]
+    x = torch.cat([centers[c]+.3*torch.randn(sizes[c], 2, generator=generator) for c in range(4)])
+    base = torch.cat([torch.full((s,), c) for c, s in enumerate(sizes)])
+    base[[16, 18, 19]] = 1
+    labeled = torch.zeros(34, dtype=torch.bool)
+    labeled[[0, 1, 8, 9, 16, 20, 26, 27]] = True
+    coarse = torch.tensor([0, 0, 1, 1])[base]
+    labels = (base, coarse)
+    protos = tuple(torch.stack([x[y == c].mean(0) for c in range(int(y.max())+1)]) for y in labels)
+    return SupervisionState(torch.arange(34)*3+1, x, labeled, base[labeled], labels, protos,
+        tuple(prototype_radii(p) for p in protos), tuple(torch.zeros(34, dtype=torch.bool) for _ in labels),
+        allow_empty_clusters=True)
+
+
+def blob_evidence(state):
+    # Unit edge weights make neighbor shares count-based and the fixture exact.
+    return knn_evidence(state, k=6, nonreciprocal_weight=1.)
+
+
+def move_policy(**changes):
+    return global_policy(**dict(dict(actions='abstain_move', min_retained_mass=.2, knn_k=6,
+                                     move_target_cap=.5), **changes))
+
+
+def test_move_reassigns_only_unlabeled_rows_with_sufficient_share_and_quotas():
+    state = blob_state()
+    evidence = blob_evidence(state)
+    from crish.global_moves import apply_moves, neighbor_shares
+    settings = move_policy()
+    moved_state, moved, target, record = apply_moves(state, evidence, .5, settings, min_support=2)
+    assert set(moved.nonzero().flatten().tolist()) == {18, 19} and (target[moved] == 2).all()
+    assert not moved[state.labeled].any() and int(moved_state.labels[0][16]) == 1  # labeled anchor kept
+    _, shares = neighbor_shares(state, evidence, moved.nonzero().flatten().tolist())
+    assert min(shares) >= settings.move_min_share
+    # Target cap: max(1, floor(.25*support_b)) with support_b=7 admits one row only.
+    _, capped, _, capped_record = apply_moves(state, evidence, .5, move_policy(move_target_cap=.25), min_support=2)
+    assert int(capped.sum()) == 1 and capped_record['move_rejected_target_cap'] == 1
+    # Share threshold above every observed share: no Move.
+    _, none, _, _ = apply_moves(state, evidence, .5, move_policy(move_min_share=1.), min_support=2)
+    assert not none.any() or all(s >= 1. for s in neighbor_shares(state, evidence, none.nonzero().flatten().tolist())[1])
+    # Source quota: cluster 1 has 8 unlabeled rows; fraction .2 lets one leave.
+    _, quota, _, quota_record = apply_moves(state, evidence, .5, move_policy(max_cluster_fraction=.2), min_support=2)
+    assert int(quota.sum()) == 1 and quota_record['move_rejected_source_quota'] >= 1
+    # Exact population protected-coefficient cap, cross-checked with full-population drift.
+    from crish.rebuild import target_drift
+    views = torch.cat([state.features, state.features])
+    shift = max(x['protected_coefficient_shift_max'] for x in target_drift(
+        state, moved_state, state.ids, views, smoothing=.5, normalization='selex_legacy')['sse_levels'])
+    assert 0 < shift <= .25
+    _, blocked, _, blocked_record = apply_moves(state, evidence, .5, settings, min_support=2,
+                                                max_protected_shift=shift/10)
+    assert not blocked.any() and blocked_record['move_rejected_protected_shift'] == 2
+
+
+def test_move_propagates_to_coarse_levels_and_rebuilds_finite_prototypes():
+    state = blob_state()
+    evidence = blob_evidence(state)
+    proposed, coverage = apply_threshold(state, evidence, .5, move_policy())
+    assert coverage['moved'] == 2 and proposed.validate() is None
+    moved = proposed.labels[0] != state.labels[0]
+    assert set(moved.nonzero().flatten().tolist()) == {18, 19}
+    for group in proposed.labels[0].unique().tolist():
+        assert len(proposed.labels[1][proposed.labels[0] == group].unique()) == 1
+    assert (proposed.labels[1][moved] == 1).all()
+    for level in range(2):
+        assert torch.isfinite(proposed.prototypes[level]).all() and torch.isfinite(proposed.radii[level]).all()
+        for group in proposed.labels[level][moved].unique().tolist() + state.labels[level][moved].unique().tolist():
+            torch.testing.assert_close(proposed.prototypes[level][group],
+                                       state.features[proposed.labels[level] == group].mean(0))
+        assert not proposed.abstained[level][moved].any()  # moved rows are never abstained
+        assert not proposed.abstained[level][state.labeled].any()
+    assert torch.equal(proposed.labels[0][state.labeled], state.known_targets)
+    assert torch.equal(proposed.known_targets, state.known_targets)
+    # Departures (Move + Abstain) from each source respect the quota.
+    for group in state.labels[0].unique().tolist():
+        u = ~state.labeled & (state.labels[0] == group)
+        left = int((u & (moved | proposed.abstained[0])).sum())
+        assert left <= int(int(u.sum())*.5) and int(u.sum())-left >= min(2, int(u.sum()))
+    from crish.rebuild import target_drift
+    views = torch.cat([state.features, state.features])
+    drift = target_drift(state, proposed, state.ids, views, smoothing=.5, normalization='selex_legacy')
+    assert 0 < max(x['protected_coefficient_shift_max'] for x in drift['sse_levels']) <= .25
+
+
+def test_move_counterfactual_and_epoch_arrays_record_moves():
+    compare, _ = scripted({.3: (1., 0.), .5: (3., 0.), .7: (2., 0.)}, confirmation=.5)
+    with tempfile.TemporaryDirectory() as directory:
+        state, outcome, record, engine = run_select(directory, compare, actions='abstain_move',
+                                                    move_min_share=.5, save_arrays=True)
+        epoch = json.loads((Path(directory)/'crish_policy_epochs.jsonl').read_text())
+        with np.load(Path(directory)/'crish_g_epoch_0010.npz', allow_pickle=False) as stored:
+            arrays = dict(stored)
+    assert record['chosen_threshold'] == .5 and outcome.validate() is None
+    moved = outcome.labels[0] != state.labels[0]
+    assert epoch['moved'] == int(moved.sum()) == record['moved']
+    assert np.array_equal(arrays['moved'], moved.numpy()) and arrays['moved'].any()
+    assert np.array_equal(arrays['move_target'][arrays['moved']], outcome.labels[0][moved].numpy())
+    assert (arrays['move_target'][~arrays['moved']] == -1).all()
+    assert np.array_equal(arrays['label_0'], state.labels[0].numpy())

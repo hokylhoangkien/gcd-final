@@ -580,7 +580,7 @@ hướng dẫn này. Giấy phép và nguồn gốc: [NOTICE](NOTICE),
 **Cơ chế.**
 - Mỗi epoch, sau extraction: kNN chính xác (k=10) trên toàn bộ N ảnh train bằng feature backbone đã normalize; cạnh mutual trọng số 1, không mutual 0,5.
 - r_i^ℓ = tỷ lệ có trọng số láng giềng cùng cụm level ℓ; labeled dùng nhãn L0 hợp lệ, không đọc nhãn thật của unlabeled; luôn có r^ℓ ≥ r^0.
-- π_τ Abstain ảnh unlabeled có r^ℓ < τ ở từng level active, với quota cụm (≤50%, giữ ≥2), sàn retained mass 0,7, hoà theo sample ID.
+- π_τ Abstain ảnh unlabeled có r^ℓ < τ ở từng level active, với quota cụm (≤50%, giữ ≥2), sàn retained mass 0,7, hoà theo sample ID; `abstain_move` trước đó Move ở level 0 sang cụm láng giềng chiếm ≥60% trọng số (trần cụm đích 25%, nhãn coarse lan truyền theo cụm đích).
 - Epoch due chọn τ* ∈ {0; 0,3; 0,5; 0,7} bằng SGD ảo trên projector (float64, 4×128 dòng theo trọng số sampler, discovery rồi confirmation); trượt/lỗi thì τ*=0.
 - `persist=true` áp lại π_τ* ở mọi epoch sau warmup trên feature/partition mới (giữ τ*, không giữ ID; không probe, không tiêu RNG). τ* được lưu trong `resume.pt`.
 
@@ -593,21 +593,21 @@ hướng dẫn này. Giấy phép và nguồn gốc: [NOTICE](NOTICE),
 bash scripts/train_selex.sh --config runs/plans/cars-global-NEW/g_cf_seed1.json --variant global --dry-run
 ```
 
-Profile: `g_fixed` (τ=0,5, không probe), `g_cf` (counterfactual), `g_random` (cùng liều, chọn ngẫu nhiên), `g_cf_nopersist` (chỉ áp ở epoch due); `--with-local` thêm `g_cf_local` (chạy bằng `--variant global_local`).
+Profile: `g_fixed` (τ=0,5, không probe), `g_cf` (counterfactual), `g_cf_move` (`g_cf` + Move), `g_random` (cùng liều, chọn ngẫu nhiên), `g_cf_nopersist` (chỉ áp ở epoch due); `--with-local` thêm `g_cf_local` (chạy bằng `--variant global_local`).
 Dry-run kỳ vọng: `discrete_repair=false` (trừ `g_cf_local`), `pair_reliability.enabled=false`, `population_policy` có `ranking=knn_agreement`, `selection=threshold`, `levels=active`, `persist=true` (trừ nopersist), `gate=counterfactual` (`g_cf*`) hoặc `none` (`g_fixed`, `g_random`), `scoring_batches=4`, `scoring_sampling=train_sampler`, `probe_float64=true`, `save_arrays=true`, epochs200; smoke có `warmup_epochs=0`.
 
 **Sàng lọc trên Cars seed 1.**
-- Chạy `g_fixed` và `g_cf` trước; mỗi run full 200 epoch với `--eval-every 1`, theo thứ tự check → smoke → full:
+- Chạy `g_fixed` và `g_cf` trước, rồi `g_cf_move`; mỗi run full 200 epoch với `--eval-every 1`, theo thứ tự check → smoke → full:
 
 ```bash
-GCD_CONFIG=runs/plans/cars-global-NEW/g_fixed_seed1.json   # sau đó: g_cf_seed1.json
+GCD_CONFIG=runs/plans/cars-global-NEW/g_fixed_seed1.json   # sau đó: g_cf_seed1.json, g_cf_move_seed1.json
 bash scripts/train_selex.sh check --config "$GCD_CONFIG" --variant global
 bash scripts/train_selex.sh smoke --config "$GCD_CONFIG" --variant global
 bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant global --eval-every 1
 ```
 
 - Quyết định ở epoch 100 theo luật G1; variant được chọn chạy tiếp tới 200.
-- Run sàng lọc cần làm hàng ablation cũng chạy tới 200: `g_fixed` khi chọn bản có counterfactual.
+- Run sàng lọc cần làm hàng ablation cũng chạy tới 200: `g_fixed` khi chọn bản có counterfactual, và `g_cf` khi chọn `g_cf_move`.
 - Các run còn lại dừng an toàn sau checkpoint (Linux, đúng PID worker):
 
 ```bash
@@ -615,7 +615,7 @@ bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant global --eval-every
 ```
 
 **Log cần xem.**
-- `crish_policy_epochs.jsonl`: mỗi epoch có policy; τ đang áp, nguồn `due`/`persisted`, moved, giây, và theo level: `abstained_unlabeled`, fraction, `truncated_by_mass_floor`, `retained_mass`, histogram 10 bin của r^ℓ. Dòng log: `CRISH_G epoch=… tau=… abstained=[…] moved=…`.
+- `crish_policy_epochs.jsonl`: mỗi epoch có policy; τ đang áp, nguồn `due`/`persisted`, moved (và lý do loại Move), giây, và theo level: `abstained_unlabeled`, fraction, `truncated_by_mass_floor`, `retained_mass`, histogram 10 bin của r^ℓ. Dòng log: `CRISH_G epoch=… tau=… abstained=[…] moved=…`.
 - `crish_p.jsonl`: epoch due; τ ứng viên, gain/known_increase (float64), coverage/guard, τ*, confirmation, giây.
 - `intervention_diagnostics.jsonl`: số ID/positive relations thực đổi mỗi epoch.
 - `crish_g_epoch_NNNN.npz` (`save_arrays`): ids, labeled, nhãn trước can thiệp, r^ℓ (float16), abstained sau can thiệp, moved, move_target; `partitions_epoch_NNNN.npz` ở epoch due.

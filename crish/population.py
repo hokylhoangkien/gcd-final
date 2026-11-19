@@ -215,6 +215,7 @@ class PopulationEngine:
 
     def _apply(self, state, evidence, tau, epoch):
         return apply_threshold(state, evidence, tau, self.settings, min_support=self.probe_settings.min_support,
+                               max_protected_shift=self.probe_settings.max_protected_shift,
                                random_seed=(self.runtime.config['seed'], epoch))
 
     def _remember(self, tau, epoch):
@@ -270,7 +271,9 @@ class PopulationEngine:
                       mutual_fraction=None if evidence is None else evidence.mutual_fraction,
                       knn_k=self.settings.knn_k, ranking='global_knn_agreement',
                       sample_choice=self.settings.sample_choice, levels_scope=self.settings.levels,
-                      actions=self.settings.actions, persist=self.settings.persist)
+                      actions=self.settings.actions, persist=self.settings.persist,
+                      move={key: value for key, value in (coverage or {}).items()
+                            if key.startswith('move_') or key == 'per_target_received'} if applied else {})
         self.runtime.last_policy_epoch_record = record
         with (self.runtime.run_dir/'crish_policy_epochs.jsonl').open('a') as handle:
             handle.write(json.dumps(record, allow_nan=False)+'\n')
@@ -422,7 +425,12 @@ class PopulationEngine:
                               for level in range(len(state.labels))]
                     entry['target_drift'] = dict(sse_levels=levels, chunks=len(drifts))
                     if max(x['protected_coefficient_shift_max'] for x in levels) > self.probe_settings.max_protected_shift:
-                        raise ValueError('Population policy changed protected coefficients')
+                        if not coverage.get('moved'):
+                            # Abstain alone never changes protected coefficients.
+                            raise ValueError('Population policy changed protected coefficients')
+                        # Moves were capped on exact population coefficients; tiny
+                        # scoring chunks inflate 1/(2n-1) shifts, so only log them.
+                        entry['scoring_protected_shift_exceeds_cap'] = True
                     if all(x['coefficient_half_l1_mean'] <= 0 for x in levels):
                         entry['reason'] = 'Policy has no changed pseudo-SSE targets in the scoring rows'; continue
                     ga, _ = mean_gradients(proposed)

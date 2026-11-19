@@ -129,7 +129,7 @@ def random_generator(seed, epoch, level):
 
 
 def apply_threshold(state, evidence: GlobalEvidence, tau: float, settings, *, min_support: int = 2,
-                    random_seed=None):
+                    max_protected_shift: float = .25, random_seed=None):
     """pi_tau: Abstain unlabeled rows with r^l < tau, per scoped level, under guards.
 
     Returns (proposed_state, coverage). tau == 0 returns the identical state.
@@ -151,7 +151,8 @@ def apply_threshold(state, evidence: GlobalEvidence, tau: float, settings, *, mi
     if tau > 0 and settings.actions == 'abstain_move':
         from .global_moves import apply_moves
         current, moved, move_target, move_record = apply_moves(state, evidence, tau, settings,
-                                                               min_support=min_support)
+                                                               min_support=min_support,
+                                                               max_protected_shift=max_protected_shift)
     scope = scoped_levels(state, settings) if tau > 0 else []
     masks = [torch.zeros(len(state.ids), dtype=torch.bool) for _ in state.labels]
     levels = []

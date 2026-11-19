@@ -14,7 +14,7 @@ sys.path.insert(0, str(ROOT))
 from gcd_runtime.config import code_fingerprint, load_config
 from selex_runtime.config import validate_config
 
-PROFILES = ('g_fixed', 'g_cf', 'g_random', 'g_cf_nopersist')
+PROFILES = ('g_fixed', 'g_cf', 'g_cf_move', 'g_random', 'g_cf_nopersist')
 OPTIONAL = ('g_cf_local',)
 
 
