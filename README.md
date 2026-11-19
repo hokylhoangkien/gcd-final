@@ -689,6 +689,26 @@ bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant global --eval-every
 
 Output có `uses_evaluation_labels: true`; mỗi tỷ lệ kèm numerator/denominator: abstain theo level, tỷ lệ cặp positive sai bị gỡ so với được giữ, lỗi nhãn giả cơ sở (leave-one-out majority), AUROC của 1−r^0, error trong tập abstain, và Move đúng theo majority cụm đích so với cụm nguồn.
 
+**So sánh run (`scripts/compare_runs.py`, chỉ đọc log, không train/đánh giá lại).** Ghép cặp theo seed trong `config.json`; cửa sổ theo `epoch_number` 1-based; log policy (0-based) được dịch tự động. Báo (a) best riêng từng metric kèm epoch, (b) epoch cuối, (c) trung bình ± std trên cửa sổ, Δ theo seed và qua seed (mean, std, min, số seed Δ>0), liều theo level, τ* từng refresh và lý do loại; JSON kèm run id, Git SHA, hash config, và các epoch bị thiếu.
+
+```bash
+# G1 (Cars seed 1): mốc là run local adaptive đã quan sát, cửa sổ 61-100.
+.venv/bin/python scripts/compare_runs.py --treatment runs/G_CF_RUN_ID \
+  --reference-history results/paper-plan-verified-20261118/curves-cars/data.json \
+  --window 61 100 --output results/g1-g_cf-seed1.json
+# Đối chứng SelEx cùng code/config gốc/seed/200 epoch/SS cadence (chỉ khác method và policy):
+.venv/bin/python scripts/prepare_global_policy.py --seeds 1 2 3 --control --output runs/plans/cars-final-NEW
+bash scripts/train_selex.sh --config runs/plans/cars-final-NEW/control_seed1.json --baseline --eval-every 1 --dry-run
+# Kết luận cuối: V* với đối chứng, seed 1-3, cửa sổ 101-200.
+.venv/bin/python scripts/compare_runs.py \
+  --treatment runs/VSTAR_SEED1 runs/VSTAR_SEED2 runs/VSTAR_SEED3 \
+  --control runs/CONTROL_SEED1 runs/CONTROL_SEED2 runs/CONTROL_SEED3 \
+  --window 101 200 --output results/final-vstar-vs-control.json
+# Bằng chứng cơ chế (Cars seed 1): V* với g_random cùng liều.
+.venv/bin/python scripts/compare_runs.py --treatment runs/VSTAR_SEED1 --control runs/G_RANDOM_SEED1 \
+  --window 101 200 --output results/mechanism-vstar-vs-random.json
+```
+
 **Luật G1.**
 
 **Mốc so sánh.** Run local adaptive Cars seed 1 hiện có, `20261115T112441Z-0ec6f014`, đánh số theo `epoch_number` (1-based). Tính lại từ `results/paper-plan-verified-20261118/curves-cars/data.json` để xác nhận.
@@ -724,3 +744,11 @@ Output có `uses_evaluation_labels: true`; mỗi tỷ lệ kèm numerator/denomi
 - error rate trong tập bị abstain ≥ 1,5 lần mức cơ sở.
 
 Không đạt thì dừng sớm.
+
+**Luật kết luận cuối (chốt ngày 19/11/2026, trước khi có kết quả).**
+- So V* (variant chọn ở G1) với đối chứng SelEx chạy cùng code, cùng config gốc, cùng seed 1–3, 200 epoch, `--eval-every 1`; ghép cặp theo seed.
+- Ba cách đọc số, áp cho cả hai bên: (a) best riêng từng metric qua 200 epoch (quy tắc báo số của paper); (b) epoch cuối; (c) trung bình SS epoch 101–200.
+- Chỉ viết "CRiSH-G cải thiện All" trên một dataset khi đủ cả ba điều kiện: (1) ΔAll trung bình > 0 ở cả (a), (b), (c); (2) ΔAll > 0 ở cả 3 seed theo (c); (3) ΔAll trung bình theo (a) vượt ngưỡng nhiễu ước tính (1,4 điểm với Cars và CUB, 0,6 điểm với Aircraft). Áp tương tự cho New.
+- Bằng chứng cơ chế (Cars, seed 1): V* hơn `g_random` (cùng liều) ở cả (a), (b), (c); hậu kiểm cho AUROC level 0 ≥ 0,65, và tỷ lệ cặp positive sai trong các cặp bị gỡ cao hơn trong các cặp được giữ.
+- Chỉ viết "nhất quán giữa các dataset" khi kết quả cùng chiều trên ít nhất 2/3 dataset.
+- Không đạt thì báo số như quan sát, không dùng chữ "cải thiện". Luôn báo mọi số theo seed, mean ± std, ở cả ba cách đọc.

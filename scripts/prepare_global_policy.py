@@ -68,7 +68,31 @@ def local(cfg):
     return cfg
 
 
-def prepare(base, output, seeds=None, profiles=PROFILES, known_guard=True):
+SS_KEYS = ('epochs', 'ss_eval_every_epochs', 'ss_n_init', 'ss_max_iter', 'ss_eval_timeout_seconds',
+           'evaluation_rng', 'final_ss_evaluation', 'checkpoint_selection', 'report_best_old_test',
+           'final_eval_timeout_seconds', 'unbalanced')
+POLICY_KEYS = ('method', 'population_policy', 'crish', 'pair_reliability', 'crish_ablation')
+
+
+def control_config(treatment, control_base):
+    """Matched SelEx control: baseline config, same seed, epochs and SS settings as the profiles."""
+    control = load_config(control_base)
+    if control.get('method') != 'baseline' or control['dataset_name'] != treatment['dataset_name']:
+        raise ValueError('Control base must be the SelEx baseline config of the same dataset')
+    control['seed'] = treatment['seed']
+    for key in SS_KEYS:
+        if key in treatment:
+            control[key] = treatment[key]
+        else:
+            control.pop(key, None)
+    return validate_config(control)
+
+
+def config_differences(first, second):
+    return sorted(k for k in set(first) | set(second) if first.get(k) != second.get(k))
+
+
+def prepare(base, output, seeds=None, profiles=PROFILES, known_guard=True, control=False):
     template = load_config(base)
     seeds = [template['seed']] if not seeds else list(seeds)
     if len(set(seeds)) != len(seeds) or any(type(s) is not int or s < 0 for s in seeds):
@@ -86,6 +110,18 @@ def prepare(base, output, seeds=None, profiles=PROFILES, known_guard=True):
                        '--eval-every', '1']
             entries.append(dict(name=name, seed=seed, config=path.name, variant=variant,
                 sha256=hashlib.sha256(payload.encode()).hexdigest(), command=command))
+        if control:
+            reference = global_variants(dict(template, seed=seed), ('g_cf',), known_guard)['g_cf']
+            cfg = control_config(reference, ROOT/f'configs/selex_{template["dataset_name"]}_baseline_200.json')
+            differences = config_differences(cfg, reference)
+            if not set(differences) <= set(POLICY_KEYS):
+                raise ValueError(f'Control differs from g_cf outside method/policy: {differences}')
+            path = output/f'control_seed{seed}.json'
+            payload = json.dumps(cfg, indent=2)+'\n'
+            path.write_text(payload)
+            entries.append(dict(name='control', seed=seed, config=path.name, variant='baseline',
+                sha256=hashlib.sha256(payload.encode()).hexdigest(), differs_from_g_cf=differences,
+                command=['bash', 'scripts/train_selex.sh', '--config', str(path), '--baseline', '--eval-every', '1']))
     version = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=ROOT, capture_output=True,
         text=True, timeout=10).stdout.strip() or 'source_archive'
     manifest = dict(status='prepared_not_executed', timestamp_utc=datetime.now(timezone.utc).isoformat(),
@@ -106,8 +142,16 @@ if __name__ == '__main__':
     parser.add_argument('--seeds', type=int, nargs='+')
     parser.add_argument('--profiles', nargs='+', choices=PROFILES+OPTIONAL, default=list(PROFILES))
     parser.add_argument('--with-local', action='store_true', help='Also write optional g_cf_local')
+    parser.add_argument('--control', action='store_true',
+                        help='Also write the matched SelEx baseline control (same seed/epochs/SS settings)')
     parser.add_argument('--known-guard', choices=['on', 'off'], default='on',
                         help='off: counterfactual gates on total probe gain only (known_increase still logged)')
     args = parser.parse_args()
     profiles = tuple(args.profiles)+(OPTIONAL if args.with_local and 'g_cf_local' not in args.profiles else ())
-    print(json.dumps(prepare(args.base, args.output, args.seeds, profiles, args.known_guard == 'on'), indent=2))
+    result = prepare(args.base, args.output, args.seeds, profiles, args.known_guard == 'on', args.control)
+    if args.control:
+        manifest = json.loads((Path(args.output)/'manifest.json').read_text())
+        for entry in manifest['entries']:
+            if entry['name'] == 'control':
+                print(f'control seed{entry["seed"]} differs from g_cf only in: {", ".join(entry["differs_from_g_cf"])}')
+    print(json.dumps(result, indent=2))
