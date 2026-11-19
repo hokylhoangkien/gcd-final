@@ -596,6 +596,66 @@ bash scripts/train_selex.sh --config runs/plans/cars-global-NEW/g_cf_seed1.json 
 Profile: `g_fixed` (τ=0,5, không probe), `g_cf` (counterfactual), `g_cf_move` (`g_cf` + Move), `g_random` (cùng liều, chọn ngẫu nhiên), `g_cf_nopersist` (chỉ áp ở epoch due); `--with-local` thêm `g_cf_local` (chạy bằng `--variant global_local`). `--known-guard off` (mặc định `on`) bỏ điều kiện known_increase ≤ known_tolerance ở cả discovery lẫn confirmation, chỉ xét gain tổng của probe; known_increase vẫn được log. Không tạo profile mới: dùng thư mục output riêng.
 Dry-run kỳ vọng: `discrete_repair=false` (trừ `g_cf_local`), `pair_reliability.enabled=false`, `population_policy` có `ranking=knn_agreement`, `selection=threshold`, `levels=active`, `persist=true` (trừ nopersist), `gate=counterfactual` (`g_cf*`) hoặc `none` (`g_fixed`, `g_random`), `scoring_batches=4`, `scoring_sampling=train_sampler`, `probe_float64=true`, `save_arrays=true`, epochs200; smoke có `warmup_epochs=0`.
 
+**Kiểm trên Linux trước khi chạy GPU.**
+- Checkout nhánh ở **thư mục mới**; không pull/checkout trong thư mục có job đang chạy (fingerprint đổi sẽ chặn resume). Data/weights dùng lại qua biến môi trường:
+
+```bash
+git clone --branch feat/global-reliability-policy --recurse-submodules https://github.com/hokylhoangkien/gcd-final.git gcd-final-crish-g
+cd gcd-final-crish-g
+git submodule update --init --recursive
+GCD_PYTHON=python3 bash scripts/bootstrap.sh cuda
+export GCD_DATA_ROOT=/path/to/datasets GCD_WEIGHTS_ROOT=/path/to/weights
+```
+
+- Toàn bộ suite CPU theo batch, mỗi file một timeout; timeout (exit 124) tính là lỗi, không phải pass:
+
+```bash
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1
+: > /tmp/crish_g_suite.txt
+for f in tests/test_*.py tests/crish_v21; do
+  timeout 900 .venv/bin/python -m pytest -q "$f" > /tmp/crish_g_last.txt 2>&1
+  echo "rc=$? $f :: $(tail -n 1 /tmp/crish_g_last.txt)" | tee -a /tmp/crish_g_suite.txt
+done
+grep -v '^rc=0 ' /tmp/crish_g_suite.txt   # phải rỗng
+```
+
+- Các file sau đã lỗi trên máy Windows dùng để phát triển (Python 3.12, torch 2.8 CPU, thiếu tensorboard, `bash` của subprocess là WSL), cả ở `4b9aadc` lẫn nhánh này; trên Linux với `.venv` đã ghim **phải đạt**: `tests/crish_v21/` (abstain_protected_pairs, finite_and_zero_mass, loss_lookahead_integration, rebuild_correctness, untouched_baseline), `test_aircraft_runtime`, `test_checkpoint_selection`, `test_cli_shared_gpu`, `test_crish_training`, `test_cub_runtime`, `test_evaluation_protocol_audit`, `test_full_crish_method`, `test_global_policy` (chỉ test launcher subprocess), `test_herbarium_runtime`, `test_kmeans`, `test_layout`, `test_local_adaptive`, `test_online_pair_reliability`, `test_periodic_evaluation`, `test_protocol_alignment`, `test_release`, `test_selex_multidataset`, `test_selex_rng`, `test_selex_runtime`, `test_selex_ss_protocol`, `test_stop_after_checkpoint`, `test_training_upgrades`, `test_upstream_pin`. Suite Windows chỉ xác nhận không có lỗi mới so với `4b9aadc`, chưa phải kiểm parity/resume.
+- Sau khi suite đạt: tạo profile, rồi check → smoke → full lần lượt cho `g_fixed`, sau đó `g_cf` (một job một lúc, trong tmux):
+
+```bash
+.venv/bin/python scripts/prepare_global_policy.py --seeds 1 --output runs/plans/cars-global-NEW
+for P in g_fixed g_cf; do
+  GCD_CONFIG=runs/plans/cars-global-NEW/${P}_seed1.json
+  bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant global --eval-every 1 --dry-run
+  bash scripts/train_selex.sh check --config "$GCD_CONFIG" --variant global
+  bash scripts/train_selex.sh smoke --config "$GCD_CONFIG" --variant global
+done
+bash scripts/train_selex.sh --config runs/plans/cars-global-NEW/g_fixed_seed1.json --variant global --eval-every 1
+# Job thứ hai, sau khi đủ GPU:
+bash scripts/train_selex.sh --config runs/plans/cars-global-NEW/g_cf_seed1.json --variant global --eval-every 1
+```
+
+- Đọc 3 refresh đầu của `g_cf` (log epoch 10, 15, 20 = epoch hiển thị 11, 16, 21) trong `crish_p.jsonl`:
+
+```bash
+.venv/bin/python - "$RUN_DIR" <<'EOF'
+import json, sys
+from pathlib import Path
+for line in (Path(sys.argv[1])/'crish_p.jsonl').read_text().splitlines()[:3]:
+    r = json.loads(line)
+    print(f"epoch={r['epoch']} status={r['status']} tau*={r['chosen_threshold']} reason={r.get('reason')} "
+          f"known_guard={r.get('known_guard')} seconds={r['seconds']:.1f}")
+    for c in r['candidates']:
+        d, k = c.get('discovery') or {}, c.get('confirmation') or {}
+        dose = [x['abstained_unlabeled'] for x in (c.get('coverage') or {}).get('levels', [])]
+        print(f"  tau={c['threshold']} {c['status']} reason={c.get('reason')} abstained={dose} "
+              f"gain={d.get('gain')} known_increase={d.get('known_increase')} "
+              f"confirm_gain={k.get('gain')} confirm_known_increase={k.get('known_increase')}")
+EOF
+```
+
+  τ*=0 với lý do `Discovery known guard failed` ở mọi τ nghĩa là known_increase chặn liều; khi đó có thể chuẩn bị riêng `--known-guard off` (thư mục output mới, cùng profile). `gain guard failed` nghĩa là gain tổng ≤ 0. Không suy ra accuracy từ các số này.
+
 **Sàng lọc trên Cars seed 1.**
 - Chạy `g_fixed` và `g_cf` trước, rồi `g_cf_move`; mỗi run full 200 epoch với `--eval-every 1`, theo thứ tự check → smoke → full:
 
