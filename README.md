@@ -1,5 +1,38 @@
 # SelEx + CRiSH — hướng dẫn chạy 5 run đã chốt
 
+**Cập nhật kế hoạch Cars ngày21/11:** chạy `evidence_only`, `random_proposal`
+và `no_abstain`, cùng seed1; tạm bỏ job FULL. Các config cũ vẫn được giữ nguyên.
+Config mới: `configs/requested_run5/scars_no_abstain_seed1.json`, chỉ khác
+`scars_full_seed1.json` ở `crish_ablation=no_abstain`. Policy loại proposal
+Abstain, vẫn giữ Move, counterfactual scoring, confirmation và mọi budget/guard.
+
+Chỉ chạy khi một GPU đã hết job cũ. Không pull/update checkout đang training;
+để đưa riêng config mới vào máy đang dùng commit92e0e9e, sau khi GPU rảnh có thể
+copy file mới từ GitHub mà không cập nhật runtime. Đường dẫn config phải chưa
+tồn tại; dùng `curl --fail --location --output` với URL của commit bổ sung.
+Không resume checkpoint của policy khác. Run mới luôn có RUN_ID riêng.
+
+```bash
+bash scripts/train_selex.sh --config configs/requested_run5/scars_no_abstain_seed1.json --variant local --dry-run
+```
+
+Khi GPU đã rảnh và setup/data/weights hoàn tất, dùng launcher như hai ablation
+còn lại (preflight -> bounded intervention smoke -> fresh200 epochs):
+
+```bash
+(
+  set -euo pipefail
+  mkdir -p logs
+  GCD_CONFIG=configs/requested_run5/scars_no_abstain_seed1.json
+  GCD_JOB_LOG="logs/scars-no_abstain-seed1-$(date -u +%Y%m%dT%H%M%SZ).log"
+  bash scripts/train_selex.sh check --config "$GCD_CONFIG" --variant local 2>&1 | tee "$GCD_JOB_LOG"
+  timeout --signal=INT --kill-after=120s 48h bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant local 2>&1 | tee -a "$GCD_JOB_LOG"
+)
+```
+
+Bảng5 run và các lệnh FULL bên dưới ghi kế hoạch ban đầu, không phải yêu cầu
+khởi lại FULL trong đợt ablation hiện tại. CUB/Aircraft full seed2 giữ nguyên.
+
 Đây là hướng dẫn chính của repository: từ chuẩn bị máy GPU đến chạy adaptive,
 ablation, đọc kết quả và bàn giao paper. Không cần mở các báo cáo để chạy.
 

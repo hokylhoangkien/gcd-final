@@ -69,6 +69,19 @@
         "seed",
         "crish_ablation"
       ]
+    },
+    {
+      "config": "scars_no_abstain_seed1.json",
+      "dataset": "scars",
+      "variant": "no_abstain",
+      "seed": 1,
+      "sha256": "d3d8d3232a61762230dec7d358d231cf9ac0ee592aaaa572a27b54261f2b943c",
+      "base_run_id": "20261115T112441Z-0ec6f014",
+      "base_config_sha256": "6aca45260eaab82b512ca9b8aae334f3f969793a713a4791384ff78d04538021",
+      "base_git_sha": "fdd81ceb782628ea26ce1b00bcfa0c2a2c56fb13",
+      "changed_fields": [
+        "crish_ablation"
+      ]
     }
   ],
   "cuda_verified": false,

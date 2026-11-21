@@ -1785,3 +1785,30 @@ bash scripts/train_selex.sh check --config configs/requested_run5/scars_full_see
 Then use README run1 launch (automatic bounded intervention smoke, then full).
 All five jobs remain prepared_not_executed. Preserve historical source for
 old checkpoint resume; do not pool different-source seeds without review.
+
+
+## 2026-11-21 — Add Cars no_abstain seed1 configuration
+
+User changed the planned Cars trio to evidence_only/random_proposal/no_abstain
+and authorized adding the missing configuration. Initial HEAD92e0e9e on
+feat/local-adaptive-acceptance. Existing unstaged manuscript/PDF/build metadata,
+.gitignore, reports00/01/02/06, check_manuscript.py and paper/figures preserved.
+Local process inventory found no training worker. Mac16GiB remains CPU-only;
+remote processes are not directly accessible. User-supplied logs indicate
+remote CUB/Aircraft jobs; their state has not been rechecked by this agent.
+
+Added configs/requested_run5/scars_no_abstain_seed1.json by copying the matched
+Cars full config and changing only crish_ablation. Existing five config hashes
+and gcd_runtime/crish/selex_runtime code_fingerprint verified unchanged.
+Added a manifest entry and README current-plan/run instructions. No source,
+upstream, old config, dataset, weight, checkpoint or remote process modified.
+Novelty/protocol caveats stay unchanged; this is an existing policy config.
+
+Verification: 16 paper-ablation CPU cases passed in1.55s under60s outer bound;
+check/smoke/train dry-runs passed with15s each;27 README Bash blocks pass bash-n;
+git diff --check passed. Receipts: logs/no-abstain-addition-tests.{log,xml},
+logs/no-abstain-addition-{check,smoke,train}-dry.log and before-hash snapshot.
+GPU no_abstain smoke/benchmark NOT RUN. Transfer only the new config to a
+historical checkout; do not pull/update runtime during active training. Wait
+for an available GPU, then check this config with --variant local and launch
+fresh; never resume a checkpoint from another ablation.
