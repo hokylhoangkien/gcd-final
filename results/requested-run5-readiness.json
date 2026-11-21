@@ -1,0 +1,74 @@
+{
+  "status": "code_config_checks_passed_remote_gates_pending",
+  "benchmark_metrics": null,
+  "cuda_verified": false,
+  "jobs": [
+    {
+      "config": "configs/requested_run5/scars_full_seed1.json",
+      "dry_run_modes": [
+        "check",
+        "smoke",
+        "train"
+      ],
+      "exact_observed_config_parity": true
+    },
+    {
+      "config": "configs/requested_run5/scars_evidence_only_seed1.json",
+      "dry_run_modes": [
+        "check",
+        "smoke",
+        "train"
+      ],
+      "exact_observed_config_parity": true
+    },
+    {
+      "config": "configs/requested_run5/scars_random_proposal_seed1.json",
+      "dry_run_modes": [
+        "check",
+        "smoke",
+        "train"
+      ],
+      "exact_observed_config_parity": true
+    },
+    {
+      "config": "configs/requested_run5/aircraft_full_seed2.json",
+      "dry_run_modes": [
+        "check",
+        "smoke",
+        "train"
+      ],
+      "exact_observed_config_parity": true
+    },
+    {
+      "config": "configs/requested_run5/cub_full_seed2.json",
+      "dry_run_modes": [
+        "check",
+        "smoke",
+        "train"
+      ],
+      "exact_observed_config_parity": true
+    }
+  ],
+  "bash_blocks_checked": 25,
+  "upstream_hypcd": {
+    "sha": "ffc895b7ff38be8502bb7e3bd851f1d2a55dff73",
+    "kind": "git_submodule"
+  },
+  "upstream_selex": {
+    "sha": "d8107b5458f3337b2d5342f79345a976037a1265",
+    "kind": "verified_selex_snapshot"
+  },
+  "date": "2026-11-21",
+  "tests": {
+    "passed": 94,
+    "failed": 0,
+    "seconds": 29.46,
+    "timeout_seconds": 120,
+    "log": "logs/requested-run5-tests.log",
+    "junit": "logs/requested-run5-tests.xml"
+  },
+  "limitations": [
+    "CPU synthetic/regression and CLI dry-runs only",
+    "Remote CUDA, actual data/weights, full-batch VRAM and full benchmark not verified"
+  ]
+}

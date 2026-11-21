@@ -1718,3 +1718,70 @@ actual adaptive check/smoke/train CLI dry-runs passed with15s deadlines.
 Eval cadence override is documented only for train, as the CLI requires.
 Only README, removed handoff docs and this audit addition belong in this commit;
 all unrelated existing dirty manuscript/reports/figure work stays local.
+
+
+## 2026-11-21 — Readiness audit for the five requested runs
+
+Requested scope: Cars full/evidence_only/random_proposal at matched seed 1,
+Aircraft full seed 2, CUB full seed 2; review code, write executable README,
+and push only the related changes. No training requested on this Mac.
+Initial HEAD: 4b9aadc; branch feat/local-adaptive-acceptance; origin
+https://github.com/hokylhoangkien/gcd-final.git. Pre-existing unstaged edits:
+.gitignore, manuscript build/PDF/TeX, reports00/01/02/06,
+scripts/check_manuscript.py, and untracked paper/figures/. Preserve all of them.
+Process inventory: Codex app-server and VS Code Python helpers, no matching
+local training worker. Remote processes were not inspected. Host macOS arm64,
+16 GiB RAM, no nvidia-smi; local datasets/ and weights/ absent. Existing runs/
+and logs/ contain historical plans/imports, not evidence of a live GPU worker.
+No local resume.pt found. No checkpoint, logs, datasets or upstream changed.
+
+Code inspection: train_selex.sh -> selex_runtime.cli -> gcd_runtime.launch;
+crish.ablation and engine implement all three requested Cars policies.
+prepare_paper_plan.py supports explicit variants/seeds and preserves config.
+Current experiments use corrected Euclidean SelEx, distinct from historical
+Hyp-SelEx. Protocol/novelty caveats in reports01/02 remain applicable; this
+operational review makes no novelty or accuracy claim.
+
+Important readiness finding: default CUB/Aircraft crish_200 templates select
+population policy, local cap1/scoring32 if overridden; they do not directly
+represent observed adaptive local runs. Use exact config_json snapshots from
+the tracked results/paper-plan-verified-20261118/registry.json: local cap8,
+boundaries16, scoring128, confirmation8, SS every epoch. Cars template also
+needs SS cadence1 to match the observed run. Prepare portable five-run configs
+from these snapshots, changing only seed and explicit crish_ablation. Never
+resume an old checkpoint under the new source fingerprint. CUDA/data/weights
+and actual intervention smoke on the remote host remain required gates.
+
+Next safe action: bounded CPU regression/synthetic tests and dry-runs of the
+five exact configs, then document per-job Linux CUDA checks, bounded launch,
+monitoring, final All/Old/New and same-source resume. Do not start training.
+
+### Five-run review outcome
+
+Added configs/requested_run5/{scars_full_seed1,scars_evidence_only_seed1,
+scars_random_proposal_seed1,aircraft_full_seed2,cub_full_seed2}.json plus
+manifest with source registry/hash and historical run provenance. Each config
+matches the observed snapshot except requested seed and explicit policy.
+Runtime and upstream untouched. README now contains complete setup, verified
+Cars ZIP layout/checksum, existing CUB/Aircraft download/checksums, five
+individual check/train commands, bounded deadlines, monitoring, final metrics
+and same-source resume. Cars archive central directory was inspected using
+HTTP Range; no image dataset or model weight was downloaded. Official HypCD
+paper and SelEx repository were revisited to retain the explicit distinction
+between historical hyperbolic and current Euclidean experiments. Novelty gates
+remain open and no new literature/efficacy claim is asserted.
+
+Verification: 94 CPU regression/synthetic cases passed in 29.46s (120s outer
+deadline); no failures. 15 CLI dry-runs passed (check/smoke/train x 5), each
+with 15s deadline. 25 README Bash blocks pass bash -n. Observed config parity,
+config hashes, HypCD submodule pin and SelEx snapshot hashes verified.
+Whitespace diff passes. Receipts logs/requested-run5-tests.{log,xml} and
+logs/requested-run5-readiness.json; portable summary committed under
+results/requested-run5-readiness.json. GPU/data/weight readiness remains
+unverified; not a completed benchmark. No running process stopped/replaced.
+
+Next exact command on Linux/NVIDIA after README setup/data/weights:
+bash scripts/train_selex.sh check --config configs/requested_run5/scars_full_seed1.json --variant local
+Then use README run1 launch (automatic bounded intervention smoke, then full).
+All five jobs remain prepared_not_executed. Preserve historical source for
+old checkpoint resume; do not pool different-source seeds without review.

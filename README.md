@@ -1,4 +1,4 @@
-# SelEx + CRiSH — cài đặt, chạy và phân tích thí nghiệm
+# SelEx + CRiSH — hướng dẫn chạy 5 run đã chốt
 
 Đây là hướng dẫn chính của repository: từ chuẩn bị máy GPU đến chạy adaptive,
 ablation, đọc kết quả và bàn giao paper. Không cần mở các báo cáo để chạy.
@@ -8,15 +8,30 @@ dùng hình học Euclidean. Nhánh Hyp-SelEx lịch sử được giữ riêng;
 các run SelEx hiện tại là hyperbolic CRiSH. Linux NVIDIA dùng cho training;
 Mac chỉ phát triển và kiểm thử CPU nhỏ.
 
-**Trạng thái ngày 18/11/2026:** có ba run adaptive seed1, 200 epoch được nhập
-log từ GPU; có full +5 ablations và công cụ phân tích, chưa có kết quả GPU
-cho các ablation mới hoặc bảng chính ≥3 seed. Chưa chứng minh cải thiện hay novelty.
+**Kiểm tra ngày 21/11/2026:** code có đủ 5 cấu hình bên dưới, lấy từ config
+của các run seed1 đã quan sát. Ba ablation Cars dùng chung **seed1**;
+Aircraft và CUB chạy **full, seed=2**, khởi tạo mới từ pretrained weights.
+Không chạy tiếp optimizer/checkpoint seed1. Các cấu hình được commit trong
+`configs/requested_run5/`, nên máy GPU mới không cần archive hoặc plan ở Mac.
+
+**Sẵn sàng về code/config; CUDA, dữ liệu và VRAM của máy thuê chưa được xác minh.**
+Chỉ bắt đầu full sau preflight và smoke thực trên Linux NVIDIA. Mac16GB dùng
+kiểm thử CPU; không có dataset/weights mặc định hoặc CUDA ở máy audit.
+Chưa chạy 5 benchmark này, chưa chứng minh cải thiện hay novelty.
+
+| Run | Dataset | Policy | Seed | Config trong `configs/requested_run5/` |
+|---|---|---|---:|---|
+| 1 | Stanford Cars | `full` | 1 | `scars_full_seed1.json` |
+| 2 | Stanford Cars | `evidence_only` | 1 | `scars_evidence_only_seed1.json` |
+| 3 | Stanford Cars | `random_proposal` | 1 | `scars_random_proposal_seed1.json` |
+| 4 | FGVC-Aircraft | `full` | 2 | `aircraft_full_seed2.json` |
+| 5 | CUB-200-2011 | `full` | 2 | `cub_full_seed2.json` |
 
 | Cần làm | Đọc phần |
 |---|---|
 | Máy GPU mới | 1 → 2 → 3 → 4 |
 | Tiếp tục seed của run đã có | 4.2 |
-| Chạy ablation | 5 |
+| Chạy đúng 5 run | 4 → 5 |
 | Xem log, điểm, checkpoint | 6 → 7 |
 | Xuất bảng, curves, hậu kiểm | 8 |
 | Dừng/resume | 9 |
@@ -28,29 +43,51 @@ Nếu máy đã có repo/môi trường/data/weights thì dùng lại. Không c�
 hoặc đổi config trong checkout có job đang chạy; fingerprint mới có thể chặn
 resume. Giữ checkout và config gốc cho những job đó.
 
+Máy mới: Ubuntu22.04 + Python3.10 là môi trường ví dụ; cần Linux NVIDIA,
+driver tương thích CUDA12.1 và Python3.9–3.11. Không cài lại NVIDIA driver.
+Cài công cụ trước (dùng sudo nếu tài khoản yêu cầu):
+
+```bash
+nvidia-smi
+apt-get update
+apt-get install -y python3.10-venv python3.10-dev build-essential git curl tar tmux unzip coreutils ca-certificates
+```
+
 Checkout mới, thư mục đích chưa tồn tại:
 
 ```bash
 git clone --branch feat/local-adaptive-acceptance --recurse-submodules https://github.com/hokylhoangkien/gcd-final.git gcd-final
 cd gcd-final
-GCD_PYTHON=python3 bash scripts/bootstrap.sh cuda
+python3.10 -m venv .venv
+.venv/bin/python -m pip install pip==24.3.1
+.venv/bin/python -m pip install torch==2.4.1 torchvision==0.19.1 --index-url https://download.pytorch.org/whl/cu121
+.venv/bin/python -m pip install -r environments/requirements-common.txt -r environments/requirements-research-tests.txt
+.venv/bin/python -m pip install -r environments/requirements-selector-cuda.txt
+.venv/bin/python -m pip install --force-reinstall --no-deps -r environments/requirements-selector-cuda.txt
+.venv/bin/python -m pip install --only-binary=:all: --no-deps xformers==0.0.28.post1
+.venv/bin/python -m pip check
+.venv/bin/python scripts/bootstrap_upstream.py
 ```
 
-Cần Python **3.9–3.11**, Linux và NVIDIA driver tương thích CUDA12.1.
-Bootstrap tạo `.venv`, ghim Torch2.4.1/cu121, torchvision0.19.1 và dependencies,
-kiểm source/CPU; không tải data/weights hoặc train dài. Không cài lại NVIDIA
-driver khi `nvidia-smi` đang hoạt động. Nếu suite chạm timeout thì chưa phải
-pass; xem log thay vì tự đổi Torch/cài lại môi trường.
+Cài selector dependencies trước rồi ghim backend Git bằng `--no-deps` để giữ
+Torch. Không chạy lại các bước install nếu môi trường đã sẵn sàng. Nếu clone
+báo thư mục đã tồn tại, kiểm tra checkout hiện có; không xóa hoặc ghi đè.
+Mọi lệnh dưới đây chạy từ gốc repo; đặt `SELEX_PYTHON` nếu dùng interpreter
+đã chuẩn bị ở nơi khác. Không cập nhật source khi có job đang chạy.
 
-Ubuntu trống cần các công cụ sau (dùng sudo nếu tài khoản yêu cầu):
+Kiểm thử CPU có giới hạn trước khi chuẩn bị GPU run; không tải data/weights:
 
 ```bash
-apt-get update
-apt-get install -y python3-venv python3-dev build-essential git curl tar tmux unzip ca-certificates
+mkdir -p logs
+set -o pipefail
+CUDA_VISIBLE_DEVICES="" OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
+  timeout 300s .venv/bin/python -m pytest tests -q --tb=short \
+  --junitxml=logs/run5-cpu-tests.xml 2>&1 | tee logs/run5-cpu-tests.log
 ```
 
-Đặt `SELEX_PYTHON` nếu dùng interpreter đã chuẩn bị ở nơi khác. Mọi lệnh bên
-dưới chạy từ gốc repo; `.venv/bin/python` là interpreter ví dụ của bootstrap.
+Fail/timeout thì dừng đọc log; không gọi timeout là pass hoặc tự đổi Torch.
+`bootstrap.sh cuda` vẫn có sẵn, nhưng hướng dẫn này dùng các bước tương đương
+ở trên để CPU suite có deadline300s thay giới hạn60s của wrapper.
 
 ## 2. Data, weights và đường dẫn
 
@@ -84,9 +121,33 @@ weights/dinov2_vitb14_reg4_pretrain.pth
 | CUB-200-2011 | `cub` | 100 / 100 | 50% | Native train |
 | FGVC-Aircraft | `aircraft` | 50 / 50 | 50% | Native trainval, 100 variant |
 
-Nguồn Cars có thể dùng [stanford_cars.zip](https://huggingface.co/zhengli97/prompt_learning_dataset/tree/main).
-Đặt ảnh và annotation theo cây trên; annotation test cần ở `devkit/`.
-Không dùng split Zhou trong archive thay SSB.
+Cars: dùng archive mirror [stanford_cars.zip](https://huggingface.co/zhengli97/prompt_learning_dataset/tree/ceb3112337fb6e1bf71534e355ca5569b63f19a6).
+Bản ghim có SHA256 từ LFS metadata; đã kiểm danh mục ZIP từ xa bằng HTTP Range,
+chưa tải/kiểm ảnh tại máy audit. Archive đặt test labels ở root, nên cần copy
+annotation vào `devkit/`. Không dùng split Zhou trong archive thay SSB.
+
+**Chỉ chạy khối này khi chưa có Cars**, hai thư mục đích phải chưa tồn tại:
+
+```bash
+(
+  set -euo pipefail
+  mkdir -p downloads datasets
+  test ! -e datasets/cars
+  test ! -e datasets/stanford_cars
+  curl -fL -C - --connect-timeout 20 --max-time 3600 \
+    -o downloads/stanford_cars.zip \
+    https://huggingface.co/zhengli97/prompt_learning_dataset/resolve/ceb3112337fb6e1bf71534e355ca5569b63f19a6/stanford_cars.zip
+  echo '50812812f33534ef2906b992762f96e8a5bb57b0eedc53800e91b7ed599abf8e  downloads/stanford_cars.zip' | sha256sum -c -
+  unzip -n -q downloads/stanford_cars.zip -d datasets
+  mv -n datasets/stanford_cars datasets/cars
+  cp -n datasets/cars/cars_test_annos_withlabels.mat datasets/cars/devkit/cars_test_annos_withlabels.mat
+)
+```
+
+Nếu đã có Cars, giữ nguyên và đối chiếu layout ở trên; thiếu annotation phải
+lấy từ nguồn đúng, không tự tạo nhãn. Download/checksum/extraction lỗi thì dừng,
+kiểm thư mục đã tạo thay vì chạy lại hoặc xóa dataset. Preflight phần4 kiểm tra
+membership/counts/split và image paths trên dữ liệu thật trước training.
 
 Nếu chưa có CUB/Aircraft, chọn đúng **một** khối tải bên dưới trên máy GPU.
 Không tải lại dữ liệu đã đủ. Chỉ giải nén khi checksum OK;
@@ -188,155 +249,163 @@ Profile local lịch sử có cap1/scoring32, khác adaptive cap8/boundaries16/s
 8 confirmation folds và cùng context/budgets. Manuscript cũ còn khác cấu hình
 quan sát; không dùng nội dung draft để suy ra thông số run.
 
-## 4. Chạy full và seed tiếp theo
+## 4. Chuẩn bị và kiểm tra đúng 5 run
 
-### 4.1. Thí nghiệm adaptive mới
+Dùng trực tiếp năm file trong bảng đầu README. **Không lấy thẳng
+`selex_cub_crish_200.json` / `selex_aircraft_crish_200.json`**: các template
+đó mặc định population policy và không khớp adaptive full đã chạy.
+Năm config mới giữ local cap8/boundaries16/scoring128/confirmation8,
+SS mỗi epoch, population và online weighting tắt. Giữ cấu hình riêng của CUB.
 
-Chọn một dataset, rồi tạo profile. Output phải là thư mục **mới**:
+Nguồn đối chiếu là `results/paper-plan-verified-20261118/registry.json`, trường
+`config_json`; manifest trong `configs/requested_run5/` ghi run ID gốc,
+config hash và các trường đổi. Chỉ đổi seed theo yêu cầu và khai báo
+`crish_ablation`; Cars chỉ khác policy. Mọi run: 200 epoch, batch128,
+DINOv2 reg4, fixed-final SS-v2. Không cần sinh lại config hoặc sửa source.
+Source hiện tại khác source seed1 lịch sử; ghi provenance riêng, chưa gộp
+seed1/seed2 thành nhóm matched chỉ vì hyperparameters giống nhau.
 
-```bash
-GCD_DATASET=scars
-# Đổi thành cub hoặc aircraft khi cần.
-.venv/bin/python scripts/prepare_local_adaptive.py \
-  --base "configs/selex_${GCD_DATASET}_crish_200.json" \
-  --output "runs/plans/${GCD_DATASET}-adaptive-NEW"
-GCD_CONFIG="runs/plans/${GCD_DATASET}-adaptive-NEW/adaptive.json"
-bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant local --eval-every 1 --dry-run
-```
-
-Preparer chỉ ghi `adaptive.json`, `legacy.json`, `cap1_context.json`,
-`baseline.json`, manifest và commands. Nó không download/train.
-Dry-run phải hiện `discrete_repair=true`, cap8/boundaries16/scoring128,
-confirmation_budget8, population/online đều false và epochs200.
-
-`--eval-every 1` ghi SS mỗi epoch. Template có thể để cadence0; snapshot config
-thực trong run sẽ ghi override1. Giữ cùng cadence cho mọi seed/ablation:
-`evaluation_rng=upstream` khiến thay cadence có thể làm đổi RNG train.
-
-Kiểm data/weights/import và **CUDA image forward/backward với head thật**:
+Chạy từ gốc repo sau phần1–2. Nếu mở tmux/SSH mới, đặt lại các biến môi trường
+trỏ volume. Trong checkout đã có job, giữ nguyên source và dùng checkout riêng.
 
 ```bash
+mkdir -p logs
+export GCD_DATA_ROOT="$PWD/datasets"
+export GCD_WEIGHTS_ROOT="$PWD/weights"
+export GCD_RUNS_ROOT="$PWD/runs"
+# Nếu dữ liệu nằm trên volume khác, thay ba đường dẫn trên bằng đường dẫn thật.
 nvidia-smi
-bash scripts/train_selex.sh check --config "$GCD_CONFIG" --variant local
+ps -axo pid,ppid,etime,%cpu,%mem,command | grep -E 'python|train_selex' | head -n 40
+git rev-parse HEAD
+git status --short
 ```
 
-Có thể chọn GPU bằng `CUDA_VISIBLE_DEVICES`. Launcher cho phép GPU có process
-khác nhưng preflight/smoke vẫn bắt buộc; tự kiểm VRAM và job trước khi chạy.
-Không suy ra CUDA đã đạt chỉ từ `nvidia-smi`.
+GPU cần đủ VRAM cho DINOv2 ViT-B/14, projector65536, batch128, feature cache
+và scoring/SS clustering. Chưa đo peak của năm job mới nên không hứa mức VRAM
+hay ETA; dùng smoke batch thật làm gate. Mỗi job có hai minibatch smoke rồi
+full200 epoch; không chạy đồng thời trên cùng GPU. Đảm bảo volume còn đủ chỗ
+cho data, weights, checkpoints và partition snapshots; lưu cả run folder.
 
-Chạy một job trong tmux, sau khi check đạt:
+Dry-run cả năm cấu hình, không train/download hay kiểm CUDA:
 
 ```bash
-tmux new -s crish-train
+set -e
+for config in \
+  configs/requested_run5/scars_full_seed1.json \
+  configs/requested_run5/scars_evidence_only_seed1.json \
+  configs/requested_run5/scars_random_proposal_seed1.json \
+  configs/requested_run5/aircraft_full_seed2.json \
+  configs/requested_run5/cub_full_seed2.json
+do
+  bash scripts/train_selex.sh --config "$config" --variant local --dry-run
+done
 ```
 
-Trong tmux, đặt lại `GCD_CONFIG` nếu dùng shell mới, rồi chạy:
+Phải thấy đúng dataset/seed/policy, `epochs=200`, `head_dimension=65536`,
+`discrete_repair=true`, cap8/boundaries16/train_batch128/confirmation8,
+population và pair reliability đều false. Full snapshot phải có
+`ss_eval_every_epochs=1`, `max_steps_per_epoch=0`; smoke được launcher tạo riêng.
+Dry-run vẫn tạo các config snapshot nhỏ trong `runs/plans/`.
+
+Mở tmux trước khi chạy job đầu; các bước còn lại làm trong tmux:
 
 ```bash
-bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant local --eval-every 1
+tmux new -s crish-run5
 ```
 
-Launcher tự thực hiện **preflight → bounded smoke → full200 epoch** khi không
-resume. Không cần chạy smoke riêng trước lệnh full; nếu đã chạy riêng, launcher
-vẫn lặp smoke. Chỉ muốn smoke:
+Mỗi khối ở phần5: **check CUDA/data/weights/import → launcher tự smoke → full**.
+`check` có pretrained image forward/backward và optimizer step thật với head;
+launcher kiểm lại trước mỗi stage. Không thêm `--eval-every` vì cadence1 đã
+nằm trong config; flag này chỉ hợp lệ ở train, không ở check/smoke.
+
+Smoke1 epoch, tối đa2 minibatch, warmup0, extraction/clustering toàn pool và
+SS cuối. Full/random phải score CF candidate; evidence-only phải thực thi
+policy không qua CF. Không bắt buộc nhận edit; fallback hoặc chưa exercise
+policy sẽ chặn full. Smoke không phải kết quả benchmark.
+
+## 5. Năm lệnh chạy đầy đủ, từng job một
+
+Chỉ chạy khối kế tiếp sau khi job trước kết thúc thành công. Mỗi khối được bọc
+trong subshell `set -euo pipefail`: check lỗi thì không train; train lỗi không
+bị `tee` che. Không dán thành sweep hoặc bỏ qua lỗi. `timeout48h` là giới hạn
+thời gian thuê, không phải ETA; điều chỉnh trước khi chạy theo ngân sách thật.
+Runtime còn có preflight180s, smoke1800s, worker604800s, SS evaluator7200s;
+giới hạn ngoài48h chặn toàn lệnh, kể cả smoke và evaluation. Nếu timeout/SSH
+lỗi, kiểm PID/GPU/log trước khi chạy lại, không khởi job trùng.
+
+### Run 1 — Cars full, seed1
 
 ```bash
-bash scripts/train_selex.sh smoke --config "$GCD_CONFIG" --variant local
+(
+  set -euo pipefail
+  GCD_CONFIG=configs/requested_run5/scars_full_seed1.json
+  GCD_JOB_LOG="logs/scars-full-seed1-$(date -u +%Y%m%dT%H%M%SZ).log"
+  bash scripts/train_selex.sh check --config "$GCD_CONFIG" --variant local 2>&1 | tee "$GCD_JOB_LOG"
+  timeout --signal=INT --kill-after=120s 48h bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant local 2>&1 | tee -a "$GCD_JOB_LOG"
+)
 ```
 
-Smoke1 epoch, ≤2 minibatch, warmup0, có extraction/clustering toàn pool và SS
-cuối; vì vậy không phải phép kiểm tức thời. Full/ablation CF phải thực sự score
-candidate; evidence-only phải exercise policy không qua CF. Không yêu cầu có
-edit được nhận, nhưng fallback hoặc không exercise được policy sẽ chặn full.
-Smoke score không dùng làm benchmark. Smoke/full có run ID và log riêng.
-Các deadline là điều kiện dừng, không phải ETA hay hứa đủ runtime thuê GPU.
-
-### 4.2. Tiếp nối seed của cấu hình đã quan sát
-
-Dùng **`config.json` của đúng full run**, không suy ra từ config template hoặc
-đổi cadence giữa các seed. Trên máy có run, thay RUN_ID bằng ID thật:
+### Run 2 — Cars evidence_only, seed1
 
 ```bash
-RUN_DIR=runs/RUN_ID
-.venv/bin/python scripts/prepare_paper_plan.py \
-  --base "$RUN_DIR/config.json" --seeds 2 3 --variants full \
-  --output runs/plans/full-seed23-NEW
-bash scripts/train_selex.sh --config runs/plans/full-seed23-NEW/full_seed2.json --variant local --dry-run
+(
+  set -euo pipefail
+  GCD_CONFIG=configs/requested_run5/scars_evidence_only_seed1.json
+  GCD_JOB_LOG="logs/scars-evidence_only-seed1-$(date -u +%Y%m%dT%H%M%SZ).log"
+  bash scripts/train_selex.sh check --config "$GCD_CONFIG" --variant local 2>&1 | tee "$GCD_JOB_LOG"
+  timeout --signal=INT --kill-after=120s 48h bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant local 2>&1 | tee -a "$GCD_JOB_LOG"
+)
 ```
 
-Sau check/smoke, chạy **từng seed** bằng cùng launcher; không dán cả danh sách
-commands như sweep. Preparer cũng nhận ZIP/tar.gz chứa đúng một run config:
+### Run 3 — Cars random_proposal, seed1
 
 ```bash
-.venv/bin/python scripts/prepare_paper_plan.py \
-  --base /path/to/cub-results-RUN_ID.zip --seeds 2 3 --variants full \
-  --output runs/plans/cub-seed23-NEW
+(
+  set -euo pipefail
+  GCD_CONFIG=configs/requested_run5/scars_random_proposal_seed1.json
+  GCD_JOB_LOG="logs/scars-random_proposal-seed1-$(date -u +%Y%m%dT%H%M%SZ).log"
+  bash scripts/train_selex.sh check --config "$GCD_CONFIG" --variant local 2>&1 | tee "$GCD_JOB_LOG"
+  timeout --signal=INT --kill-after=120s 48h bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant local 2>&1 | tee -a "$GCD_JOB_LOG"
+)
 ```
 
-Archive gốc, `runs/` và các plans cá nhân không nằm trên Git. Source hiện tại
-được triển khai tại commit `a9640c4`; runtime fingerprint đã khác source của
-các run cũ. Full default có regression parity nhưng không tự gộp các seed
-khác source/provenance thành cùng nhóm. Chốt version/config trước G1 và giữ
-checkout cũ cho resume; không bypass fingerprint.
-
-## 5. Năm ablation và cách chạy
-
-Trường top-level `crish_ablation` chọn policy; không có trường tương đương
-`full`. Không sửa source giữa các run. Chỉ hỗ trợ local SelEx controller,
-population/online weighting phải tắt.
-
-| Table II | Giá trị | Proposal | Abstain | Move | CF | Confirmation |
-|---|---|---|---|---|---|---|
-| (a) | SelEx công bố | — | — | — | — | — |
-| (b) | `evidence_only` | Reciprocal | Có | Có | Không | Không |
-| (c) | `no_confirmation` | Reciprocal | Có | Có | Có | Không |
-| (d) | `full` | Reciprocal | Có | Có | Có | Có |
-| (e) | `no_abstain` | Reciprocal | Không | Có | Có | Có |
-| (f) | `no_move` | Reciprocal | Có | Không | Có | Có |
-| (g) | `random_proposal` | Random | Có | Có | Có | Có |
-
-- Evidence-only gộp evidence + actions: ưu tiên boundary, có Move target đủ
-  support thì chọn Move, không có thì Abstain. Giữ structural/known-label,
-  protected-shift và nonzero-SSE-drift guards; không tính CF/confirmation gain.
-  Move trượt guard thì Keep, không thử Abstain để lách guard.
-- No-confirmation giữ discovery CF và các guard, chỉ bỏ independent confirmation.
-- No-abstain bỏ proposal Abstain; trường hợp chỉ có Abstain trở thành Keep,
-  không biến thành Move. No-move chỉ bỏ Move; không ép dùng hết action budget.
-- Random xáo thứ tự cùng eligible boundary pool **trước shortlist cap**, không
-  random action type hay cố tình hạ quota. Dùng `random.Random(seed)` riêng,
-  không tiêu thụ Python/NumPy/Torch training RNG. Tập được chọn sau cap có thể khác.
-- Tất cả giữ cùng reserved context/folds, budgets, split, augmentation,
-  dataloader, seed,200 epoch và lịch refresh/SS. Số edit thực có thể khác do guards.
-
-Tạo đủ6 variants từ **config thực của full** đã chọn:
+### Run 4 — Aircraft full, seed2
 
 ```bash
-.venv/bin/python scripts/prepare_paper_plan.py \
-  --base "$RUN_DIR/config.json" --seeds 1 2 3 \
-  --output runs/plans/cars-ablation-NEW
-GCD_ABLATION_CONFIG=runs/plans/cars-ablation-NEW/no_confirmation_seed1.json
-bash scripts/train_selex.sh --config "$GCD_ABLATION_CONFIG" --variant local --dry-run
+(
+  set -euo pipefail
+  GCD_CONFIG=configs/requested_run5/aircraft_full_seed2.json
+  GCD_JOB_LOG="logs/aircraft-full-seed2-$(date -u +%Y%m%dT%H%M%SZ).log"
+  bash scripts/train_selex.sh check --config "$GCD_CONFIG" --variant local 2>&1 | tee "$GCD_JOB_LOG"
+  timeout --signal=INT --kill-after=120s 48h bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant local 2>&1 | tee -a "$GCD_JOB_LOG"
+)
 ```
 
-Thay tên `no_confirmation` bằng giá trị trong bảng để chọn variant. Có
-`manifest.json` với Git SHA/runtime fingerprint/config hashes và `commands.txt`.
-Để chuẩn bị trước khi có full run, có thể dùng template adaptive Cars làm
-`--base`; nếu muốn SS mỗi epoch thì thêm `--eval-every 1` **như nhau** ở mọi
-lệnh train. `--eval-every` chỉ hợp lệ ở mode train; check/smoke dùng lệnh
-không có override này. Snapshot hiệu lực trong mỗi run là nguồn đối chiếu.
-
-Trên Linux/NVIDIA đã sẵn sàng, check rồi chọn lệnh train:
+### Run 5 — CUB full, seed2
 
 ```bash
-bash scripts/train_selex.sh check --config "$GCD_ABLATION_CONFIG" --variant local
-bash scripts/train_selex.sh --config "$GCD_ABLATION_CONFIG" --variant local
+(
+  set -euo pipefail
+  GCD_CONFIG=configs/requested_run5/cub_full_seed2.json
+  GCD_JOB_LOG="logs/cub-full-seed2-$(date -u +%Y%m%dT%H%M%SZ).log"
+  bash scripts/train_selex.sh check --config "$GCD_CONFIG" --variant local 2>&1 | tee "$GCD_JOB_LOG"
+  timeout --signal=INT --kill-after=120s 48h bash scripts/train_selex.sh --config "$GCD_CONFIG" --variant local 2>&1 | tee -a "$GCD_JOB_LOG"
+)
 ```
 
-Không chạy lại baseline theo kế hoạch paper hiện tại: hàng(a) dùng corrected
-SelEx published last/3 seeds; hàng(d) dùng full seeds. Chỉ cần chạy mới5 biến
-thể. Ưu tiên Cars1–2 seed theo GPU; full main table cần ≥3 seed khi đủ compute.
-Nếu cần control riêng ngoài kế hoạch, dùng generated `baseline.json` với
-`--baseline`; đây là job bổ sung, không tự khởi chạy.
+Full dùng reciprocal evidence + discovery counterfactual SGD + independent
+confirmation; tối đa8 edits/refresh, có thể0. Evidence-only giữ proposal,
+actions và structural/known-label/protected-shift/drift guards nhưng bỏ
+CF/confirmation; ưu tiên Move đủ support, nếu không có thì Abstain, Move trượt
+guard thì Keep. Random-proposal chỉ shuffle eligible boundaries trước cap bằng
+RNG riêng theo seed, giữ action types, CF, confirmation và budgets của full.
+Không dùng nhãn unlabeled để chọn action. Các switch khác vẫn có trong code
+nhưng không thuộc năm job được yêu cầu.
+
+Không thay seed, batch, LR, cadence hoặc guard khi một run thất bại rồi báo
+như cùng nhóm. Giữ log lỗi và xử lý nguyên nhân trước khi lên lịch lại.
+Sau mỗi run ghi lại **full RUN_ID** và đọc `evaluation_last.json` ở phần7;
+metadata status phải completed, epoch cuối199. Check/smoke có run ID riêng.
 
 ## 6. Theo dõi log và action
 
@@ -500,6 +569,14 @@ Trước khi trả GPU, copy toàn bộ full run, plan manifest và launcher log
 text-only export đủ phân tích một phần, không đủ resume/evaluate lại weights.
 
 ## 10. Kết quả đang có và kiểm thử
+
+Kiểm chứng cho đúng5 run ngày21/11: **94 tests passed** trong29.46s;
+15 dry-runs (check/smoke/train ×5) đạt, config khớp snapshot gốc ngoài seed và
+policy, upstream pins/hashes đạt. Các khối Bash trong README được kiểm bằng
+`bash -n`. Receipts local: `logs/requested-run5-tests.xml`,
+`logs/requested-run5-tests.log`, `logs/requested-run5-readiness.json`.
+Không xác minh CUDA/VRAM/data trên máy thuê và không khởi chạy benchmark.
+
 
 Các số sau là **observed fixed-final seed1**, không phải best-All trong kế hoạch:
 

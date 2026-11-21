@@ -1,0 +1,77 @@
+{
+  "status": "prepared_not_executed",
+  "source_registry": "results/paper-plan-verified-20261118/registry.json",
+  "source_registry_sha256": "6dd28d773a6a51cf3ed4a09fc0608c24e2cfd31d0d9b15204aae92a62d0c7261",
+  "entries": [
+    {
+      "config": "scars_full_seed1.json",
+      "dataset": "scars",
+      "variant": "full",
+      "seed": 1,
+      "sha256": "6d2f7636bd14107a19287aa20d31fa46818b22b5092cbfbb5faff4494cc46e16",
+      "base_run_id": "20261115T112441Z-0ec6f014",
+      "base_config_sha256": "6aca45260eaab82b512ca9b8aae334f3f969793a713a4791384ff78d04538021",
+      "base_git_sha": "fdd81ceb782628ea26ce1b00bcfa0c2a2c56fb13",
+      "changed_fields": [
+        "crish_ablation"
+      ]
+    },
+    {
+      "config": "scars_evidence_only_seed1.json",
+      "dataset": "scars",
+      "variant": "evidence_only",
+      "seed": 1,
+      "sha256": "a98d8fc505c648e8624f5513953fc317f55d2c1c5286ab8ffbd74d139b36aff5",
+      "base_run_id": "20261115T112441Z-0ec6f014",
+      "base_config_sha256": "6aca45260eaab82b512ca9b8aae334f3f969793a713a4791384ff78d04538021",
+      "base_git_sha": "fdd81ceb782628ea26ce1b00bcfa0c2a2c56fb13",
+      "changed_fields": [
+        "crish_ablation"
+      ]
+    },
+    {
+      "config": "scars_random_proposal_seed1.json",
+      "dataset": "scars",
+      "variant": "random_proposal",
+      "seed": 1,
+      "sha256": "cf7915a4cca050dcd31df52d153500d1fe831774ca7db1f1ac9e3c7d9ec14c71",
+      "base_run_id": "20261115T112441Z-0ec6f014",
+      "base_config_sha256": "6aca45260eaab82b512ca9b8aae334f3f969793a713a4791384ff78d04538021",
+      "base_git_sha": "fdd81ceb782628ea26ce1b00bcfa0c2a2c56fb13",
+      "changed_fields": [
+        "crish_ablation"
+      ]
+    },
+    {
+      "config": "aircraft_full_seed2.json",
+      "dataset": "aircraft",
+      "variant": "full",
+      "seed": 2,
+      "sha256": "6daa9f16e63dc5a5ee8bbc8f85f0d504cd6e528c986808379d0b6d588355d9b7",
+      "base_run_id": "20261116T002008Z-ce74b2d9",
+      "base_config_sha256": "008870ff518a7392b09f9e8ed211495549e5a07b3c7926e4991f6a15c03a2160",
+      "base_git_sha": "55725d8c07128eff90da8f803c7fca9b4d660a0f",
+      "changed_fields": [
+        "seed",
+        "crish_ablation"
+      ]
+    },
+    {
+      "config": "cub_full_seed2.json",
+      "dataset": "cub",
+      "variant": "full",
+      "seed": 2,
+      "sha256": "b1a9e8c5356b4f331f2150be90e6003a7a80ce95d5cd5a895c270cb224706ac2",
+      "base_run_id": "20261116T002137Z-056eafad",
+      "base_config_sha256": "606822b7cde0d10c7773658eaa0c036e1a759326ab086802a334cc342b9238f6",
+      "base_git_sha": "55725d8c07128eff90da8f803c7fca9b4d660a0f",
+      "changed_fields": [
+        "seed",
+        "crish_ablation"
+      ]
+    }
+  ],
+  "cuda_verified": false,
+  "benchmark_metrics": null,
+  "note": "Exact observed config snapshots; explicit full variant and requested seed only. Current source fingerprint differs from historical runs; do not pool seeds without provenance review. No historical checkpoints required for fresh training."
+}
