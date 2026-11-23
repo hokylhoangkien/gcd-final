@@ -53,3 +53,13 @@ def test_ema_partition_label_permutation_and_reset():
     assert resets==[0,0]
     assert all(torch.equal(a,b) for a,b in zip(score,again))
     assert saved['labels'][0].device.type=='cpu'
+
+def test_rank_move_propagates_and_protects_anchors():
+    from tests.test_global_policy import blob_state,blob_evidence
+    from crish.rank_moves import apply_rank_moves
+    s=blob_state();ev=blob_evidence(s)
+    out,moved,record=apply_rank_moves(s,ev,[18,19],v2_settings(actions='abstain_move',move_target_cap=.5),seed=1)
+    assert moved.sum()==2 and not moved[s.labeled].any()
+    assert (out.labels[0][moved]==2).all() and (out.labels[1][moved]==1).all()
+    assert torch.equal(out.labels[0][s.labeled],s.known_targets)
+    assert all(torch.isfinite(p).all() for p in out.prototypes)
