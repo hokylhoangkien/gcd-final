@@ -22,6 +22,13 @@ cho các ablation mới hoặc bảng chính ≥3 seed. Chưa chứng minh cải
 | Dừng/resume | 9 |
 | Kiểm thử và checklist bàn giao | 10 → 11 |
 
+**CRiSH-G v2 (23/11/2026):** nhánh `feat/crish-g-v2` bổ sung các profile
+`g2_` theo kế hoạch mới. Dùng [runbook v2](reports/24_crish_g_v2_runbook.md),
+[báo cáo triển khai](reports/23_crish_g_v2_implementation.md) và
+[đăng ký trước](reports/25_crish_g_v2_preregistration.md). Các luật G1 cũ ở
+phần 12 chỉ thuộc CRiSH-G v1; v2 dùng luật của báo cáo 25. Chỉ kiểm thử CPU,
+chưa có benchmark/GPU smoke v2. CLI/config mặc định vẫn là đường lịch sử.
+
 ## 1. Code và môi trường
 
 Nếu máy đã có repo/môi trường/data/weights thì dùng lại. Không cập nhật source

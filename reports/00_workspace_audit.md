@@ -1734,3 +1734,12 @@ Real-data/CUDA preflight and benchmark prerequisites are not verified.
 Plan: preserve local controller and default SelEx arithmetic, implement v2
 opt-ins in WP order, commit tested WPs, run finite CPU regression batches;
 record GPU blocker and exact remote commands. No benchmark training.
+
+### CRiSH-G v2 completed CPU verification
+
+Runtime revision 07a7c97: WP1–WP11 implemented behind opt-in keys. Final bounded
+CPU suite: 438 passed across 46 groups; all eight profile dry-runs passed.
+Existing protected files and local controller hashes unchanged. No benchmark
+or CUDA smoke was run. See reports 23–25 for implementation, exact commands,
+preregistration and limitations. Disposable test plans were removed only from
+the new worktree; the original checkout and run artifacts remain untouched.
