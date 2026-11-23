@@ -13,3 +13,43 @@ def test_pooled_selector_one_se_and_scale_floor():
     floored,sc=component_statistics(chunks,{'view':[10.,12.]})
     assert sc['view']['effective']==pytest.approx(2.75)
     assert select_dose(floored,t_min=100)==(0.,0.)
+
+import torch
+from dataclasses import replace
+from tests.test_selex_runtime import fixture
+from crish.global_policy import GlobalEvidence,knn_evidence
+from crish.population_settings import PopulationSettings
+from crish.rank_policy import apply_rank_dose,ema_scores
+
+def v2_settings(**changes):
+    v=dict(enabled=True,ranking='knn_agreement',selection='threshold',dose_mode='rank_quantile',
+        scorer='first_order_fp64',selector='normalized_v1',scoring_batches=2,confirmation_batches=2,
+        levels='active',hierarchical_abstain=True,tie_break='hash',min_retained_mass=.2,abstain_ceiling=.5)
+    v.update(changes);return PopulationSettings(**v)
+
+def test_rank_dose_nested_quotas_and_hash_row_permutation():
+    _,s,_,_=fixture(epoch=10)
+    r=torch.full((len(s.ids),),.2,dtype=torch.float64)
+    ev=GlobalEvidence(torch.zeros(len(r),1,dtype=torch.long),torch.ones(len(r),1),(r,r),1.,0.)
+    settings=v2_settings()
+    a,cov=apply_rank_dose(s,ev,.25,settings,seed=3,epoch=10)
+    assert all(int(m.sum())==8 for m in a.abstained)
+    assert (a.abstained[1]<=a.abstained[0]).all()
+    assert not a.abstained[0][s.labeled].any()
+    perm=torch.arange(len(s.ids)-1,-1,-1)
+    b=replace(s,ids=s.ids[perm],features=s.features[perm],labeled=s.labeled[perm],known_targets=s.labels[0][perm][s.labeled[perm]],
+        labels=tuple(x[perm] for x in s.labels),abstained=tuple(x[perm] for x in s.abstained))
+    out,_=apply_rank_dose(b,ev,.25,settings,seed=3,epoch=10)
+    assert set(s.ids[a.abstained[0]].tolist())==set(b.ids[out.abstained[0]].tolist())
+
+def test_ema_partition_label_permutation_and_reset():
+    _,s,_,_=fixture(epoch=10);ev=knn_evidence(s,k=3,nonreciprocal_weight=.5)
+    settings=v2_settings(reliability_ema=dict(enabled=True,beta=.7,reset_jaccard=.5))
+    score,cache,resets=ema_scores(s,ev,None,settings)
+    # Legal known anchors fixed; permute novel labels only.
+    y=s.labels[0].clone();y[s.labels[0]==2]=3;y[s.labels[0]==3]=2
+    swapped=replace(s,labels=(y,s.labels[1]))
+    again,saved,resets=ema_scores(swapped,ev,cache,settings)
+    assert resets==[0,0]
+    assert all(torch.equal(a,b) for a,b in zip(score,again))
+    assert saved['labels'][0].device.type=='cpu'
