@@ -103,6 +103,8 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
         total, steps = 0., 0
         pair_summary = dict(eligible_pairs=0, changed_pairs=0, weight_sum=0., weight_histogram=[0]*5)
         pair_batches = 0
+        v2_diagnostics = population.settings.diagnostics or {}
+        exposure_summary = []
         for batch_index, (views, targets, ids, membership) in enumerate(train_loader):
             limit = runtime.config.get('max_steps_per_epoch', 0)
             if limit and steps >= limit:
@@ -113,6 +115,21 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
             # production dataset stores -1 for every unlabeled row.
             legal = targets[membership].long()
             raw = model(torch.cat(views).to(device))
+            if v2_diagnostics.get('use_saturation', False) and batch_index == 0 and epoch % 10 == 0:
+                from .diagnostics import use_saturation
+                with (runtime.run_dir/'use_saturation.jsonl').open('a') as handle:
+                    handle.write(json.dumps(dict(epoch=epoch, levels=use_saturation(state, ids, raw)), allow_nan=False)+'\n')
+            if v2_diagnostics.get('exposure', False):
+                from .diagnostics import batch_exposure
+                entries = batch_exposure(before_intervention, state, ids)
+                if not exposure_summary:
+                    exposure_summary = [dict(level=x['level'], removed_directed_view_pairs=0,
+                        original_directed_view_pairs=0, exposure_sum=0., batches=0) for x in entries]
+                for total_entry, entry in zip(exposure_summary, entries):
+                    for key in ('removed_directed_view_pairs','original_directed_view_pairs'):
+                        total_entry[key] += entry[key]
+                    total_entry['exposure_sum'] += entry['exposure']
+                    total_entry['batches'] += 1
             result = objective(head, raw, ids, membership, legal, state, args, epoch)
             pair_record = result.get('pair_reliability')
             if pair_record is not None:
@@ -146,6 +163,14 @@ def train_strict(head, model, train_loader, merge_loader, args, runtime, *,
                                              repairs=state.version, intervention=dose,
                                              method=runtime.config['method'],
                                              peak_cuda_allocated_bytes=torch.cuda.max_memory_allocated(device) if device.type == 'cuda' else None)
+        if exposure_summary:
+            for entry in exposure_summary:
+                entry['exposure_mean'] = entry['exposure_sum']/entry['batches']
+            runtime.last_training_summary['exposure'] = exposure_summary
+            if hasattr(runtime, 'last_policy_epoch_record'):
+                runtime.last_policy_epoch_record['exposure'] = exposure_summary
+                with (runtime.run_dir/'crish_policy_exposure.jsonl').open('a') as handle:
+                    handle.write(json.dumps(dict(epoch=epoch, levels=exposure_summary), allow_nan=False)+'\n')
         if pair_batches:
             pair_summary.update(batches=pair_batches, mean_weight=(pair_summary['weight_sum']/pair_summary['eligible_pairs']
                                 if pair_summary['eligible_pairs'] else None))

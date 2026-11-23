@@ -40,3 +40,38 @@ def supervision_dose(before, after):
             unweighted_target_mass_after=base_target_mass(after, level)))
     return dict(changed_ids=int(edited.sum()), changed_unlabeled_ids=int((edited & ~after.labeled).sum()),
                 changed_labeled_ids=int((edited & after.labeled).sum()), levels=levels)
+
+
+@torch.no_grad()
+def batch_exposure(before,after,ids):
+    """Actual directed view-pair removal in this sampled batch (duplicates legal)."""
+    from .rebuild import pseudo_masks
+    offdiag=~torch.eye(2*len(ids),dtype=torch.bool)
+    levels=[]
+    for level in range(len(before.labels)):
+        _,original=pseudo_masks(before,ids,level)
+        _,retained=pseudo_masks(after,ids,level)
+        p=original.repeat(2,2)&offdiag
+        removed=p&~retained.repeat(2,2)
+        denominator=p.sum(1)
+        if (denominator<=0).any():raise ValueError('Exposure lacks protected positives')
+        levels.append(dict(level=level,removed_directed_view_pairs=int(removed.sum()),
+            original_directed_view_pairs=int(p.sum()),exposure=float((removed.sum(1).double()/denominator).mean())))
+    return levels
+
+
+@torch.no_grad()
+def use_saturation(state,ids,raw):
+    """Exact zero_one indicator BEFORE confusion-factor min/max normalization."""
+    from .ids import rows_for_ids
+    rows=rows_for_ids(state.ids,ids)
+    distance=torch.cdist(raw.detach(),raw.detach())
+    offdiag=~torch.eye(len(raw),dtype=torch.bool,device=raw.device)
+    result=[]
+    for level in range(len(state.labels)):
+        labels=state.labels[level][rows].to(raw.device).repeat(2)
+        diameter=2*state.radii[level].to(raw.device)[labels]
+        result.append(dict(level=level,frac_F1=float((distance>diameter)[offdiag].double().mean()),
+                           mean_raw_feature_norm=float(raw.norm(dim=1).mean()),
+                           mean_pair_distance=float(distance[offdiag].mean()),mean_2R=float(diameter.mean())))
+    return result
