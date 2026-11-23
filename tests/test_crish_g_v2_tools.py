@@ -10,3 +10,32 @@ def test_last_epoch_schedule_and_multiseed_summary():
     stats=summarize(rows)
     assert stats['all_acc']['median']==.8 and stats['all_acc']['mean']==pytest.approx(.8)
     assert stats['all_acc']['std']==pytest.approx((.02/4)**.5)
+
+
+def test_offline_scale_audit_and_paired_tests(tmp_path):
+    import json
+    from scripts.audit_probe_scale import analyze
+    from scripts.paired_statistics import analyze as paired
+    log=tmp_path/'crish.jsonl'
+    log.write_text(json.dumps(dict(gains=[dict(kind='move',proxy=dict(raw=.2),target_drift=dict(use_target_half_l1_mean=0.),
+        exact_discovery=dict(gain=.2,keep=dict(known=2.,view=.3,variance=.1),action=dict(known=1.9,view=.2,variance=.1)))]))+'\n')
+    out=analyze([log])
+    assert out['same_sign_fraction']==1. and out['move_zero_use_drift']['fraction']==1.
+    assert out['median_component_share']['known']==pytest.approx(.5)
+    report=paired([1.,2.,3.])
+    assert report['mean']==2 and report['std']==1 and report['ci95'][0]<2<report['ci95'][1]
+    assert report['sign_test']['pvalue']==pytest.approx(.25)
+
+
+def test_offline_image_bootstrap_and_temporal_errors():
+    import numpy as np
+    from scripts.global_policy_statistics import weighted_enrichment,enrichment_ratio,persistence
+    arrays=dict(ids=np.arange(8),labeled=np.array([True,False,False,False,True,False,False,False]),
+        label_0=np.array([0,0,0,0,1,1,1,1]),abstained_0=np.array([False,False,False,True,False,False,False,True]))
+    truth=np.array([0,0,0,1,1,1,1,0]);labels=dict(enumerate(truth.tolist()))
+    value=weighted_enrichment(arrays['label_0'],truth,arrays['abstained_0'],np.ones(8))
+    assert value==pytest.approx(2.)
+    stats=enrichment_ratio(arrays,arrays,labels,repetitions=30)
+    assert stats['ratio']==1. and stats['ci95']==[1.,1.]
+    temporal=persistence({0:arrays,5:arrays},labels)
+    assert temporal[0]['wrong_after_given_wrong']['fraction']==1.

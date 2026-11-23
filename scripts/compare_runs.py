@@ -83,6 +83,12 @@ def load_run(directory, window, *, require_observed=True):
                method=config.get('method'), dataset=config.get('dataset_name'), git_sha=metadata.get('git_sha'),
                config_sha256=config_hash(config), protocol=protocol, epochs=int(config['epochs']),
                n_unlabeled=n_unlabeled, ss=history_stats(history, int(config['epochs']), window))
+    repeated=directory/'evaluation_kmeans_seeds.json'
+    if repeated.is_file():
+        report=json.loads(repeated.read_text())
+        if report.get('primary')!='median_5_clustering_seeds' or report.get('status')!='observed':
+            raise ValueError('Final primary requires observed five-seed SS report')
+        run['multiseed_primary']={name:100*report['summary'][key]['median'] for name,key in METRICS}
     policy = policy_summary(directory, window, n_unlabeled)
     if policy is not None:
         run['policy'] = policy
@@ -147,7 +153,7 @@ def pair(treatment, control):
     by_seed = {}
     for side, runs in (('treatment', treatment), ('control', control)):
         for run in runs:
-            slot = by_seed.setdefault(run['seed'], {})
+            slot = by_seed.setdefault((run.get('dataset'),run['seed']), {})
             if side in slot:
                 raise ValueError(f'Duplicate {side} run for seed {run["seed"]}')
             slot[side] = run
@@ -173,8 +179,8 @@ def compare(treatment_dirs, control_dirs=(), window=(61, 100), reference=None, r
         control = [load_run(d, window, require_observed=require_observed) for d in control_dirs]
     pairs = pair(treatment, control)
     per_seed, deltas = [], {(m, r): [] for m, _ in METRICS for r in READINGS}
-    for seed, slot in pairs.items():
-        row = dict(seed=seed, treatment=slot['treatment']['run_id'], control=slot['control']['run_id'], delta={})
+    for (dataset,seed), slot in pairs.items():
+        row = dict(seed=seed,dataset=dataset, treatment=slot['treatment']['run_id'], control=slot['control']['run_id'], delta={})
         for name, _ in METRICS:
             a, b = slot['treatment']['ss']['metrics'][name], slot['control']['ss']['metrics'][name]
             row['delta'][name] = {}
@@ -189,7 +195,18 @@ def compare(treatment_dirs, control_dirs=(), window=(61, 100), reference=None, r
         stats = mean_std(present)
         aggregate.setdefault(name, {})[reading] = dict(stats, min=min(present) if present else None,
             positive=sum(v > 0 for v in present), seeds=len(values), missing=len(values)-len(present))
-    return dict(kind='seed_paired_log_comparison_not_reevaluated', unit='percent', window=list(window),
+    from scripts.paired_statistics import analyze
+    inferential={}
+    for name,_ in METRICS:
+        window_values=[r['delta'][name]['window_mean'] for r in per_seed]
+        final_values=[slot['treatment'].get('multiseed_primary',{}).get(name, None)-slot['control'].get('multiseed_primary',{}).get(name, None)
+            if name in slot['treatment'].get('multiseed_primary',{}) and name in slot['control'].get('multiseed_primary',{}) else None for slot in pairs.values()]
+        datasets=sorted({r['dataset'] for r in per_seed})
+        inferential[name]=dict(window=analyze(window_values),fixed_final_median=analyze(final_values),
+            final_median_missing=sum(v is None for v in final_values),
+            by_dataset={d:dict(window=analyze([v for v,r in zip(window_values,per_seed) if r['dataset']==d]),
+                fixed_final_median=analyze([v for v,r in zip(final_values,per_seed) if r['dataset']==d])) for d in datasets})
+    return dict(statistics=inferential,pooled_test_assumption='dataset/seed differences treated as independent; only nine pairs in planned design',kind='seed_paired_log_comparison_not_reevaluated', unit='percent', window=list(window),
                 readings=dict(best='per-metric best over logged epochs', last='final epoch',
                               window_mean=f'mean SS over epoch_number {first}-{last}'),
                 treatment=treatment, control=control, per_seed=per_seed, aggregate=aggregate)
@@ -202,10 +219,10 @@ def fmt(value, digits=2):
 def markdown(result):
     lines = [f'Window: epoch_number {result["window"][0]}-{result["window"][1]} (percent)', '',
              '| Seed | Metric | Reading | Treatment | Control | Delta |', '|---|---|---|---|---|---|']
-    runs = {('t', r['seed']): r for r in result['treatment']} | {('c', r['seed']): r for r in result['control']}
+    runs = {r['run_id']:r for side in ('treatment','control') for r in result[side]}
     for row in result['per_seed']:
         for name, _ in METRICS:
-            t, c = runs[('t', row['seed'])]['ss']['metrics'][name], runs[('c', row['seed'])]['ss']['metrics'][name]
+            t, c = runs[row['treatment']]['ss']['metrics'][name], runs[row['control']]['ss']['metrics'][name]
             for reading in READINGS:
                 suffix = lambda x: (f' (ep{x["best_epoch"]})' if reading == 'best' and x['best_epoch'] else
                                     f' +/- {fmt(x["window_std"])}' if reading == 'window_mean' and x['window_std'] is not None else '')

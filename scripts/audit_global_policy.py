@@ -14,6 +14,9 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import sys
+ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
 
 import numpy as np
 
@@ -158,10 +161,15 @@ def audit(run, labels, epochs=None):
     report = dict(status='offline_analysis_only', uses_evaluation_labels=True, run=str(run),
                   labels_sha256=hashlib.sha256(Path(labels).read_bytes()).hexdigest(),
                   definition=DEFINITION, epochs=[])
+    from scripts.global_policy_statistics import extended_epoch, persistence
+    snapshots={}
     for path in paths:
         with np.load(path, allow_pickle=False) as arrays:
-            report['epochs'].append(dict(epoch=int(path.stem.split('_')[-1]), file=path.name,
-                                         **audit_epoch(arrays, truth)))
+            epoch=int(path.stem.split('_')[-1])
+            snapshots[epoch]=dict(arrays)
+            report['epochs'].append(dict(epoch=epoch, file=path.name,
+                                         **audit_epoch(arrays, truth), extended=extended_epoch(arrays,truth)))
+    report['persistence']=persistence(snapshots,truth)
     return report
 
 
@@ -171,8 +179,22 @@ if __name__ == '__main__':
     parser.add_argument('--labels', type=Path, required=True, help='Offline CSV: sample_id,true_label')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--epochs', type=int, nargs='+', help='0-based log epochs; default all arrays')
+    parser.add_argument('--compare-run',type=Path,help='Paired image-bootstrap enrichment ratio vs this run')
+    parser.add_argument('--bootstrap',type=int,default=2000)
     args = parser.parse_args()
     result = audit(args.run, args.labels, args.epochs)
+    if args.compare_run is not None:
+        from scripts.global_policy_statistics import enrichment_ratio
+        truth=read_labels(args.labels)
+        ratios=[]
+        for row in result['epochs']:
+            path=args.run/row['file'];other=args.compare_run/row['file']
+            if not other.is_file():continue
+            with np.load(path,allow_pickle=False) as a,np.load(other,allow_pickle=False) as b:
+                order={int(i):j for j,i in enumerate(b['ids'])}
+                aligned={k:v[np.array([order[int(i)] for i in a['ids']])] for k,v in dict(b).items()}
+                ratios.append(dict(epoch=row['epoch'],**enrichment_ratio(a,aligned,truth,repetitions=args.bootstrap)))
+        result['enrichment_ratios']=ratios
     with args.output.open('x') as handle:
         json.dump(result, handle, indent=2, allow_nan=False)
         handle.write('\n')
