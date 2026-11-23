@@ -69,7 +69,10 @@ def validate_config(cfg, *, eval_every_epochs=None):
         raise ValueError('Invalid SelEx loss/optimizer settings')
     if cfg.get('strategy') != 'zero_one' or cfg.get('evaluation_rng') not in ('isolated', 'upstream'):
         raise ValueError('Expected zero_one and an explicit SelEx RNG policy')
+    explicit_reduction = 'probe_view_reduction' in cfg['crish']
     cfg['crish'] = asdict(CrishSettings(**cfg['crish']))
+    if not explicit_reduction:
+        cfg['crish'].pop('probe_view_reduction')
     if 'pair_reliability' in cfg:
         cfg['pair_reliability'] = asdict(PairReliabilitySettings(**cfg['pair_reliability']))
     if 'population_policy' in cfg:

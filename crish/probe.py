@@ -36,8 +36,11 @@ class ProbeWeights:
     view: float
     variance: float
     std_floor: float
+    view_reduction: str = 'mean_all'
 
     def __post_init__(self):
+        if self.view_reduction not in ('mean_all', 'per_row_sum'):
+            raise ValueError('Invalid probe_view_reduction')
         values = torch.tensor([self.known, self.view, self.variance, self.std_floor])
         if not torch.isfinite(values).all() or (values < 0).any() or self.known + self.view + self.variance <= 0:
             raise ValueError('Finite nonnegative probe weights and a nonzero objective required')
@@ -96,6 +99,8 @@ class LegalProbe:
         u = F.normalize(student, dim=1).reshape(len(self.unlabeled_ids), 2, -1)
         t = F.normalize(teacher, dim=-1)
         view_loss = (u - t.flip(1)).square().mean()
+        if self.weights.view_reduction == 'per_row_sum':
+            view_loss = (u - t.flip(1)).square().sum(-1).mean()
         std = (student.var(dim=0, unbiased=False) + 1e-4).sqrt()
         variance_loss = torch.relu(self.weights.std_floor - std).mean()
         return dict(known=known_loss, view=view_loss, variance=variance_loss)

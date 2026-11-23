@@ -1718,3 +1718,19 @@ actual adaptive check/smoke/train CLI dry-runs passed with15s deadlines.
 Eval cadence override is documented only for train, as the CLI requires.
 Only README, removed handoff docs and this audit addition belong in this commit;
 all unrelated existing dirty manuscript/reports/figure work stays local.
+
+
+## CRiSH-G v2 implementation audit — 2026-11-23
+
+Requested plan: current finetuneok.md (CRiSH-G v2, WP1–WP11). Original
+checkout is dirty with manuscript work on 1c6ada8; preserved in place.
+Fetched origin/feat/global-reliability-policy at exact requested base
+119d073e57b7d95d443e4dd1be32ae2594d821ba. Implementation is isolated in
+sibling worktree gcd-final-crish-g-v2 on feat/crish-g-v2.
+Local process inspection: Codex/VS Code services only; no Python training
+process observed, no process stopped. Mac Apple M5, 16 GiB, CPU-only torch
+2.4.1; no NVIDIA CUDA. Baseline source and synthetic CPU fixtures available.
+Real-data/CUDA preflight and benchmark prerequisites are not verified.
+Plan: preserve local controller and default SelEx arithmetic, implement v2
+opt-ins in WP order, commit tested WPs, run finite CPU regression batches;
+record GPU blocker and exact remote commands. No benchmark training.

@@ -31,6 +31,7 @@ class CrishSettings:
     probe_view_weight: float = 1.0
     probe_variance_weight: float = 0.1
     probe_std_floor: float = 0.1
+    probe_view_reduction: str = 'mean_all'
     acceptance_gain: float = 0.0
     known_tolerance: float = 0.0
     max_protected_shift: float = 0.25
@@ -40,6 +41,8 @@ class CrishSettings:
     save_partitions: bool = True
 
     def __post_init__(self):
+        if self.probe_view_reduction not in ('mean_all', 'per_row_sum'):
+            raise ValueError('Invalid crish.probe_view_reduction')
         if self.lookahead_scope != 'projector' or self.evidence_space != 'normalized_backbone_euclidean':
             raise ValueError('Only the explicitly tested projector lookahead/backbone evidence path is implemented')
         if self.evidence_sampling not in ('random', 'global_neighbors'):
