@@ -56,7 +56,9 @@ def validate_checkpoint(source, minimum_epoch):
     return state['epoch']
 
 
-def stop_after_checkpoint(source, pid, *, max_seconds=600):
+def stop_after_checkpoint(source, pid, *, max_seconds=600, after_epoch=None):
+    if after_epoch is not None and (type(after_epoch) is not int or after_epoch<1):
+        raise ValueError('after_epoch must be a positive completed epoch number')
     source = Path(source).resolve()
     identity = worker_identity(pid, source)
     previous = latest_epoch(source)
@@ -66,7 +68,7 @@ def stop_after_checkpoint(source, pid, *, max_seconds=600):
         if worker_identity(pid, source) != identity:
             raise ValueError('Worker identity changed; refusing any signal')
         observed = latest_epoch(source)
-        if observed > previous:
+        if observed > previous and (after_epoch is None or observed+1>=after_epoch):
             frozen, terminating = False, False
             try:
                 os.killpg(pid, signal.SIGSTOP)
@@ -94,9 +96,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', type=Path, required=True)
     parser.add_argument('--pid', type=int, required=True)
+    parser.add_argument('--after-epoch',type=int,help='Wait until at least this many epochs are completed')
     parser.add_argument('--timeout', type=int, default=600)
     parser.add_argument('--confirm-stop', action='store_true', required=True)
     args = parser.parse_args()
     if args.pid <= 1 or args.timeout <= 0:
         parser.error('Positive worker PID and timeout required')
-    stop_after_checkpoint(args.run, args.pid, max_seconds=args.timeout)
+    stop_after_checkpoint(args.run, args.pid, max_seconds=args.timeout, after_epoch=args.after_epoch)

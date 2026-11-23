@@ -191,8 +191,10 @@ class PopulationSettings:
                 raise ValueError('population_policy.rank_quantile CF requires first_order_fp64, normalized_v1, >=2 scoring_batches')
             if self.gate!='none' and self.confirm and self.confirmation_batches<2:
                 raise ValueError('population_policy.normalized_v1 needs >=2 confirmation_batches')
-        elif self.scorer!='exact_sgd' or self.selector!='legacy' or self.diagnostic_oracle or self.evidence_views!=1:
-            raise ValueError('population_policy v2 features require dose_mode=rank_quantile')
+        else:
+            defaults={f.name:f.default for f in fields(self)}
+            if any(getattr(self,k)!=defaults[k] for k in V2_FIELDS):
+                raise ValueError('population_policy v2 features require dose_mode=rank_quantile')
         if self.oracle_labels_csv is not None and not self.diagnostic_oracle:
             raise ValueError('population_policy.oracle_labels_csv requires diagnostic_oracle=true')
         if self.diagnostic_oracle and (not self.oracle_labels_csv or self.gate!='none' or self.random_control!='none' or self.actions!='abstain'):

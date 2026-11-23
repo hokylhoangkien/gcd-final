@@ -39,3 +39,17 @@ def test_offline_image_bootstrap_and_temporal_errors():
     assert stats['ratio']==1. and stats['ci95']==[1.,1.]
     temporal=persistence({0:arrays,5:arrays},labels)
     assert temporal[0]['wrong_after_given_wrong']['fraction']==1.
+
+
+def test_phase3_profile_commands_and_smoke_cli(tmp_path):
+    from scripts.prepare_global_policy import prepare
+    from gcd_runtime.config import ROOT
+    from tests.test_global_policy import cli_dry_run
+    import json
+    prepare(ROOT/'configs/selex_scars_crish_200.json',tmp_path/'plan',[1],profiles=('matched_selex','g2_cf'),phase='phase3')
+    config=tmp_path/'plan/g2_cf_seed1.json'
+    cfg=json.loads(config.read_text())
+    assert cfg['ss_eval_every_epochs']==5 and cfg['ss_eval_last_epochs']==10
+    assert '--eval-every 5' in (tmp_path/'plan/commands.txt').read_text()
+    _,(smoke,)=cli_dry_run(['smoke','--config',str(config),'--variant','global','--smoke-epochs','2','--dry-run'])
+    assert smoke['epochs']==2 and smoke['max_steps_per_epoch']==2

@@ -2,6 +2,8 @@
 from dataclasses import dataclass
 import math
 
+ABLATION_VARIANTS = ('full','evidence_only','no_confirmation','no_abstain','no_move','random_proposal')
+
 
 @dataclass(frozen=True)
 class CrishSettings:

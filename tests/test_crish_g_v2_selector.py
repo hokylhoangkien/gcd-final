@@ -74,3 +74,66 @@ def test_two_view_evidence_preserves_rng_and_modes():
     assert same_rng(before,rng_snapshot()) and model.training
     assert (ev.weights<=one.weights).all()
     assert all(((r>=0)&(r<=1)).all() for r in ev.reliability)
+
+
+def test_ema_resets_after_partition_membership_change():
+    _,s,_,_=fixture(epoch=10)
+    r=torch.full((len(s.ids),),.2,dtype=torch.float64)
+    ev=GlobalEvidence(torch.zeros(len(r),1,dtype=torch.long),torch.ones(len(r),1),(r,r),1.,0.)
+    settings=v2_settings(reliability_ema=dict(enabled=True,beta=.7,reset_jaccard=.5))
+    _,cache,_=ema_scores(s,ev,None,settings)
+    y=s.labels[0].clone()
+    rows=(~s.labeled).nonzero().flatten();y[rows]=torch.arange(len(rows))%4
+    changed=replace(s,labels=(y,s.labels[1]))
+    newr=torch.full_like(r,.8);new_ev=replace(ev,reliability=(newr,newr))
+    scores,_,resets=ema_scores(changed,new_ev,cache,settings)
+    assert resets[0]>0 and (scores[0]==.8).any()
+
+
+def test_random_rank_count_determinism_and_score_independent_order():
+    _,s,_,_=fixture(epoch=10)
+    r=torch.full((len(s.ids),),.2,dtype=torch.float64)
+    ev=GlobalEvidence(torch.zeros(len(r),1,dtype=torch.long),torch.ones(len(r),1),(r,r),1.,0.)
+    settings=v2_settings(mode='fixed',gate='none')
+    fixed,_=apply_rank_dose(s,ev,.25,settings,seed=2,epoch=10)
+    random=replace(settings,random_control='count_matched')
+    a,_=apply_rank_dose(s,ev,.25,random,seed=2,epoch=10)
+    b,_=apply_rank_dose(s,replace(ev,reliability=(r+.1,r+.1)),.25,random,seed=2,epoch=10)
+    assert all(int(x.sum())==int(y.sum()) for x,y in zip(a.abstained,fixed.abstained))
+    assert all(torch.equal(x,y) for x,y in zip(a.abstained,b.abstained))
+
+
+def test_oracle_explicit_permission_and_leave_one_out(tmp_path):
+    from crish.oracle import load_oracle_errors
+    _,s,_,_=fixture(epoch=10)
+    truth=s.labels[0].clone();row=int((~s.labeled).nonzero()[0]);truth[row]=(truth[row]+1)%4
+    labels=tmp_path/'labels.csv'
+    labels.write_text('sample_id,true_label\n'+''.join(f'{int(i)},{int(y)}\n' for i,y in zip(s.ids,truth)))
+    with pytest.raises(ValueError,match='diagnostic_oracle'):
+        load_oracle_errors(s,v2_settings())
+    settings=v2_settings(mode='fixed',gate='none',diagnostic_oracle=True,oracle_labels_csv=str(labels))
+    masks=load_oracle_errors(s,settings)
+    assert masks[0][row] and not masks[0][s.labeled].any()
+
+
+def test_augmented_pass_seed_is_private_even_with_zero_workers():
+    import random
+    import numpy as np
+    from crish.evidence_v2 import augmented_features
+    from tests.test_global_policy import rng_snapshot,same_rng
+    ds,state,_,_=fixture(epoch=10)
+    class StochasticDataset:
+        sample_ids=ds.sample_ids
+        def __len__(self):return len(ds)
+        def __getitem__(self,i):
+            views,y,sid,m=ds[i]
+            noise=torch.rand_like(views[0])+random.random()+float(np.random.rand())
+            return [v+noise for v in views],y,sid,m
+    model=torch.nn.Identity().train();wrapped=StochasticDataset()
+    before=rng_snapshot()
+    a=augmented_features(model,wrapped,state,device='cpu',seed=1,epoch=10,batch_size=8,num_workers=0)
+    assert same_rng(before,rng_snapshot())
+    torch.rand(17);random.random();np.random.rand(19)
+    rng=rng_snapshot()
+    b=augmented_features(model,wrapped,state,device='cpu',seed=1,epoch=10,batch_size=8,num_workers=0)
+    assert same_rng(rng,rng_snapshot()) and torch.equal(a,b) and model.training

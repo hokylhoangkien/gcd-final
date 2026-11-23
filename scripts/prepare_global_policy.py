@@ -123,7 +123,7 @@ def config_differences(first, second):
     return sorted(k for k in set(first) | set(second) if first.get(k) != second.get(k))
 
 
-def prepare(base, output, seeds=None, profiles=PROFILES, known_guard=True, control=False, oracle_labels=None):
+def prepare(base, output, seeds=None, profiles=PROFILES, known_guard=True, control=False, oracle_labels=None, phase=None):
     template = load_config(base)
     if oracle_labels is not None:
         template.setdefault('population_policy',{})['oracle_labels_csv']=str(oracle_labels)
@@ -135,15 +135,19 @@ def prepare(base, output, seeds=None, profiles=PROFILES, known_guard=True, contr
     entries = []
     for seed in seeds:
         for name, cfg in global_variants(dict(template, seed=seed), profiles, known_guard).items():
+            if phase is not None:
+                if name not in G2_PROFILES:raise ValueError('--phase is for g2 profiles only')
+                cfg['ss_eval_every_epochs']=5 if phase=='phase3' else 1
+                cfg['ss_eval_last_epochs']=10 if phase=='phase3' else 0
             path = output/f'{name}_seed{seed}.json'
             payload = json.dumps(cfg, indent=2)+'\n'
             path.write_text(payload)
             variant = 'global_local' if cfg['population_policy'].get('compose_local') else 'global'
             command = ['bash', 'scripts/train_selex.sh', '--config', str(path), '--variant', variant,
-                       '--eval-every', '1']
+                       '--eval-every', str(cfg['ss_eval_every_epochs'] if phase else 1)]
             if name=='matched_selex':
                 variant='baseline'
-                command=['bash','scripts/train_selex.sh','--config',str(path),'--baseline','--eval-every','1']
+                command=['bash','scripts/train_selex.sh','--config',str(path),'--baseline','--eval-every',str(cfg['ss_eval_every_epochs'] if phase else 1)]
             entries.append(dict(name=name, seed=seed, config=path.name, variant=variant,
                 sha256=hashlib.sha256(payload.encode()).hexdigest(), command=command))
         if control:
@@ -163,6 +167,7 @@ def prepare(base, output, seeds=None, profiles=PROFILES, known_guard=True, contr
     manifest = dict(status='prepared_not_executed', timestamp_utc=datetime.now(timezone.utc).isoformat(),
         git_sha=version, code_fingerprint=code_fingerprint(), base=str(base), seeds=seeds,
         profiles=list(profiles), known_guard=known_guard, entries=entries, dataset=template['dataset_name'],
+        phase=phase, preregistration_commit='f70279b' if any(n in G2_PROFILES for n in profiles) else None,
         epochs=template['epochs'], cuda_verified=False, benchmark_metrics=None)
     (output/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     (output/'commands.txt').write_text('\n\n'.join(
@@ -178,6 +183,7 @@ if __name__ == '__main__':
     parser.add_argument('--seeds', type=int, nargs='+')
     parser.add_argument('--profiles', nargs='+', choices=PROFILES+OPTIONAL+G2_PROFILES, default=list(PROFILES))
     parser.add_argument('--with-local', action='store_true', help='Also write optional g_cf_local')
+    parser.add_argument('--phase',choices=['g1','phase3'],help='g2: SS every epoch (G1), or every 5 + final 10 (phase3)')
     parser.add_argument('--oracle-labels',type=Path,help='Diagnostic g2_oracle_dose only: offline CSV')
     parser.add_argument('--control', action='store_true',
                         help='Also write the matched SelEx baseline control (same seed/epochs/SS settings)')
@@ -185,7 +191,7 @@ if __name__ == '__main__':
                         help='off: counterfactual gates on total probe gain only (known_increase still logged)')
     args = parser.parse_args()
     profiles = tuple(args.profiles)+(OPTIONAL if args.with_local and 'g_cf_local' not in args.profiles else ())
-    result = prepare(args.base, args.output, args.seeds, profiles, args.known_guard == 'on', args.control, args.oracle_labels)
+    result = prepare(args.base, args.output, args.seeds, profiles, args.known_guard == 'on', args.control, args.oracle_labels, args.phase)
     if args.control:
         manifest = json.loads((Path(args.output)/'manifest.json').read_text())
         for entry in manifest['entries']:

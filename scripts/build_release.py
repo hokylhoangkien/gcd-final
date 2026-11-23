@@ -16,7 +16,7 @@ from gcd_runtime.readiness import verify_upstream, sha256
 # Exact extensions prevent caches, temporary reports or artifacts leaking in.
 SOURCE_DIRS = {
     'gcd_runtime': {'.py'}, 'crish': {'.py'}, 'audit': {'.py'}, 'selex_runtime': {'.py'},
-    'scripts': {'.py', '.sh'}, 'tests': {'.py'}, 'configs': {'.json'},
+    'scripts': {'.py', '.sh'}, 'tests': {'.py', '.json'}, 'configs': {'.json'},
     'environments': {'.txt'}, 'LICENSES': {'.txt'},
     'reports': {'.md'}, 'paper': {'.tex', '.bib', '.pdf', '.json'},
 }

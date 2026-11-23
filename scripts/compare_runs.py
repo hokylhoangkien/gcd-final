@@ -88,6 +88,11 @@ def load_run(directory, window, *, require_observed=True):
         report=json.loads(repeated.read_text())
         if report.get('primary')!='median_5_clustering_seeds' or report.get('status')!='observed':
             raise ValueError('Final primary requires observed five-seed SS report')
+        if report.get('config_sha256') != hashlib.sha256((directory/'config.json').read_bytes()).hexdigest():
+            raise ValueError('Five-seed report config hash mismatch')
+        final=json.loads((directory/'evaluation_last.json').read_text())
+        if final.get('checkpoint_sha256') and final['checkpoint_sha256']!=report.get('checkpoint_sha256'):
+            raise ValueError('Five-seed report checkpoint differs from fixed-final checkpoint')
         run['multiseed_primary']={name:100*report['summary'][key]['median'] for name,key in METRICS}
     policy = policy_summary(directory, window, n_unlabeled)
     if policy is not None:

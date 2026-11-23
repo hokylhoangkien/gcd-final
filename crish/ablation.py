@@ -5,7 +5,7 @@ from .candidates import propose_actions
 from .policy import RepairBudgetExhausted
 from .rebuild import rebuild
 
-VARIANTS = ('full', 'evidence_only', 'no_confirmation', 'no_abstain', 'no_move', 'random_proposal')
+from .config import ABLATION_VARIANTS as VARIANTS
 
 
 def order_boundaries(boundaries, variant, seed):

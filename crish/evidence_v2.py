@@ -17,6 +17,10 @@ def augmented_features(model,dataset,state,*,device,seed,epoch,batch_size=128,nu
     generator=torch.Generator().manual_seed(hash_key(seed,epoch)%(2**63))
     result=[]
     with preserve_rng(),fixed_modes(model):
+        import random
+        import numpy as np
+        local_seed=hash_key(seed,epoch)%(2**32)
+        random.seed(local_seed);np.random.seed(local_seed);torch.manual_seed(local_seed)
         # Workers (if any) are seeded from this loader's private generator.
         loader=DataLoader(Subset(dataset,indices),batch_size=batch_size,shuffle=False,
                           num_workers=num_workers,generator=generator)

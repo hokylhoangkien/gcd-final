@@ -1,6 +1,7 @@
 """SelEx+CRiSH entrypoint, separate from the legacy Hyp-SelEx command."""
 import argparse
 import json
+import os
 from pathlib import Path
 import platform
 import subprocess
@@ -12,6 +13,7 @@ from gcd_runtime.config import ROOT, load_config
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('mode', nargs='?', default='train', choices=['train', 'check', 'smoke', 'evaluate'])
+    parser.add_argument('--smoke-epochs',type=int,choices=[1,2],default=1,help='Finite derived smoke length; default 1')
     parser.add_argument('--baseline', action='store_true', help='Updated SelEx without CRiSH')
     parser.add_argument('--config', type=Path, help='Exact SelEx config snapshot; also supports other seeds')
     parser.add_argument('--dataset', choices=['scars', 'cub', 'aircraft', 'cifar100', 'herbarium_19'],
@@ -88,12 +90,12 @@ def main():
     if cfg.get('baseline_family') != 'selex' or cfg['method'] != name:
         parser.error('Config must match SelEx and the selected baseline/CRiSH arm')
     # Derive smoke from the selected dataset/arm, never a Cars-only preset.
-    directory = ROOT/'runs/plans'/('selex-config-'+uuid.uuid4().hex[:12])
+    directory = Path(os.environ.get('GCD_PLAN_ROOT',ROOT/'runs/plans'))/('selex-config-'+uuid.uuid4().hex[:12])
     directory.mkdir(parents=True, exist_ok=False)
     full = directory/'full.json'
     full.write_text(json.dumps(cfg, indent=2)+'\n')
     trial = json.loads(json.dumps(cfg))
-    trial.update(epochs=1, max_steps_per_epoch=2, max_runtime_seconds=1800, ss_eval_every_epochs=0,
+    trial.update(epochs=args.smoke_epochs, max_steps_per_epoch=2, max_runtime_seconds=1800, ss_eval_every_epochs=0,
                  require_intervention_smoke=True)
     trial['crish']['warmup_epochs'] = 0
     if trial.get('pair_reliability', {}).get('enabled'):

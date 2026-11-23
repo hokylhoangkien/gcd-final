@@ -9,7 +9,7 @@ from crish.population_settings import PopulationSettings
 
 def validate_config(cfg, *, eval_every_epochs=None):
     cfg = dict(cfg)
-    from crish.ablation import VARIANTS
+    from crish.config import ABLATION_VARIANTS as VARIANTS
     if cfg.get('crish_ablation', 'full') not in VARIANTS:
         raise ValueError('Invalid crish_ablation')
     if cfg.get('crish_ablation', 'full') != 'full' and (cfg.get('method') != 'crish'

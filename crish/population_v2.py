@@ -44,7 +44,8 @@ class RankPopulationController:
         source='refresh' if due else 'persisted' if s.persist else 'nopersist_zero'
         record=dict(epoch=epoch,profile=cfg.get('experiment_profile','g2'),status='completed',
                     deadline_triggered=False,source=source,q_grid=list(s.dose_quantiles),candidates=[],
-                    notices=[],oracle_diagnostic=s.diagnostic_oracle)
+                    notices=[],oracle_diagnostic=s.diagnostic_oracle,q_hat=0.,q_candidate=0.,
+                    gradient_seconds=0.,scoring_seconds=0.,policy_build_seconds=0.)
         evidence=single=scores=coverage=None;outcome=state;q=0.;resets=[]
         device=next(head.parameters()).device
         try:
@@ -83,6 +84,8 @@ class RankPopulationController:
                           peak_cuda_allocated_bytes=torch.cuda.max_memory_allocated(device) if device.type=='cuda' else None,
                           peak_memory_scope='epoch_including_refresh',ema_resets=resets)
             levels=(coverage or {}).get('levels',[])
+            record['abstained_unlabeled']=[x['abstained_unlabeled'] for x in levels]
+            record['moved']=(coverage or {}).get('moved',0)
             epoch_record=dict(epoch=epoch,q=float(q),tau=float(q),source=source,status=record['status'],
                 ranking=record.get('ranking'),levels=levels,moved=(coverage or {}).get('moved',0),ema_resets=resets,
                 seconds=record['seconds'],knn_seconds=record.get('evidence_seconds'),oracle_diagnostic=s.diagnostic_oracle)
@@ -147,7 +150,9 @@ class RankPopulationController:
         def grads(chunk,current):
             return torch.autograd.grad(self.owner.objective(frozen,chunk['flat'],chunk['ids'],chunk['membership'],
                                        chunk['targets'],current,args,epoch)['loss'],parameters,allow_unused=True)
+        gradient_start=time.monotonic()
         g0s=[grads(c,state) for c in chunks]
+        record['gradient_seconds']+=time.monotonic()-gradient_start
         g0=tuple(None if all(g[i] is None for g in g0s) else sum(g[i] for g in g0s if g[i] is not None)/len(g0s)
                  for i in range(len(parameters)))
         all_scoring=torch.cat([state.ids[discovery_rows],state.ids[confirmation_rows]])
@@ -164,11 +169,13 @@ class RankPopulationController:
         before_gradient=time.monotonic()
         query=component_gradients_after_keep(frozen,opt,g0,probes)
         record['probe_gradient_seconds']=time.monotonic()-before_gradient
+        record['gradient_seconds']+=record['probe_gradient_seconds']
         from selex_runtime.objective import abstain_delta_loss
         def score(current,parts,fold,keeps=None):
             gains=[];norms=[]
             for m,chunk in enumerate(parts):
                 _check_deadline(deadline)
+                gradient_start=time.monotonic()
                 if s.actions=='abstain':
                     delta=torch.autograd.grad(abstain_delta_loss(frozen,chunk,state,current,args),parameters,allow_unused=True)
                 else:
@@ -180,13 +187,18 @@ class RankPopulationController:
                     n0=sum(float(g.double().square().sum()) for g in keep if g is not None)**.5
                     nd=sum(float(g.double().square().sum()) for g in delta if g is not None)**.5
                     norms.append(nd/n0 if n0 else None)
+                record['gradient_seconds']+=time.monotonic()-gradient_start
+                dot_start=time.monotonic()
                 gains.append(first_order_component_gains(query[fold],delta,lr))
+                record['scoring_seconds']+=time.monotonic()-dot_start
             return gains,norms
         candidates={};states={};entries={}
         before_score=time.monotonic()
         for q in s.dose_quantiles:
             if q==0:continue
+            build_start=time.monotonic()
             current,coverage=self.apply(state,evidence,q,scores,epoch)
+            record['policy_build_seconds']+=time.monotonic()-build_start
             entry=dict(q=q,coverage=coverage,constructed=current is not state,status='rejected')
             record['candidates'].append(entry);entries[q]=entry
             if current is state:entry['reason']='empty_policy';continue
@@ -214,6 +226,5 @@ class RankPopulationController:
         # Update history only after discovery AND confirmation used prior refresh history.
         for c in COMPONENTS:
             if scales:self.policy['sigma_history'][c].append(scales[c]['raw'])
-            if confirmation_scales:self.policy['sigma_history'][c].append(confirmation_scales[c]['raw'])
         record['gradient_scoring_seconds']=time.monotonic()-before_score
         return q

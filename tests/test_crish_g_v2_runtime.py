@@ -3,6 +3,7 @@ import copy
 import json
 from unittest.mock import patch
 import numpy as np
+import pytest
 import torch
 from crish.population import PopulationEngine
 from gcd_runtime.checkpoint import EpochRuntime
@@ -12,8 +13,9 @@ from tests.test_selex_runtime import fixture
 from tests.test_crish_g_v2_selector import v2_settings
 
 
-def run(directory,**changes):
+def run(directory,hidden_poison=None,**changes):
     ds,state,args,head=fixture(epoch=10)
+    if hidden_poison is not None:ds.targets[~state.labeled]=hidden_poison
     cfg=small_config()
     cfg['crish']['probe_view_reduction']='per_row_sum'
     cfg['population_policy']=v2_settings(train_batch=4,knn_k=3,warmup_epochs=10,refresh_every=5,
@@ -80,7 +82,8 @@ def test_emergency_deadline_returns_keep(tmp_path):
     assert engine.policy['q']==0 and not any(x.any() for x in out.abstained)
 
 
-def test_resume_reproduces_policy_masks_model_and_rng(tmp_path):
+@pytest.mark.parametrize('counterfactual',[False,True])
+def test_resume_reproduces_policy_masks_model_and_rng(tmp_path,counterfactual):
     from crish.training import train_strict
     from torch.utils.data import DataLoader
     import pytest
@@ -89,7 +92,8 @@ def test_resume_reproduces_policy_masks_model_and_rng(tmp_path):
         ds,state,args,head=fixture();cfg=small_config()
         cfg.update(epochs=4,max_steps_per_epoch=1)
         cfg['crish']['probe_view_reduction']='per_row_sum'
-        cfg['population_policy']=v2_settings(mode='fixed',gate='none',train_batch=4,knn_k=3,warmup_epochs=0,
+        cfg['population_policy']=v2_settings(mode='counterfactual' if counterfactual else 'fixed',
+            gate='counterfactual' if counterfactual else 'none',train_batch=4,knn_k=3,warmup_epochs=0,
             refresh_every=2,persist=True,save_arrays=True,reliability_ema=dict(enabled=True,beta=.7,reset_jaccard=.5)).to_dict()
         args.epochs=4
         class Runtime(EpochRuntime):
@@ -131,3 +135,56 @@ def test_diagnostics_preserve_loss_gradient_rng():
     actual=torch.autograd.grad(selex_loss(head,raw,state.ids,state.labeled,state.known_targets,after,args,0)['loss'],tuple(head.parameters()))
     assert all(torch.equal(a,b) for a,b in zip(expected,actual)) and same_rng(before,rng_snapshot())
     assert exposure[0]['removed_directed_view_pairs']>0 and 0<=stats[0]['frac_F1']<=1
+
+
+def test_legacy_json_matches_119d073_fixture(tmp_path):
+    from pathlib import Path
+    from tests.test_global_policy import run_select
+    def clean(x):
+        if isinstance(x,dict):return {k:clean(v) for k,v in x.items() if 'seconds' not in k}
+        if isinstance(x,list):return [clean(v) for v in x]
+        return x
+    _,out,record,engine=run_select(tmp_path)
+    expected=json.loads((Path(__file__).parent/'fixtures/crish_g_119d073.json').read_text())
+    assert dict(record=clean(record),policy=engine.policy,masks=[x.tolist() for x in out.abstained])==expected
+
+
+@pytest.mark.parametrize('mode',['cf','fixed','random'])
+def test_two_epoch_cpu_smoke_real_training(tmp_path,mode):
+    from crish.training import train_strict
+    from torch.utils.data import DataLoader
+    ds,state,args,head=fixture();cfg=small_config()
+    cfg['crish']['probe_view_reduction']='per_row_sum'
+    changes={} if mode=='cf' else dict(mode='fixed',gate='none')
+    if mode=='random':changes['random_control']='count_matched'
+    cfg['population_policy']=v2_settings(train_batch=4,knn_k=3,warmup_epochs=0,refresh_every=1,
+        persist=True,confirm_fresh_chunks=True,diagnostics=dict(use_saturation=True,exposure=True),**changes).to_dict()
+    cfg['require_intervention_smoke']=True
+    args.epochs=2
+    class Runtime(EpochRuntime):
+        def monitor_epoch(self,*unused):pass
+    runtime=Runtime(tmp_path,cfg)
+    model=torch.nn.Linear(4,4);loader=DataLoader(ds,batch_size=16)
+    def extract(*unused):runtime.hierarchy_state=state.copy()
+    train_strict(head,model,loader,loader,args,runtime,objective=selex_loss,extractor=extract)
+    summary=runtime.last_training_summary
+    assert summary['steps']==1 and summary['peak_cuda_allocated_bytes'] is None
+    assert all(np.isfinite(summary[k]) for k in ['loss','seconds'])
+    assert 'exposure' in summary and (tmp_path/'use_saturation.jsonl').is_file()
+    records=[json.loads(x) for x in (tmp_path/'crish_p.jsonl').read_text().splitlines()]
+    assert len(records)==2 and all(r['status']=='completed' and not r['deadline_triggered'] for r in records)
+
+
+@pytest.mark.parametrize('mode',['cf','fixed','random'])
+def test_hidden_training_labels_do_not_affect_v2(tmp_path,mode):
+    changes={} if mode=='cf' else dict(mode='fixed',gate='none')
+    if mode=='random':changes['random_control']='count_matched'
+    def clean(x):
+        if isinstance(x,dict):return {k:clean(v) for k,v in x.items() if 'seconds' not in k}
+        if isinstance(x,list):return [clean(v) for v in x]
+        return x
+    (tmp_path/'a').mkdir();(tmp_path/'b').mkdir()
+    *_,a,first=run(tmp_path/'a',**changes)
+    *_,b,second=run(tmp_path/'b',hidden_poison=98765,**changes)
+    assert all(torch.equal(x,y) for x,y in zip(first.abstained,second.abstained))
+    assert clean(a.runtime.last_population_record)==clean(b.runtime.last_population_record)
