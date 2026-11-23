@@ -60,3 +60,41 @@ def selex_loss(head, backbone_views, batch_ids, labeled, legal_targets, state, a
     return dict(loss=loss, angle=loss, distance=loss*0, features=flat,
                 distance_weight=0., supervised=[true], use=use, pseudo=pseudo,
                 pseudo_pair_weights=weights, pair_reliability=diagnostics)
+
+
+def abstain_delta_loss(head, chunk, state_0, state_a, args):
+    """Direct L(a)-L(Keep) from removed numerators; no subtraction of full losses.
+
+    Chunk keys follow PopulationEngine: flat=[view0,view1], ids=stable IDs.
+    Only pure Abstain with unchanged assignments/prototypes is admissible.
+    """
+    if (getattr(args, 'pair_reliability', None) or {}).get('enabled', False):
+        raise ValueError('abstain_delta_loss requires pair_reliability.enabled=false')
+    if not torch.equal(state_0.ids, state_a.ids) or len(state_0.labels) != len(state_a.labels):
+        raise ValueError('Abstain requires aligned states')
+    if any(not torch.equal(a, b) for a, b in zip(state_0.labels+state_0.prototypes+state_0.radii,
+                                                  state_a.labels+state_a.prototypes+state_a.radii)):
+        raise ValueError('Direct Abstain delta cannot score Move')
+    flat = F.normalize(head(chunk['flat']), dim=-1)
+    criterion = source_losses(str(flat.device))['SupConLoss']()
+    loss = flat.sum()*0
+    offdiag = ~torch.eye(len(flat), dtype=torch.bool, device=flat.device)
+    for level in range(len(state_0.labels)):
+        original, before = pseudo_masks(state_0, chunk['ids'], level)
+        _, after = pseudo_masks(state_a, chunk['ids'], level)
+        if (after & ~before).any():
+            raise ValueError('Abstain delta may only remove positives')
+        removed = (before & ~after).to(flat.device).repeat(2, 2) & offdiag
+        width = flat.shape[1] // 2**(level+1)
+        if width < 1:
+            raise ValueError('Head too small for active levels')
+        prefix = flat[:, :width]
+        logits = -torch.cdist(prefix, prefix)/criterion.temperature
+        logits = logits-logits.max(1, keepdim=True).values.detach()
+        logprob = logits-torch.log((logits.exp()*offdiag).sum(1, keepdim=True))
+        count = (original.to(flat.device).repeat(2, 2) & offdiag).sum(1)
+        if (count <= 0).any() or not torch.isfinite(logprob).all():
+            raise ValueError('Invalid positive count/logits')
+        loss = loss + (criterion.temperature/criterion.base_temperature) * (
+            (removed*logprob).sum(1)/count).mean()/2**(level+1)
+    return args.sup_con_weight*loss/2
