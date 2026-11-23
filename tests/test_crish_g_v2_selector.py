@@ -63,3 +63,14 @@ def test_rank_move_propagates_and_protects_anchors():
     assert (out.labels[0][moved]==2).all() and (out.labels[1][moved]==1).all()
     assert torch.equal(out.labels[0][s.labeled],s.known_targets)
     assert all(torch.isfinite(p).all() for p in out.prototypes)
+
+def test_two_view_evidence_preserves_rng_and_modes():
+    from crish.evidence_v2 import evidence_for_epoch
+    from tests.test_global_policy import rng_snapshot,same_rng
+    ds,s,args,head=fixture(epoch=10)
+    model=torch.nn.Identity().train()
+    before=rng_snapshot()
+    ev,one=evidence_for_epoch(s,model,ds,v2_settings(evidence_views=2,knn_k=3),device='cpu',seed=4,epoch=10,batch_size=8,num_workers=0)
+    assert same_rng(before,rng_snapshot()) and model.training
+    assert (ev.weights<=one.weights).all()
+    assert all(((r>=0)&(r<=1)).all() for r in ev.reliability)
