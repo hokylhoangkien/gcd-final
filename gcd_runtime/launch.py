@@ -68,6 +68,8 @@ def main():
         raise RuntimeError('Full baseline runs are restricted to Linux + NVIDIA; use local smoke tests')
     _, _, runs = paths()
     run_id = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '-' + uuid.uuid4().hex[:8]
+    if cfg.get('population_policy',{}).get('diagnostic_oracle',False):
+        run_id='oracle-'+run_id
     run_dir = runs / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
     snapshot = run_dir / 'config.json'
@@ -82,6 +84,8 @@ def main():
                     code_fingerprint=code_fingerprint(),
                     git_status=subprocess.run(['git', 'status', '--short'], cwd=ROOT, capture_output=True, text=True, timeout=10).stdout.strip() or 'clean_or_release_snapshot',
                     checkpoint=str(args.checkpoint.resolve()) if args.checkpoint else None)
+    if cfg.get('population_policy',{}).get('diagnostic_oracle',False):
+        metadata['oracle_diagnostic']=True
     log = run_dir / 'run.log'
     print(f'Preflight run={run_id}; log={log}; timeout=180s; full-batch VRAM chưa đo', flush=True)
     try:

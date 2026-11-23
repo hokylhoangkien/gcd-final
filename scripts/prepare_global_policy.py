@@ -16,6 +16,7 @@ from selex_runtime.config import validate_config
 
 PROFILES = ('g_fixed', 'g_cf', 'g_cf_move', 'g_random', 'g_cf_nopersist')
 OPTIONAL = ('g_cf_local',)
+G2_PROFILES = ('matched_selex','g2_fixed','g2_random','g2_cf','g2_cf_move','g2_cf_nopersist','g2_cf_noconfirm','g2_oracle_dose')
 
 
 def common(template, known_guard=True):
@@ -38,6 +39,33 @@ def common(template, known_guard=True):
     return cfg
 
 
+def g2_variant(template,name,known_guard=True):
+    cfg=common(template,known_guard)
+    cfg['experiment_profile']=name
+    cfg['crish']['probe_view_reduction']='per_row_sum'
+    cfg['crish'].update(probe_known=16,probe_unlabeled=32,probe_sampling='class_balanced',probe_known_per_class=2)
+    cfg['report_best_old_test']=False
+    cfg['population_policy'].update(scorer='first_order_fp64',selector='normalized_v1',dose_mode='rank_quantile',
+        dose_quantiles=[0.,.1,.25,.4],fixed_dose=.25,abstain_ceiling=.5,min_boundary_size=20,
+        hierarchical_abstain=True,tie_break='hash',t_min=1.,t_min_confirm=0.,guard_se=2.,sigma_floor_ratio=.25,
+        scoring_batches=8,confirmation_batches=8,confirm_fresh_chunks=True,probe_float64=False,
+        emergency_deadline_seconds=900.,diagnostics=dict(use_saturation=True,exposure=True),confirm=True,
+        reliability_ema=dict(enabled=False,beta=.7,reset_jaccard=.5),evidence_views=1)
+    p=cfg['population_policy']
+    p.pop('oracle_labels_csv',None)
+    if name=='matched_selex':cfg['method']='baseline';p['enabled']=False
+    if name in ('g2_fixed','g2_random','g2_oracle_dose'):p.update(mode='fixed',gate='none')
+    if name=='g2_random':p['random_control']='count_matched'
+    if name=='g2_cf_move':p['actions']='abstain_move'
+    if name=='g2_cf_nopersist':p['persist']=False
+    if name=='g2_cf_noconfirm':p['confirm']=False
+    if name=='g2_oracle_dose':
+        p['diagnostic_oracle']=True
+        p['oracle_labels_csv']=template.get('population_policy',{}).get('oracle_labels_csv')
+        if not p['oracle_labels_csv']:raise ValueError('g2_oracle_dose requires --oracle-labels CSV')
+    return cfg
+
+
 def global_variants(template, profiles=PROFILES, known_guard=True):
     base = common(template, known_guard)
     out = {}
@@ -53,6 +81,9 @@ def global_variants(template, profiles=PROFILES, known_guard=True):
         g_cf_nopersist=lambda: make(persist=False),
         g_cf_local=lambda: local(make(compose_local=True)))
     for name in profiles:
+        if name in G2_PROFILES:
+            out[name]=validate_config(g2_variant(template,name,known_guard))
+            continue
         if name not in builders:
             raise ValueError(f'Unknown CRiSH-G profile: {name}')
         out[name] = validate_config(builders[name]())
@@ -92,8 +123,10 @@ def config_differences(first, second):
     return sorted(k for k in set(first) | set(second) if first.get(k) != second.get(k))
 
 
-def prepare(base, output, seeds=None, profiles=PROFILES, known_guard=True, control=False):
+def prepare(base, output, seeds=None, profiles=PROFILES, known_guard=True, control=False, oracle_labels=None):
     template = load_config(base)
+    if oracle_labels is not None:
+        template.setdefault('population_policy',{})['oracle_labels_csv']=str(oracle_labels)
     seeds = [template['seed']] if not seeds else list(seeds)
     if len(set(seeds)) != len(seeds) or any(type(s) is not int or s < 0 for s in seeds):
         raise ValueError('Seeds must be distinct nonnegative integers')
@@ -108,6 +141,9 @@ def prepare(base, output, seeds=None, profiles=PROFILES, known_guard=True, contr
             variant = 'global_local' if cfg['population_policy'].get('compose_local') else 'global'
             command = ['bash', 'scripts/train_selex.sh', '--config', str(path), '--variant', variant,
                        '--eval-every', '1']
+            if name=='matched_selex':
+                variant='baseline'
+                command=['bash','scripts/train_selex.sh','--config',str(path),'--baseline','--eval-every','1']
             entries.append(dict(name=name, seed=seed, config=path.name, variant=variant,
                 sha256=hashlib.sha256(payload.encode()).hexdigest(), command=command))
         if control:
@@ -140,15 +176,16 @@ if __name__ == '__main__':
     parser.add_argument('--base', type=Path, default=ROOT/'configs/selex_scars_crish_200.json')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--seeds', type=int, nargs='+')
-    parser.add_argument('--profiles', nargs='+', choices=PROFILES+OPTIONAL, default=list(PROFILES))
+    parser.add_argument('--profiles', nargs='+', choices=PROFILES+OPTIONAL+G2_PROFILES, default=list(PROFILES))
     parser.add_argument('--with-local', action='store_true', help='Also write optional g_cf_local')
+    parser.add_argument('--oracle-labels',type=Path,help='Diagnostic g2_oracle_dose only: offline CSV')
     parser.add_argument('--control', action='store_true',
                         help='Also write the matched SelEx baseline control (same seed/epochs/SS settings)')
     parser.add_argument('--known-guard', choices=['on', 'off'], default='on',
                         help='off: counterfactual gates on total probe gain only (known_increase still logged)')
     args = parser.parse_args()
     profiles = tuple(args.profiles)+(OPTIONAL if args.with_local and 'g_cf_local' not in args.profiles else ())
-    result = prepare(args.base, args.output, args.seeds, profiles, args.known_guard == 'on', args.control)
+    result = prepare(args.base, args.output, args.seeds, profiles, args.known_guard == 'on', args.control, args.oracle_labels)
     if args.control:
         manifest = json.loads((Path(args.output)/'manifest.json').read_text())
         for entry in manifest['entries']:
