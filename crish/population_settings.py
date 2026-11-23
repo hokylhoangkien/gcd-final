@@ -14,6 +14,12 @@ GLOBAL_FIELDS = ('ranking', 'selection', 'thresholds', 'fixed_threshold', 'gate'
                  'save_arrays', 'compose_local', 'known_guard')
 
 
+V2_FIELDS = ('scorer', 'selector', 'dose_mode', 'dose_quantiles', 'fixed_dose', 'abstain_ceiling',
+    'min_boundary_size', 'hierarchical_abstain', 'tie_break', 't_min', 't_min_confirm', 'guard_se',
+    'sigma_floor_ratio', 'confirmation_batches', 'confirm_fresh_chunks', 'reliability_ema',
+    'evidence_views', 'random_control', 'diagnostic_oracle', 'oracle_labels_csv',
+    'move_gate_asymmetric', 'emergency_deadline_seconds', 'diagnostics', 'confirm')
+
 @dataclass(frozen=True)
 class PopulationSettings:
     enabled: bool = False
@@ -50,6 +56,31 @@ class PopulationSettings:
     compose_local: bool = False
     known_guard: bool = True
 
+    scorer: str = 'exact_sgd'
+    selector: str = 'legacy'
+    dose_mode: str = 'threshold'
+    dose_quantiles: tuple = (0., .1, .25, .4)
+    fixed_dose: float = .25
+    abstain_ceiling: float = 1.
+    min_boundary_size: int = 0
+    hierarchical_abstain: bool = False
+    tie_break: str = 'id'
+    t_min: float = 1.
+    t_min_confirm: float = 0.
+    guard_se: float = 2.
+    sigma_floor_ratio: float = .25
+    confirmation_batches: int = 0
+    confirm_fresh_chunks: bool = False
+    reliability_ema: object = None
+    evidence_views: int = 1
+    random_control: str = 'none'
+    diagnostic_oracle: bool = False
+    oracle_labels_csv: object = None
+    move_gate_asymmetric: bool = False
+    emergency_deadline_seconds: float = 900.
+    diagnostics: object = None
+    confirm: bool = True
+
     def __post_init__(self):
         if type(self.enabled) is not bool or self.mode not in ('counterfactual', 'fixed', 'scheduled', 'random'):
             raise ValueError('Invalid population_policy enabled/mode')
@@ -69,6 +100,7 @@ class PopulationSettings:
         if self.train_batch < 4 or type(self.warmup_epochs) is not int or self.warmup_epochs < 0:
             raise ValueError('Invalid population batch/warmup')
         self._validate_global()
+        self._validate_v2()
 
     def _validate_global(self):
         choices = dict(ranking=('margin', 'knn_agreement'), selection=('fraction', 'threshold'),
@@ -119,6 +151,57 @@ class PopulationSettings:
         if self.selection == 'threshold' and self.mode == 'counterfactual' and self.gate != 'counterfactual':
             raise ValueError("population_policy.mode='counterfactual' requires gate='counterfactual'")
 
+    def _validate_v2(self):
+        for key, allowed in dict(scorer=('exact_sgd','first_order_fp64'), selector=('legacy','normalized_v1'),
+                dose_mode=('threshold','rank_quantile'), tie_break=('id','hash'), random_control=('none','count_matched')).items():
+            if getattr(self,key) not in allowed:
+                raise ValueError(f'population_policy.{key} invalid')
+        for key in ('hierarchical_abstain','confirm_fresh_chunks','diagnostic_oracle','move_gate_asymmetric','confirm'):
+            if type(getattr(self,key)) is not bool:
+                raise ValueError(f'population_policy.{key} must be bool')
+        for key in ('min_boundary_size','confirmation_batches'):
+            if type(getattr(self,key)) is not int or getattr(self,key)<0:
+                raise ValueError(f'population_policy.{key} must be nonnegative integer')
+        for key in ('t_min','t_min_confirm','guard_se','sigma_floor_ratio','emergency_deadline_seconds'):
+            if type(getattr(self,key)) not in (int,float) or not math.isfinite(getattr(self,key)) or getattr(self,key)<0:
+                raise ValueError(f'population_policy.{key} must be finite nonnegative')
+        for key in ('fixed_dose','abstain_ceiling'):
+            if type(getattr(self,key)) not in (int,float) or not math.isfinite(getattr(self,key)) or not 0<=getattr(self,key)<=1:
+                raise ValueError(f'population_policy.{key} must be in [0,1]')
+        object.__setattr__(self,'dose_quantiles',tuple(self.dose_quantiles))
+        if (len(self.dose_quantiles)<2 or self.dose_quantiles[0]!=0 or
+            tuple(sorted(set(self.dose_quantiles)))!=self.dose_quantiles or
+            any(type(q) not in (int,float) or not math.isfinite(q) or not 0<=q<1 for q in self.dose_quantiles)):
+            raise ValueError('population_policy.dose_quantiles invalid')
+        if type(self.evidence_views) is not int or self.evidence_views not in (1,2):
+            raise ValueError('population_policy.evidence_views must be 1 or 2')
+        if self.reliability_ema is not None:
+            v=self.reliability_ema
+            if (not isinstance(v,dict) or set(v)-{'enabled','beta','reset_jaccard'} or type(v.get('enabled',False)) is not bool
+                or any(type(v.get(k,d)) not in (int,float) or not math.isfinite(v.get(k,d)) or not 0<=v.get(k,d)<=1
+                       for k,d in [('beta',.7),('reset_jaccard',.5)])):
+                raise ValueError('population_policy.reliability_ema invalid')
+        if self.diagnostics is not None and (not isinstance(self.diagnostics,dict) or
+                set(self.diagnostics)-{'use_saturation','exposure'} or any(type(v) is not bool for v in self.diagnostics.values())):
+            raise ValueError('population_policy.diagnostics invalid')
+        if self.dose_mode=='rank_quantile':
+            if not self.is_global or self.compose_local:
+                raise ValueError('population_policy.rank_quantile requires isolated global policy')
+            if self.gate!='none' and (self.scorer!='first_order_fp64' or self.selector!='normalized_v1' or self.scoring_batches<2):
+                raise ValueError('population_policy.rank_quantile CF requires first_order_fp64, normalized_v1, >=2 scoring_batches')
+            if self.gate!='none' and self.confirm and self.confirmation_batches<2:
+                raise ValueError('population_policy.normalized_v1 needs >=2 confirmation_batches')
+        elif self.scorer!='exact_sgd' or self.selector!='legacy' or self.diagnostic_oracle or self.evidence_views!=1:
+            raise ValueError('population_policy v2 features require dose_mode=rank_quantile')
+        if self.oracle_labels_csv is not None and not self.diagnostic_oracle:
+            raise ValueError('population_policy.oracle_labels_csv requires diagnostic_oracle=true')
+        if self.diagnostic_oracle and (not self.oracle_labels_csv or self.gate!='none' or self.random_control!='none' or self.actions!='abstain'):
+            raise ValueError('population_policy diagnostic_oracle requires CSV, gate=none, Abstain only')
+
+    @property
+    def is_v2(self):
+        return self.dose_mode == 'rank_quantile'
+
     @property
     def is_global(self):
         return self.selection == 'threshold'
@@ -127,7 +210,12 @@ class PopulationSettings:
         values = asdict(self)
         values['fractions'] = list(self.fractions)
         values['thresholds'] = list(self.thresholds)
+        values['dose_quantiles'] = list(self.dose_quantiles)
         defaults = {f.name: f.default for f in fields(self)}
+        for name in V2_FIELDS:
+            default = list(defaults[name]) if isinstance(defaults[name], tuple) else defaults[name]
+            if values[name] == default:
+                values.pop(name)
         if all(values[name] == (list(defaults[name]) if isinstance(defaults[name], tuple) else defaults[name])
                for name in GLOBAL_FIELDS):
             # Historical CRiSH-P snapshot: keep its exact original key set.
@@ -140,6 +228,7 @@ class PopulationSettings:
         values = asdict(self)
         values['fractions'] = list(self.fractions)
         values['thresholds'] = list(self.thresholds)
+        values['dose_quantiles'] = list(self.dose_quantiles)
         return values
 
     def due(self, epoch):
