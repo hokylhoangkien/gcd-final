@@ -83,4 +83,11 @@ def validate_config(cfg, *, eval_every_epochs=None):
                              'only population_policy.compose_local=true (variant global_local) combines them')
         if cfg['population_policy'].get('compose_local', False) and cfg['population_policy'].get('selection') != 'threshold':
             raise ValueError('population_policy.compose_local requires the CRiSH-G threshold policy')
+    if type(cfg.get('ss_eval_last_epochs',0)) is not int or cfg.get('ss_eval_last_epochs',0)<0:
+        raise ValueError('ss_eval_last_epochs must be nonnegative integer')
+    if cfg.get('population_policy',{}).get('dose_mode')=='rank_quantile':
+        if cfg.get('pair_reliability',{}).get('enabled') or cfg['crish']['enabled']:
+            raise ValueError('CRiSH-G v2 requires local and online weighting disabled')
+        if cfg['crish'].get('probe_view_reduction')!='per_row_sum':
+            raise ValueError('CRiSH-G v2 requires per_row_sum probe')
     return cfg

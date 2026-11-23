@@ -80,7 +80,10 @@ def load_config(path, *, eval_every_epochs=None):
         raise ValueError('Unsupported USE strategy')
     if any(type(cfg[k]) is not int for k in ('hyper_start_epoch', 'hyper_end_epoch')) or cfg['hyper_end_epoch'] <= cfg['hyper_start_epoch']:
         raise ValueError('Invalid hyperbolic ramp interval')
+    explicit_reduction = 'probe_view_reduction' in cfg.get('crish',{})
     cfg['crish'] = asdict(CrishSettings(**cfg.get('crish', {})))
+    if not explicit_reduction:
+        cfg['crish'].pop('probe_view_reduction')
     return cfg
 
 

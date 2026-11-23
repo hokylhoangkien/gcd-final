@@ -11,12 +11,13 @@ from .config import ROOT
 
 def monitor_due(config, epoch):
     every = config.get('ss_eval_every_epochs', 0)
-    if not every:
+    last = config.get('ss_eval_last_epochs', 0)
+    if not every and not last:
         return False
     if epoch + 1 == config['epochs']:
         # The launcher evaluates the fixed final checkpoint after training exits.
         return not config['final_ss_evaluation']
-    return (epoch + 1) % every == 0
+    return (bool(every) and (epoch + 1) % every == 0) or epoch >= config['epochs']-last
 
 
 def monitor_epoch(runtime, epoch, model, *, selection_only=False):
