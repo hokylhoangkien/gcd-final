@@ -74,10 +74,25 @@ bash scripts/train_selex.sh smoke --config "$GCD_CONFIG" --variant global
 
 The launcher accepts an explicit bounded two-epoch smoke. Prepare the three
 profiles with warmup 0 and refresh_every 1 in a separate smoke config directory;
-these overrides are for smoke only. Then run each profile serially:
+these overrides are for smoke only:
 
 ```bash
+.venv/bin/python - <<'PYSMOKE'
+from pathlib import Path
+import json
+source=Path('/tmp/cars-g2-G1-NEW')
+output=Path('/tmp/cars-g2-smoke-NEW')
+output.mkdir(exist_ok=False)
+for name in ('g2_cf','g2_fixed','g2_random'):
+    cfg=json.loads((source/f'{name}_seed1.json').read_text())
+    cfg['population_policy'].update(warmup_epochs=0,refresh_every=1)
+    cfg['max_runtime_seconds']=1800
+    with (output/f'{name}.json').open('x') as f:
+        json.dump(cfg,f,indent=2)
+PYSMOKE
+SMOKE_CONFIG=/tmp/cars-g2-smoke-NEW/g2_cf.json
 bash scripts/train_selex.sh smoke --config "$SMOKE_CONFIG" --variant global --smoke-epochs 2
+# Run g2_fixed.json and g2_random.json separately after the preceding smoke ends.
 ```
 
 Each epoch has at most two minibatches. Keep max_runtime_seconds bounded.
