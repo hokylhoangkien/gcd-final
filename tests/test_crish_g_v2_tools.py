@@ -53,3 +53,21 @@ def test_phase3_profile_commands_and_smoke_cli(tmp_path):
     assert '--eval-every 5' in (tmp_path/'plan/commands.txt').read_text()
     _,(smoke,)=cli_dry_run(['smoke','--config',str(config),'--variant','global','--smoke-epochs','2','--dry-run'])
     assert smoke['epochs']==2 and smoke['max_steps_per_epoch']==2
+
+
+def test_phase0_export_capture_and_offline_ema_replay():
+    import numpy as np
+    import torch
+    from scripts.export_policy_evidence import capture
+    from scripts.global_policy_statistics import replay_ema
+    from tests.test_selex_runtime import fixture
+    from tests.test_global_policy import rng_snapshot,same_rng
+    ds,state,_,_=fixture(epoch=10);rng=rng_snapshot()
+    arrays=capture(state,torch.nn.Identity(),ds,device='cpu',seed=1,epoch=10,batch_size=8,num_workers=0)
+    assert same_rng(rng,rng_snapshot())
+    assert 'single_view_reliability_0' in arrays
+    snapshots={0:{k:v.copy() for k,v in arrays.items()},1:{k:v.copy() for k,v in arrays.items()}}
+    snapshots[0]['reliability_0']=np.full(len(state.ids),.2)
+    snapshots[1]['reliability_0']=np.full(len(state.ids),.8)
+    meta=replay_ema(snapshots)
+    assert meta['complete_epoch_sequence'] and np.allclose(snapshots[1]['ema_reliability_0'],.38)

@@ -188,3 +188,13 @@ def test_hidden_training_labels_do_not_affect_v2(tmp_path,mode):
     *_,b,second=run(tmp_path/'b',hidden_poison=98765,**changes)
     assert all(torch.equal(x,y) for x,y in zip(first.abstained,second.abstained))
     assert clean(a.runtime.last_population_record)==clean(b.runtime.last_population_record)
+
+
+def test_no_confirmation_does_not_compute_confirmation_probe_gradients(tmp_path):
+    from crish.lookahead import component_gradients_after_keep
+    lengths=[]
+    def wrapped(model,opt,keep,probes):
+        lengths.append(len(probes));return component_gradients_after_keep(model,opt,keep,probes)
+    with patch('crish.population_v2.component_gradients_after_keep',side_effect=wrapped):
+        run(tmp_path,confirm=False)
+    assert lengths==[1]

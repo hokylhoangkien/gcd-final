@@ -150,7 +150,7 @@ def audit_epoch(arrays, truth_map):
     return record
 
 
-def audit(run, labels, epochs=None):
+def audit(run, labels, epochs=None, replay_ema=False):
     run = Path(run)
     truth = read_labels(labels)
     paths = sorted(run.glob('crish_g_epoch_*.npz'))
@@ -169,6 +169,11 @@ def audit(run, labels, epochs=None):
             snapshots[epoch]=dict(arrays)
             report['epochs'].append(dict(epoch=epoch, file=path.name,
                                          **audit_epoch(arrays, truth), extended=extended_epoch(arrays,truth)))
+    if replay_ema:
+        from scripts.global_policy_statistics import replay_ema as smooth
+        report['ema_replay']=smooth(snapshots)
+        for row in report['epochs']:
+            row['extended']=extended_epoch(snapshots[row['epoch']],truth)
     report['persistence']=persistence(snapshots,truth)
     return report
 
@@ -179,10 +184,11 @@ if __name__ == '__main__':
     parser.add_argument('--labels', type=Path, required=True, help='Offline CSV: sample_id,true_label')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--epochs', type=int, nargs='+', help='0-based log epochs; default all arrays')
+    parser.add_argument('--replay-ema',action='store_true',help='Offline hypothetical EMA; missing epochs reset history')
     parser.add_argument('--compare-run',type=Path,help='Paired image-bootstrap enrichment ratio vs this run')
     parser.add_argument('--bootstrap',type=int,default=2000)
     args = parser.parse_args()
-    result = audit(args.run, args.labels, args.epochs)
+    result = audit(args.run, args.labels, args.epochs, args.replay_ema)
     if args.compare_run is not None:
         from scripts.global_policy_statistics import enrichment_ratio
         truth=read_labels(args.labels)

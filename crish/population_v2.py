@@ -100,7 +100,8 @@ class RankPopulationController:
                 for l,r in enumerate(evidence.reliability):
                     arrays[f'reliability_{l}']=r.numpy()
                     arrays[f'single_view_reliability_{l}']=single.reliability[l].numpy()
-                    if scores is not None:arrays[f'ema_reliability_{l}']=scores[l].numpy()
+                    if scores is not None and (s.reliability_ema or {}).get('enabled',False):
+                        arrays[f'ema_reliability_{l}']=scores[l].numpy()
                 np.savez_compressed(self.runtime.run_dir/f'crish_g_epoch_{epoch:04d}.npz',**arrays)
             print(f'CRISH_G_V2 epoch={epoch} q={q} source={source} status={record["status"]}',flush=True)
         return outcome
@@ -158,14 +159,14 @@ class RankPopulationController:
         all_scoring=torch.cat([state.ids[discovery_rows],state.ids[confirmation_rows]])
         registry=dict(zip(state.ids[state.labeled].tolist(),state.known_targets.tolist()))
         probes=[]
-        for k,u in folds:
+        for k,u in (folds if s.confirm else folds[:1]):
             x=cached_views(model,dataset,state.ids[torch.cat([k,u])],next(head.parameters()).device,deadline)
             with torch.no_grad():teacher=frozen(x[len(k):].flatten(0,1)).reshape(len(u),2,-1)
             probes.append(LegalProbe(known_ids=state.ids[k],known_views=x[:len(k)],known_targets=state.labels[0][k],
                 unlabeled_ids=state.ids[u],unlabeled_views=x[len(k):],teacher_views=teacher,proposal_ids=all_scoring,
                 legal_labels=registry,weights=ProbeWeights(1.,1.,.1,self.probe_settings.probe_std_floor,
                                                            self.probe_settings.probe_view_reduction)))
-        probes[0].assert_disjoint(probes[1])
+        if s.confirm:probes[0].assert_disjoint(probes[1])
         before_gradient=time.monotonic()
         query=component_gradients_after_keep(frozen,opt,g0,probes)
         record['probe_gradient_seconds']=time.monotonic()-before_gradient
@@ -176,7 +177,7 @@ class RankPopulationController:
             for m,chunk in enumerate(parts):
                 _check_deadline(deadline)
                 gradient_start=time.monotonic()
-                if s.actions=='abstain':
+                if all(torch.equal(a,b) for a,b in zip(state.labels,current.labels)):
                     delta=torch.autograd.grad(abstain_delta_loss(frozen,chunk,state,current,args),parameters,allow_unused=True)
                 else:
                     keep=keeps[m] if keeps is not None else grads(chunk,state)

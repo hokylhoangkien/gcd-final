@@ -93,3 +93,31 @@ def persistence(snapshots,truth_map):
             wrong_after_given_wrong=fraction((wa&wb&mask).sum(),(wa&mask).sum()),
             marginal_wrong_after=fraction((wb&mask).sum(),mask.sum())))
     return out
+
+
+def replay_ema(snapshots,beta=.7,reset_jaccard=.5):
+    """Counterfactual score smoothing ONLY, with no annotations or model training.
+
+    Gaps reset rather than invent unobserved epochs. Existing raw reliabilities
+    and partitions are preserved; the derived scores are not observed runs.
+    """
+    previous=None;previous_epoch=None;gap_resets=[]
+    for epoch,a in sorted(snapshots.items()):
+        contiguous=previous is not None and epoch==previous_epoch+1
+        if previous is not None and not contiguous:gap_resets.append(epoch)
+        aligned=contiguous and np.array_equal(a['ids'],previous['ids'])
+        for key in sorted(k for k in a if k.startswith('label_')):
+            level=key.split('_')[-1];r=a[f'reliability_{level}'].astype(float)
+            score=r.copy()
+            if aligned and key in previous:
+                x,y=a[key],previous[key]
+                _,ix,nx=np.unique(x,return_inverse=True,return_counts=True)
+                _,iy,ny=np.unique(y,return_inverse=True,return_counts=True)
+                _,joint,nxy=np.unique(np.stack([x,y],1),axis=0,return_inverse=True,return_counts=True)
+                common=nxy[joint];den=nx[ix]+ny[iy]-common-1
+                jac=np.divide(common-1,den,out=np.ones(len(x),dtype=float),where=den>0)
+                score=np.where(jac<reset_jaccard,r,beta*previous[f'ema_reliability_{level}']+(1-beta)*r)
+            a[f'ema_reliability_{level}']=score
+        previous=a;previous_epoch=epoch
+    return dict(kind='offline_counterfactual_score_ema_not_training',beta=beta,reset_jaccard=reset_jaccard,
+                gap_reset_epochs=gap_resets,complete_epoch_sequence=not gap_resets)
