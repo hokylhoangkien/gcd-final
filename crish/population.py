@@ -95,12 +95,17 @@ class PopulationEngine:
         # CRiSH-G persists the chosen threshold, never a list of sample IDs.
         self.policy = dict(tau=0., selected_epoch=None, source=None)
         restored = getattr(runtime, 'restored_population_policy', None)
-        if self.settings.is_global and restored is not None:
+        if self.settings.is_global and not self.settings.is_v2 and restored is not None:
             self.policy = dict(tau=float(restored['tau']), selected_epoch=restored.get('selected_epoch'),
                                source=restored.get('source'))
 
     def prepare(self, state, model, head, optimizer, dataset, args, epoch):
         cfg, settings = self.runtime.config, self.settings
+        if settings.is_v2:
+            if not hasattr(self, '_v2'):
+                from .population_v2 import RankPopulationController
+                self._v2 = RankPopulationController(self)
+            return self._v2.prepare(state, model, head, optimizer, dataset, args, epoch)
         if settings.is_global:
             return self._prepare_global(state, model, head, optimizer, dataset, args, epoch)
         if cfg['method'] != 'crish' or not settings.due(epoch): return state
