@@ -47,14 +47,28 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
     # best_train_acc_all = 0
 
     repairs = None
-    if getattr(args, 'crish_mode', 'E0') != 'E0':
+    epoch_repairs = None
+    if getattr(args, 'crish_mode', 'E0') == 'E3':
+        from crish.global_repair import EpochRepairs
+        epoch_repairs = EpochRepairs(args)
+    elif getattr(args, 'crish_mode', 'E0') != 'E0':
         from crish.runtime import Repairs
         repairs = Repairs(args)
 
-    for epoch in range(args.epochs):
+    benchmark = getattr(args, 'benchmark_refreshes', 0)
+    start_epoch = getattr(args, 'benchmark_epoch', 0) if benchmark else 0
+    if benchmark and getattr(args, 'benchmark_state', None) is not None:
+        optimizer.load_state_dict(args.benchmark_state)
+    elif benchmark:
+        exp_lr_scheduler.step(start_epoch)
+    for epoch in range(start_epoch, start_epoch + benchmark if benchmark else args.epochs):
         loss_record = AverageMeter()
 
         student.train()
+        active_plan = epoch_repairs is not None and epoch_repairs.due(epoch)
+        if active_plan:
+            epoch_repairs.prepare(student, optimizer, train_loader.dataset,
+                                  unlabelled_train_loader.dataset.transform, cluster_criterion, epoch)
         for batch_idx, batch in enumerate(train_loader):
             images, class_labels, uq_idxs, mask_lab = batch
             mask_lab = mask_lab[:, 0]
@@ -80,6 +94,8 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
                 if refresh:
                     cluster_loss = repairs.loss(features, student_out, uq_idxs, class_labels.masked_fill(~mask_lab, -1),
                         student[1].last_layer, optimizer, cluster_criterion, epoch)
+                elif active_plan:
+                    cluster_loss = epoch_repairs.loss(student_out, uq_idxs, mask_lab, cluster_criterion, epoch)
                 else:
                     cluster_loss = cluster_criterion(student_out, teacher_out, epoch)
                 avg_probs = (student_out / 0.1).softmax(dim=1).mean(dim=0)
@@ -113,7 +129,7 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
                 loss.backward()
                 optimizer.step()
             else:
-                if refresh:
+                if refresh or active_plan:
                     scale_before = fp16_scaler.get_scale()
                 fp16_scaler.scale(loss).backward()
                 fp16_scaler.step(optimizer)
@@ -121,11 +137,20 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
 
             if refresh:
                 repairs.finish_step(fp16_scaler is None or fp16_scaler.get_scale() >= scale_before)
+            if active_plan:
+                epoch_repairs.finish_step(fp16_scaler is None or fp16_scaler.get_scale() >= scale_before)
+            if benchmark and batch_idx + 1 >= args.benchmark_steps:
+                break
 
             if batch_idx % args.print_freq == 0:
                 args.logger.info('Epoch: [{}][{}/{}]\t loss {:.5f}\t {}'
                             .format(epoch, batch_idx, len(train_loader), loss.item(), pstr))
 
+        if active_plan:
+            epoch_repairs.close_epoch()
+        if benchmark:
+            exp_lr_scheduler.step(epoch + 1)
+            continue
         args.logger.info('Train Epoch: {} Avg Loss: {:.4f} '.format(epoch, loss_record.avg))
 
         args.logger.info('Testing on unlabelled examples in the training data...')
@@ -226,8 +251,10 @@ if __name__ == "__main__":
     # ----------------------
     # INIT
     # ----------------------
-    from crish.runtime import arguments
+    from crish.runtime import arguments, global_defaults
     arguments(parser)
+    if parser.parse_known_args()[0].crish_mode == 'E3':
+        global_defaults(parser)
     args = parser.parse_args()
     if args.run_seed is not None:
         import random

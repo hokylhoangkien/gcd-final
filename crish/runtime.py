@@ -23,6 +23,13 @@ def arguments(parser):
         ("boundaries", 16),
         ("k", 5),
         ("seed", 1),
+        ("evidence", 512),
+        ("trials", 2),
+        ("scoring", 256),
+        ("probe_known", 32),
+        ("probe_unknown", 64),
+        ("confirmations", 8),
+        ("encode_batch", 16),
     ]:
         parser.add_argument("--crish_" + name, type=int, default=default)
     parser.add_argument("--crish_gain", type=float, default=0.0)
@@ -30,6 +37,10 @@ def arguments(parser):
     parser.add_argument("--crish_seconds", type=float, default=120.0)
     parser.add_argument("--crish_dose", type=Path)
     parser.add_argument("--run_seed", type=int, default=None)
+
+
+def global_defaults(parser):
+    parser.set_defaults(crish_every=1, crish_cap=8, crish_seconds=300, crish_boundaries=64)
 
 
 class Repairs:

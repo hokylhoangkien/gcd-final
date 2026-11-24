@@ -1,5 +1,7 @@
 # Counterfactual-verified supervision repair in SimGCD
 
+Historical report for commit `6af77dc`. The current primary E3 method, Cars configuration, exposure rules and bounded benchmark are documented in [CRISH_SIMGCD_GLOBAL.md](CRISH_SIMGCD_GLOBAL.md). The one-batch E3 fixture and matched-dose commands below refer to the historical commit.
+
 ## Provenance and research question
 
 Can geometry-aware repair selected by a counterfactual update improve SimGCD independently of SelEx? The implementation and checks below establish a way to run that experiment. Accuracy on a GCD benchmark has yet to be measured.
