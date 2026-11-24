@@ -33,6 +33,30 @@ For the actual update, KEEP calls official DistillLoss when there are no active 
 
 ## Reproduction
 
+### Observed Cars budget benchmark
+
+Measured method revision `aa7eec0c210f0ae0cc69d4f24d30eed3d3ff944d`. The [raw JSONL](cars_global_refreshes.jsonl) contains six records from one invocation. Using 8,144 real train images (2,000 known-labeled and 6,144 unlabeled), each refresh produced 512 distinct evidence IDs, 256 distinct scoring IDs and nine mutually disjoint 96-ID probe reservations. No reserved ID appeared in the score or evidence lists. All accepted decisions had positive marginal and group gain on both discovery and confirmation.
+
+| Schedule index | Eligible ABSTAIN / MOVE | Confirmations | Accepted ABSTAIN / MOVE | Sampler encounters / applied occurrences | Stop | Refresh seconds |
+| ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| 10 | 38 / 0 | 8 | 8 / 0 | 0 / 0 | cap | 248.16 |
+| 11 | 41 / 0 | 0 | 0 / 0 | 0 / 0 | discovery | 226.84 |
+| 12 | 42 / 2 | 8 | 7 / 1 | 0 / 0 | cap | 265.00 |
+
+| Schedule index | Global snapshot | Global shortlist | Evidence | Peer batch | Probe encoding | Discovery SGD + probe | Confirmation |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10 | 166.05 | 0.08 | 39.05 | 7.19 | 34.16 | 1.59 | 0.02 |
+| 11 | 178.70 | 0.14 | 39.59 | 4.41 | 3.74 | 0.23 | 0.00 |
+| 12 | 180.45 | 0.13 | 41.70 | 5.08 | 35.86 | 1.70 | 0.05 |
+
+All stage times are seconds. Mean refresh time was 246.67 s; the smallest observed margin to the 300 s deadline was 35.00 s. Each refresh encoded 8,144 center crops and 2,048 evidence crops. Lazy encoding of probe views used 1,728 / 192 / 1,728 images. Producing backbone features dominated the budget. The sixteen accepted actions were selected naturally; sixteen is a cumulative count across refreshes. The sampler encountered zero accepted IDs in twelve real SGD updates (1,536 draws, 512 per refresh). Thus both the applied and stale-rejected counts are zero. These short windows cannot estimate exposure over all 63 batches in a full epoch. The focused fixture separately exercised nonzero applied MOVE/ABSTAIN, stale and AMP-skipped occurrences and simulated timeout after a genuine confirmation.
+
+Measurement environment: Windows, RTX 3050 Ti Laptop 4 GiB, PyTorch 2.6.0+cu124, FP32, encoder microbatch 16, no loader workers, two OMP/MKL threads. Images and devkit were read from the Stanford Cars mirror `iharabukhouski/stanford_cars`, revision `5e32750f7a3c226a5ab20653178f1278925b4ca9`. SSB split SHA-256 `28d471f0fb9e2c773e1255b8b447e542974f6617952203056a0635c638513d39`. DINO source was facebookresearch/dino `7c446df5b9f45747937fb0d72314eb9f7b66930a`, official dino_vitbase16_pretrain.pth SHA-256 `bf34ad0f424b9029b593e8dc3ed553bf26e88bcba0d32bf3e62a6209cb64c85e`.
+
+No compatible post-warmup SimGCD checkpoint was available. We initialized the classifier with seed 1 and used schedule indices 10–12 with four real batches per index. Accordingly the learned classifier, momentum and teacher assignment distributions differ from those after ten full epochs. These measurements establish feasibility on this host only. There was no accuracy evaluation, ablation, baseline reproduction or full training. The observed run used the command below with the local DINO source/weights options and without `--checkpoint`.
+
+### Commands
+
 From the repository root, with an official-layout Cars directory and the SimGCD dependencies installed:
 
 ~~~bash
