@@ -46,6 +46,11 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
     # best_train_acc_ubl = 0 
     # best_train_acc_all = 0
 
+    repairs = None
+    if getattr(args, 'crish_mode', 'E0') != 'E0':
+        from crish.runtime import Repairs
+        repairs = Repairs(args)
+
     for epoch in range(args.epochs):
         loss_record = AverageMeter()
 
@@ -58,7 +63,12 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
             images = torch.cat(images, dim=0).cuda(non_blocking=True)
 
             with torch.cuda.amp.autocast(fp16_scaler is not None):
-                student_proj, student_out = student(images)
+                refresh = repairs is not None and repairs.due(epoch, batch_idx)
+                if refresh:
+                    features = student[0](images)
+                    student_proj, student_out = student[1](features)
+                else:
+                    student_proj, student_out = student(images)
                 teacher_out = student_out.detach()
 
                 # clustering, sup
@@ -67,7 +77,11 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
                 cls_loss = nn.CrossEntropyLoss()(sup_logits, sup_labels)
 
                 # clustering, unsup
-                cluster_loss = cluster_criterion(student_out, teacher_out, epoch)
+                if refresh:
+                    cluster_loss = repairs.loss(features, student_out, uq_idxs, class_labels.masked_fill(~mask_lab, -1),
+                        student[1].last_layer, optimizer, cluster_criterion, epoch)
+                else:
+                    cluster_loss = cluster_criterion(student_out, teacher_out, epoch)
                 avg_probs = (student_out / 0.1).softmax(dim=1).mean(dim=0)
                 me_max_loss = - torch.sum(torch.log(avg_probs**(-avg_probs))) + math.log(float(len(avg_probs)))
                 cluster_loss += args.memax_weight * me_max_loss
@@ -99,9 +113,14 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
                 loss.backward()
                 optimizer.step()
             else:
+                if refresh:
+                    scale_before = fp16_scaler.get_scale()
                 fp16_scaler.scale(loss).backward()
                 fp16_scaler.step(optimizer)
                 fp16_scaler.update()
+
+            if refresh:
+                repairs.finish_step(fp16_scaler is None or fp16_scaler.get_scale() >= scale_before)
 
             if batch_idx % args.print_freq == 0:
                 args.logger.info('Epoch: [{}][{}/{}]\t loss {:.5f}\t {}'
@@ -207,7 +226,14 @@ if __name__ == "__main__":
     # ----------------------
     # INIT
     # ----------------------
+    from crish.runtime import arguments
+    arguments(parser)
     args = parser.parse_args()
+    if args.run_seed is not None:
+        import random
+        random.seed(args.run_seed)
+        np.random.seed(args.run_seed)
+        torch.manual_seed(args.run_seed)
     device = torch.device('cuda:0')
     args = get_class_splits(args)
 
@@ -270,6 +296,10 @@ if __name__ == "__main__":
     # SAMPLER
     # Sampler which balances labelled and unlabelled examples in each batch
     # --------------------
+    if args.crish_mode != 'E0':
+        from crish.data import ImageOnly
+        train_dataset.unlabelled_dataset = ImageOnly(train_dataset.unlabelled_dataset, args.dataset_name)
+
     label_len = len(train_dataset.labelled_dataset)
     unlabelled_len = len(train_dataset.unlabelled_dataset)
     sample_weights = [1 if i < label_len else label_len / unlabelled_len for i in range(len(train_dataset))]
