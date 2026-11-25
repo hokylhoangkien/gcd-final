@@ -38,8 +38,14 @@ def paired_settings(args):
     return {
         k: v
         for k, v in vars(args).items()
-        if k in common
-        or (k.startswith("crish_") and k not in ("crish_mode", "crish_dose"))
+        if (
+            k in common
+            or (k.startswith("crish_") and k not in ("crish_mode", "crish_dose"))
+        )
+        and not (
+            k in ("crish_confirmation_fallback", "crish_revalidated_persistence")
+            and not v
+        )
     }
 
 

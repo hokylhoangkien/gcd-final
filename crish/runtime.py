@@ -38,6 +38,8 @@ def arguments(parser):
     parser.add_argument("--crish_dose", type=Path)
     parser.add_argument("--run_seed", type=int, default=None)
     parser.add_argument("--crish_global_suite", action="store_true")
+    parser.add_argument("--crish_confirmation_fallback", action="store_true")
+    parser.add_argument("--crish_revalidated_persistence", action="store_true")
 
 
 def global_defaults(parser):

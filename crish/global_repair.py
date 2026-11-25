@@ -18,6 +18,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 
+from .confirmation import MAX_ATTEMPTS, confirm_ranked, sign_audit
 from .experiment import paired_settings, recover_ledger, reference_dose
 from .ids import rows_for_ids
 from .reliability import blockwise_euclidean_knn, sparse_evidence
@@ -124,7 +125,7 @@ def encode(backbone, dataset, rows, device, args, clock, expected=None):
     return torch.cat(xs, dim=1), ids, torch.cat(labels)
 
 
-def candidates(state, pool, edges, counts, limit, random_order=None):
+def candidates(state, pool, edges, counts, limit, random_order=None, carried=None):
     local = {int(state.ids[i]): int(state.labels[0][i]) for i in pool}
     adjacency = defaultdict(list)
     for (u, v), edge in edges.items():
@@ -148,6 +149,15 @@ def candidates(state, pool, edges, counts, limit, random_order=None):
             options.append(Proposal(key, "move", source, target))
         ranking.append((-score, key, options))
     ranking.sort()
+    if carried:
+        # Reserve a boundary slot only when the exact old edit is legal again.
+        retained, fresh = [], []
+        for score, key, options in ranking:
+            if key not in carried:
+                fresh.append((score, key, options))
+            elif carried[key][0] in options:
+                retained.append((score, key, [carried[key][0]]))
+        ranking = retained + fresh
     if random_order is not None:
         random_order.shuffle(ranking)
     return [a for _, _, options in ranking[:limit] for a in options], adjacency
@@ -162,6 +172,21 @@ def source_ok(q, row, action, mass):
 class EpochRepairs:
     def __init__(self, args):
         self.args = args
+        self.fallback = getattr(args, "crish_confirmation_fallback", False)
+        self.persistence = getattr(args, "crish_revalidated_persistence", False)
+        if (self.fallback or self.persistence) and args.crish_mode not in ("E3", "E4"):
+            raise ValueError(
+                "Confirmation fallback and revalidated persistence require a verified global mode"
+            )
+        if (self.fallback or self.persistence) and args.crish_cap > 8:
+            raise ValueError(
+                "Verified extensions permit at most eight accepted actions"
+            )
+        self.carry = {}
+        if self.persistence:
+            for entry in getattr(args, "resume_carry", []):
+                action = Proposal(**entry["action"])
+                self.carry[action.sample_id] = (action, entry["origin_epoch"])
         self.path = Path(args.model_path).parent / "crish-global.jsonl"
         if (
             args.n_views != 2
@@ -212,6 +237,12 @@ class EpochRepairs:
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, allow_nan=False) + "\n")
 
+    def carry_state(self):
+        return [
+            {"action": asdict(a), "origin_epoch": born}
+            for a, born in self.carry.values()
+        ]
+
     def prepare(self, student, optimizer, dataset, transform, criterion, epoch):
         if self.epoch is not None:
             raise RuntimeError("Previous repair epoch was not closed")
@@ -235,6 +266,19 @@ class EpochRepairs:
         }
         if getattr(args, "crish_global_suite", False):
             rec.update(mode=args.crish_mode, settings=paired_settings(args))
+        if self.fallback:
+            rec.update(
+                confirmation_attempts=[],
+                attempt_limit=MAX_ATTEMPTS,
+                required_probe_folds=1 + MAX_ATTEMPTS,
+            )
+        if self.persistence:
+            expired = [
+                item for item in self.carry_state() if epoch - item["origin_epoch"] > 3
+            ]
+            for item in expired:
+                del self.carry[item["action"]["sample_id"]]
+            rec.update(expired=expired, carried=self.carry_state(), reaccepted=[])
         with frozen(student, seed, device):
             try:
                 self._refresh(
@@ -252,6 +296,16 @@ class EpochRepairs:
                 clock.check()
             except Deadline:
                 rec["stop"] = "timeout"
+                if self.fallback and rec["confirmation_attempts"]:
+                    last = rec["confirmation_attempts"][-1]
+                    if last["result"] == "started":
+                        last["result"] = "timeout"
+        if self.persistence:
+            rec["reaccepted"] = [
+                {"action": asdict(a), "origin_epoch": self.carry[key][1]}
+                for key, a in self.plan.items()
+                if key in self.carry and a == self.carry[key][0]
+            ]
         rec.update(
             runtime_seconds=time.monotonic() - clock.start,
             stages_seconds=dict(clock.times),
@@ -294,12 +348,24 @@ class EpochRepairs:
         with clock.stage("global_shortlist"):
             known = state.labeled.nonzero().flatten()
             other = (~state.labeled).nonzero().flatten()
+            carry_rows = (
+                [i for i in other.tolist() if int(ids[i]) in self.carry]
+                if self.carry
+                else []
+            )
+            if carry_rows:
+                excluded = set(carry_rows)
+                other = torch.tensor(
+                    [i for i in other.tolist() if i not in excluded], dtype=torch.long
+                )
             fold_count = 1 + (
                 args.crish_confirmations
                 if getattr(args, "crish_global_suite", False)
                 else min(args.crish_cap, args.crish_confirmations)
             )
             try:
+                if self.fallback:
+                    fold_count = 9
                 kfold = balanced_known_folds(
                     known,
                     legal[known],
@@ -308,6 +374,17 @@ class EpochRepairs:
                     per_class=2,
                     folds=fold_count,
                 )
+                if self.fallback:
+                    remaining = ~torch.isin(known, torch.cat(kfold))
+                    kfold += balanced_known_folds(
+                        known[remaining],
+                        legal[known[remaining]],
+                        args.crish_probe_known,
+                        g,
+                        per_class=2,
+                        folds=1 + MAX_ATTEMPTS - fold_count,
+                    )
+                    fold_count = len(kfold)
             except ValueError:
                 rec["stop"] = "insufficient_known_probes"
                 return
@@ -328,6 +405,13 @@ class EpochRepairs:
                 for i, kf in enumerate(kfold)
             ]
             reserved = torch.cat(folds)
+            if self.fallback:
+                rec["probe_support"] = {
+                    "folds": len(folds),
+                    "known_per_fold": args.crish_probe_known,
+                    "unlabeled_per_fold": args.crish_probe_unknown,
+                    "distinct_ids": int(reserved.unique().numel()),
+                }
             allowed = torch.ones(len(ids), dtype=torch.bool)
             allowed[reserved] = False
             available = allowed.nonzero().flatten()
@@ -335,6 +419,7 @@ class EpochRepairs:
                 len(available) < args.crish_evidence
                 or not state.labeled[available].any()
                 or state.labeled[available].all()
+                or len(carry_rows) > args.crish_evidence
             ):
                 rec["stop"] = "insufficient_context"
                 return
@@ -346,6 +431,7 @@ class EpochRepairs:
                     args.crish_k,
                     g,
                     deadline=clock.end,
+                    required_rows=carry_rows,
                 )
             except RuntimeError:
                 clock.check()
@@ -377,8 +463,18 @@ class EpochRepairs:
                 else None
             )
             options, adj = candidates(
-                state, pool, edges, counts, args.crish_boundaries, random_order
+                state,
+                pool,
+                edges,
+                counts,
+                args.crish_boundaries,
+                random_order,
+                self.carry,
             )
+            if self.persistence:
+                rec["carry_geometry_ids"] = [
+                    a.sample_id for a in options if a.sample_id in self.carry
+                ]
             rec.update(
                 joint_edges=sum(e.joint > 0 for e in edges.values()),
                 proposed=len(options),
@@ -416,6 +512,10 @@ class EpochRepairs:
                 if source_ok(probs, lookup[a.sample_id], a, args.crish_mass)
             ]
             rec["score_eligible"] = len(options)
+            if self.persistence:
+                rec["carry_teacher_eligible_ids"] = [
+                    a.sample_id for a in options if a.sample_id in self.carry
+                ]
             if self.reference is not None:
                 kinds, _ = self.reference[epoch]
                 rec["planned_reference"] = kinds
@@ -459,17 +559,19 @@ class EpochRepairs:
             original = step([])
             orig = virtual.probe(original, *discovery)
         accepted = []
+        rejected = set()
+        limit = MAX_ATTEMPTS if self.fallback else args.crish_confirmations
         current, baseline = original, orig
         for n in range(args.crish_cap):
-            if n >= args.crish_confirmations:
+            if rec["confirmations"] >= limit:
                 rec["stop"] = "confirmation_budget"
                 return
             best = args.crish_gain
-            winner = None
+            ranked = []
             with clock.stage("discovery"):
                 for a in options:
                     clock.check()
-                    if a.sample_id in self.plan:
+                    if a.sample_id in self.plan or a in rejected:
                         continue
                     if a.kind == "move" and (
                         counts[a.source] < 3
@@ -500,44 +602,50 @@ class EpochRepairs:
                         and group > args.crish_gain
                         and known <= min(baseline[1], orig[1])
                     ):
-                        winner = (a, edit, trial, (total, known), trace)
-                        best = gain
-            if winner is None:
+                        if self.fallback:
+                            # Recreate the selected exact SGD step rather than retaining every weight matrix.
+                            ranked.append((a, edit, None, (total, known), trace))
+                        else:
+                            ranked = [(a, edit, trial, (total, known), trace)]
+                            best = gain
+            if not ranked:
                 rec["stop"] = "discovery"
                 return
+            if self.fallback:
+                ranked.sort(key=lambda item: -item[-1]["gain"])
+            winner = confirm_ranked(
+                ranked,
+                fallback=self.fallback,
+                limit=limit,
+                rejected=rejected,
+                rec=rec,
+                clock=clock,
+                get_probe=get_probe,
+                probe=virtual.probe,
+                step=step,
+                accepted=accepted,
+                current=current,
+                original=original,
+                threshold=args.crish_gain,
+                round_index=n,
+                audit=lambda f, t, h, m: sign_audit(virtual, f, t, h, m),
+            )
+            if winner is None:
+                return
             a, edit, trial, new_base, trace = winner
-            fresh = get_probe(n + 1)
-            with clock.stage("confirmation"):
-                b, bk = virtual.probe(current, *fresh)
-                o, ok = virtual.probe(original, *fresh) if accepted else (b, bk)
-                c, ck = virtual.probe(trial, *fresh)
-                rec["confirmations"] += 1
-                if not all(math.isfinite(v) for v in (b, bk, o, ok, c, ck)):
-                    rec["stop"] = "nonfinite_confirmation"
-                    return
-                trace.update(
-                    confirmation=b - c,
-                    group_confirmation=o - c,
-                    confirmation_known_delta=ck - bk,
-                )
-                if min(b - c, o - c) <= args.crish_gain or ck > min(bk, ok):
-                    rec["stop"] = "confirmation"
-                    return
-                # Commit before starting any further timed work. A timeout retains this prefix.
-                clock.check()
-                accepted.append(edit)
-                self.plan[a.sample_id] = a
-                trace["accepted"] = True
-                rec["accepted"].append(asdict(a))
-                current, baseline = trial, new_base
-                if a.kind == "move":
-                    edited = probs[:, edit.row].mean(0).clone()
-                    edited[a.source] -= args.crish_mass
-                    edited[a.target] += args.crish_mass
-                    new_slot = int(edited.argmax())
-                    counts[a.source] -= 1
-                    counts[new_slot] += 1
-                    peer_slots[a.sample_id] = new_slot
+            accepted.append(edit)
+            self.plan[a.sample_id] = a
+            trace["accepted"] = True
+            rec["accepted"].append(asdict(a))
+            current, baseline = trial, new_base
+            if a.kind == "move":
+                edited = probs[:, edit.row].mean(0).clone()
+                edited[a.source] -= args.crish_mass
+                edited[a.target] += args.crish_mass
+                new_slot = int(edited.argmax())
+                counts[a.source] -= 1
+                counts[new_slot] += 1
+                peer_slots[a.sample_id] = new_slot
         rec["stop"] = "cap"
 
     def loss(self, logits, ids, labeled, criterion, epoch):
@@ -607,6 +715,13 @@ class EpochRepairs:
                 plan_matched=[a.kind for a in self.plan.values()] == kinds,
                 exposure_matched=dict(self.applied) == target,
             )
+        if self.persistence:
+            for key, action in self.plan.items():
+                if key in self.applied_ids:
+                    self.carry.pop(key, None)
+                else:
+                    self.carry.setdefault(key, (action, self.epoch))
+            record["carry_pending"] = self.carry_state()
         self.log(record)
         self.plan.clear()
         self.epoch = None

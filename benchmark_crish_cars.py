@@ -26,7 +26,7 @@ def main():
     p.add_argument(
         "--checkpoint", type=Path, help="Official epoch-boundary SimGCD model/optimizer"
     )
-    p.add_argument("--refreshes", type=int, choices=(3, 4, 5), default=3)
+    p.add_argument("--refreshes", type=int, choices=range(1, 6), default=3)
     p.add_argument(
         "--steps",
         type=int,

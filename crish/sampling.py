@@ -60,7 +60,7 @@ def known_fold_structure(targets):
 
 
 def global_neighbor_pool(state, available, budget, k, generator, *,
-                         reference_block=1024, deadline=None):
+                         reference_block=1024, deadline=None, required_rows=()):
     """Cache-budgeted neighborhoods shortlisted against all non-probe rows.
 
     Unlabeled anchors are sampled without hidden class identities. Each anchor's
@@ -80,7 +80,17 @@ def global_neighbor_pool(state, available, budget, k, generator, *,
     if not len(unlabeled):
         raise ValueError('No unlabeled evidence anchors remain after reserving probes')
     query_count = min(len(unlabeled), max(1, budget // (k+1)))
-    anchors = unlabeled[torch.randperm(len(unlabeled), generator=generator)[:query_count]]
+    order = unlabeled[torch.randperm(len(unlabeled), generator=generator)]
+    if len(required_rows):
+        positions = {row: pos for pos, row in enumerate(available.tolist())}
+        required = [positions[row] for row in required_rows]
+        query_count = max(query_count, len(required))
+        if query_count > budget:
+            raise ValueError("Carry anchors exceed the evidence cache")
+        forced = set(required)
+        anchors = torch.tensor((required + [r for r in order.tolist() if r not in forced])[:query_count])
+    else:
+        anchors = order[:query_count]
     features = F.normalize(state.features[available], dim=-1)
     neighbors = blockwise_query_knn(features, anchors, k, reference_block=reference_block, deadline=deadline)
     # Reserve every query first; only then include reference neighbors.

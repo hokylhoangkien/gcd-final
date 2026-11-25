@@ -20,13 +20,14 @@ from model import DINOHead, info_nce_logits
 from validate_global_crish import Rows
 
 
-def run(root, mode, folder, resume=False, interrupt=False, seed=23):
+def run(root, mode, folder, resume=False, interrupt=False, seed=23, extensions=False):
     torch.manual_seed(seed)
     parser = argparse.ArgumentParser()
     arguments(parser)
     global_defaults(parser)
     a = parser.parse_args([])
     a.run_seed, a.crish_mode, a.crish_global_suite = seed, mode, True
+    a.crish_confirmation_fallback = a.crish_revalidated_persistence = extensions
     a.resume_run, a.fp16, a.epochs, a.num_workers = resume, False, 3, 0
     a.crish_probe_known, a.crish_probe_unknown = 4, 5
     a.crish_warmup, a.crish_cap, a.crish_confirmations = 0, 3 if mode == "E4" else 1, 3
@@ -47,7 +48,13 @@ def run(root, mode, folder, resume=False, interrupt=False, seed=23):
     )
     head = DINOHead(12, 8, hidden_dim=16, bottleneck_dim=8)
     model = nn.Sequential(nn.Linear(12, 12), head)
-    loader = DataLoader(ds, batch_size=512, shuffle=True)
+    if extensions:
+        # Only part of the training population is drawn, to exercise unapplied actions at resume.
+        loader = DataLoader(
+            ds, batch_size=64, sampler=list(range(32)) + list(range(128, 160))
+        )
+    else:
+        loader = DataLoader(ds, batch_size=512, shuffle=True)
     evaluation = SimpleNamespace(dataset=SimpleNamespace(transform=lambda v: v))
 
     def checkpoint(state, path):

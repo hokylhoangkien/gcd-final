@@ -66,6 +66,7 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
             restore_rng(saved['rng'])
             saved_epoch = saved['epoch']
             args.resume_ledger_bytes = saved['ledger_bytes']
+            args.resume_carry = saved.get('carry', [])
             del saved
         elif args.resume_run and (Path(args.model_path).parent / 'crish-global.jsonl').exists():
             # An interruption before checkpoint zero cannot commit any repair exposure.
@@ -203,6 +204,8 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
                              scaler=fp16_scaler.state_dict() if fp16_scaler else None,
                              rng=rng_state(), ledger_bytes=epoch_repairs.path.stat().st_size,
                              accuracy=dict(all=float(all_acc), old=float(old_acc), new=float(new_acc)))
+            if epoch_repairs.persistence:
+                save_dict['carry'] = epoch_repairs.carry_state()
             atomic_checkpoint(save_dict, args.model_path)
         else:
             torch.save(save_dict, args.model_path)
@@ -292,6 +295,9 @@ if __name__ == "__main__":
     if selected.crish_mode == 'E3' or selected.crish_global_suite:
         global_defaults(parser)
     args = parser.parse_args()
+    if (args.crish_confirmation_fallback or args.crish_revalidated_persistence) and not (
+            args.crish_mode == 'E3' or (args.crish_mode == 'E4' and args.crish_global_suite)):
+        parser.error("Use these repair flags with global E3 or the equivalent verified E4 suite mode")
     if args.run_seed is not None:
         import random
         random.seed(args.run_seed)
