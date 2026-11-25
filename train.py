@@ -1,4 +1,6 @@
 import argparse
+import os
+from pathlib import Path
 
 import math
 import numpy as np
@@ -18,6 +20,7 @@ from model import DINOHead, info_nce_logits, SupConLoss, DistillLoss, Contrastiv
 
 
 def train(student, train_loader, test_loader, unlabelled_train_loader, args):
+    from crish.experiment import atomic_checkpoint, load_checkpoint, paired_settings, restore_rng, rng_state
     params_groups = get_params_groups(student)
     optimizer = SGD(params_groups, lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     fp16_scaler = None
@@ -46,9 +49,33 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
     # best_train_acc_ubl = 0 
     # best_train_acc_all = 0
 
+    suite = getattr(args, 'crish_global_suite', False)
+    saved_epoch = 0
+    if suite:
+        identity = dict(settings=paired_settings(args), mode=args.crish_mode,
+                        dose_digest=getattr(args, 'dose_digest', None))
+        if args.resume_run and Path(args.model_path).is_file():
+            saved = load_checkpoint(args.model_path)
+            if saved.get('identity') != identity:
+                raise ValueError("Resume settings or dose reference differ from the checkpoint")
+            student.load_state_dict(saved['model'])
+            optimizer.load_state_dict(saved['optimizer'])
+            exp_lr_scheduler.load_state_dict(saved['scheduler'])
+            if fp16_scaler is not None:
+                fp16_scaler.load_state_dict(saved['scaler'])
+            restore_rng(saved['rng'])
+            saved_epoch = saved['epoch']
+            args.resume_ledger_bytes = saved['ledger_bytes']
+            del saved
+        elif args.resume_run and (Path(args.model_path).parent / 'crish-global.jsonl').exists():
+            # An interruption before checkpoint zero cannot commit any repair exposure.
+            if args.crish_warmup > 0 and (Path(args.model_path).parent / 'crish-global.jsonl').stat().st_size:
+                raise ValueError("Found post-warmup repair records but the training checkpoint is missing")
+            args.resume_ledger_bytes = 0
     repairs = None
     epoch_repairs = None
-    if getattr(args, 'crish_mode', 'E0') == 'E3':
+    if getattr(args, 'crish_mode', 'E0') == 'E3' or (
+            getattr(args, 'crish_global_suite', False) and args.crish_mode in ('E1', 'E2', 'E4')):
         from crish.global_repair import EpochRepairs
         epoch_repairs = EpochRepairs(args)
     elif getattr(args, 'crish_mode', 'E0') != 'E0':
@@ -56,7 +83,7 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
         repairs = Repairs(args)
 
     benchmark = getattr(args, 'benchmark_refreshes', 0)
-    start_epoch = getattr(args, 'benchmark_epoch', 0) if benchmark else 0
+    start_epoch = getattr(args, 'benchmark_epoch', 0) if benchmark else saved_epoch
     if benchmark and getattr(args, 'benchmark_state', None) is not None:
         optimizer.load_state_dict(args.benchmark_state)
     elif benchmark:
@@ -171,7 +198,14 @@ def train(student, train_loader, test_loader, unlabelled_train_loader, args):
             'epoch': epoch + 1,
         }
 
-        torch.save(save_dict, args.model_path)
+        if suite:
+            save_dict.update(identity=identity, scheduler=exp_lr_scheduler.state_dict(),
+                             scaler=fp16_scaler.state_dict() if fp16_scaler else None,
+                             rng=rng_state(), ledger_bytes=epoch_repairs.path.stat().st_size,
+                             accuracy=dict(all=float(all_acc), old=float(old_acc), new=float(new_acc)))
+            atomic_checkpoint(save_dict, args.model_path)
+        else:
+            torch.save(save_dict, args.model_path)
         args.logger.info("model saved to {}.".format(args.model_path))
 
         # if old_acc_test > best_test_acc_lab:
@@ -247,13 +281,15 @@ if __name__ == "__main__":
     parser.add_argument('--fp16', action='store_true', default=False)
     parser.add_argument('--print_freq', default=10, type=int)
     parser.add_argument('--exp_name', default=None, type=str)
+    parser.add_argument('--resume_run', action='store_true')
 
     # ----------------------
     # INIT
     # ----------------------
     from crish.runtime import arguments, global_defaults
     arguments(parser)
-    if parser.parse_known_args()[0].crish_mode == 'E3':
+    selected = parser.parse_known_args()[0]
+    if selected.crish_mode == 'E3' or selected.crish_global_suite:
         global_defaults(parser)
     args = parser.parse_args()
     if args.run_seed is not None:
@@ -267,7 +303,18 @@ if __name__ == "__main__":
     args.num_labeled_classes = len(args.train_classes)
     args.num_unlabeled_classes = len(args.unlabeled_classes)
 
-    init_experiment(args, runner_name=['simgcd'])
+    if args.crish_global_suite:
+        if args.dataset_name != 'scars' or args.run_seed is None:
+            parser.error("The Cars suite requires --dataset_name scars and an explicit --run_seed")
+        if args.crish_mode == 'E0' or not args.exp_name or Path(args.exp_name).name != args.exp_name or args.exp_name in ('.', '..'):
+            parser.error("The global suite requires E1–E4 and a run name")
+        run_dir = Path(args.exp_root) / 'simgcd' / 'log' / args.exp_name
+        if run_dir.exists() and not args.resume_run:
+            parser.error("Run already exists. Use --resume_run or a new exp_name")
+        from crish.experiment import file_digest
+        if args.crish_dose:
+            args.dose_digest = file_digest(args.crish_dose)
+    init_experiment(args, runner_name=['simgcd'], exp_id=args.exp_name if args.crish_global_suite else None)
     args.logger.info(f'Using evaluation function {args.eval_funcs[0]} to print results')
     
     torch.backends.cudnn.benchmark = True
@@ -278,7 +325,12 @@ if __name__ == "__main__":
     args.interpolation = 3
     args.crop_pct = 0.875
 
-    backbone = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
+    local_dino = os.environ.get('SIMGCD_DINO_REPO')
+    if local_dino:
+        backbone = torch.hub.load(local_dino, 'dino_vitb16', source='local', pretrained=False)
+        backbone.load_state_dict(torch.load(os.environ['SIMGCD_DINO_WEIGHTS'], map_location='cpu'))
+    else:
+        backbone = torch.hub.load('facebookresearch/dino:main', 'dino_vitb16')
 
     if args.warmup_model_dir is not None:
         args.logger.info(f'Loading weights from {args.warmup_model_dir}')
@@ -326,6 +378,18 @@ if __name__ == "__main__":
     if args.crish_mode != 'E0':
         from crish.data import ImageOnly
         train_dataset.unlabelled_dataset = ImageOnly(train_dataset.unlabelled_dataset, args.dataset_name)
+    if args.crish_global_suite:
+        import hashlib
+        known_split = train_dataset.labelled_dataset
+        split_hash = hashlib.sha256()
+        for values in (args.train_classes, args.unlabeled_classes, known_split.uq_idxs,
+                       known_split.target, train_dataset.unlabelled_dataset.ids):
+            split_hash.update(np.asarray(values, dtype='<i8').tobytes())
+        args.split_digest = split_hash.hexdigest()
+        weight_hash = hashlib.sha256()
+        for tensor in backbone.state_dict().values():
+            weight_hash.update(tensor.detach().cpu().contiguous().numpy().tobytes())
+        args.backbone_digest = weight_hash.hexdigest()
 
     label_len = len(train_dataset.labelled_dataset)
     unlabelled_len = len(train_dataset.unlabelled_dataset)

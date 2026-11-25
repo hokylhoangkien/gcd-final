@@ -37,6 +37,7 @@ def arguments(parser):
     parser.add_argument("--crish_seconds", type=float, default=120.0)
     parser.add_argument("--crish_dose", type=Path)
     parser.add_argument("--run_seed", type=int, default=None)
+    parser.add_argument("--crish_global_suite", action="store_true")
 
 
 def global_defaults(parser):

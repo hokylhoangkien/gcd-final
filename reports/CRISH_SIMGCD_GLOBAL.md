@@ -1,5 +1,7 @@
 # Global counterfactual supervision repair on Stanford Cars
 
+For the four-mode, 200-epoch Cars experiment on a Linux GPU host, see [CARS_FULL_SUITE.md](CARS_FULL_SUITE.md). It includes the cap-1 control reference, adaptive cap-8 mapping and restart procedure.
+
 ## Revisions and run configuration
 
 Primary method E3. Source implementation: hokylhoangkien/gcd-final at `1c6ada810b451e5a1f3b36b930c550489917cf0a` (feat/local-adaptive-acceptance). Previous SimGCD port: `6af77dc3220d2abb8033fc67ab9bc8a5695394db`. Official SimGCD base: `f843f27195701b7c8c5713cfd17499ad67c86247`.

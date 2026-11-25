@@ -18,6 +18,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Subset
 
+from .experiment import paired_settings, recover_ledger, reference_dose
 from .ids import rows_for_ids
 from .reliability import blockwise_euclidean_knn, sparse_evidence
 from .repair import Action, VirtualClassifier, corrected_distill
@@ -123,7 +124,7 @@ def encode(backbone, dataset, rows, device, args, clock, expected=None):
     return torch.cat(xs, dim=1), ids, torch.cat(labels)
 
 
-def candidates(state, pool, edges, counts, limit):
+def candidates(state, pool, edges, counts, limit, random_order=None):
     local = {int(state.ids[i]): int(state.labels[0][i]) for i in pool}
     adjacency = defaultdict(list)
     for (u, v), edge in edges.items():
@@ -147,6 +148,8 @@ def candidates(state, pool, edges, counts, limit):
             options.append(Proposal(key, "move", source, target))
         ranking.append((-score, key, options))
     ranking.sort()
+    if random_order is not None:
+        random_order.shuffle(ranking)
     return [a for _, _, options in ranking[:limit] for a in options], adjacency
 
 
@@ -186,7 +189,16 @@ class EpochRepairs:
             or args.crish_probe_known % 2
         ):
             raise ValueError("Invalid global CRiSH configuration")
-        self.path.touch(exist_ok=False)
+        self.reference = None
+        if getattr(args, "crish_global_suite", False) and args.crish_mode in (
+            "E1",
+            "E2",
+        ):
+            self.reference = reference_dose(args)
+        if getattr(args, "resume_ledger_bytes", None) is None:
+            self.path.touch(exist_ok=False)
+        else:
+            recover_ledger(self.path, args.resume_ledger_bytes)
         self.plan = {}
         self.epoch = None
 
@@ -221,6 +233,8 @@ class EpochRepairs:
             "decisions": [],
             "confirmations": 0,
         }
+        if getattr(args, "crish_global_suite", False):
+            rec.update(mode=args.crish_mode, settings=paired_settings(args))
         with frozen(student, seed, device):
             try:
                 self._refresh(
@@ -280,7 +294,11 @@ class EpochRepairs:
         with clock.stage("global_shortlist"):
             known = state.labeled.nonzero().flatten()
             other = (~state.labeled).nonzero().flatten()
-            fold_count = 1 + min(args.crish_cap, args.crish_confirmations)
+            fold_count = 1 + (
+                args.crish_confirmations
+                if getattr(args, "crish_global_suite", False)
+                else min(args.crish_cap, args.crish_confirmations)
+            )
             try:
                 kfold = balanced_known_folds(
                     known,
@@ -353,7 +371,14 @@ class EpochRepairs:
             edges = sparse_evidence(ids[pool], trials)
             counts = Counter(slots[available].tolist())
             peer_slots = dict(zip(ids[pool].tolist(), slots[pool].tolist()))
-            options, adj = candidates(state, pool, edges, counts, args.crish_boundaries)
+            random_order = (
+                random.Random(rec["seed"])
+                if self.reference is not None and args.crish_mode == "E1"
+                else None
+            )
+            options, adj = candidates(
+                state, pool, edges, counts, args.crish_boundaries, random_order
+            )
             rec.update(
                 joint_edges=sum(e.joint > 0 for e in edges.values()),
                 proposed=len(options),
@@ -391,6 +416,26 @@ class EpochRepairs:
                 if source_ok(probs, lookup[a.sample_id], a, args.crish_mass)
             ]
             rec["score_eligible"] = len(options)
+            if self.reference is not None:
+                kinds, _ = self.reference[epoch]
+                rec["planned_reference"] = kinds
+                if not kinds:
+                    rec["stop"] = "reference_keep"
+                    return
+                eligible = [a for a in options if a.kind == kinds[0]]
+                if not eligible:
+                    rec["stop"] = "reference_type_unavailable"
+                    return
+                clock.check()
+                pick = (
+                    random_order.choice(eligible)
+                    if random_order is not None
+                    else eligible[0]
+                )
+                self.plan[pick.sample_id] = pick
+                rec["accepted"].append(asdict(pick))
+                rec["stop"] = "matched_plan"
+                return
             if not options:
                 rec["stop"] = "no_current_candidate"
                 return
@@ -518,6 +563,12 @@ class EpochRepairs:
                 ):
                     self.exposure["low_teacher_mass"] += 1
                     continue
+                if self.reference is not None:
+                    quota = self.reference[epoch][1].get(a.kind, 0)
+                    pending = sum(edit.kind == a.kind for _, edit in self.pending)
+                    if self.applied[a.kind] + pending >= quota:
+                        self.exposure["dose_cap"] += 1
+                        continue
                 self.pending.append(
                     (a.sample_id, Action(i, a.kind, a.source, a.target))
                 )
@@ -549,6 +600,13 @@ class EpochRepairs:
             "applied_ids": sorted(self.applied_ids),
             "exposure": dict(self.exposure),
         }
+        if self.reference is not None:
+            kinds, target = self.reference[self.epoch]
+            record.update(
+                reference_applied=target,
+                plan_matched=[a.kind for a in self.plan.values()] == kinds,
+                exposure_matched=dict(self.applied) == target,
+            )
         self.log(record)
         self.plan.clear()
         self.epoch = None
