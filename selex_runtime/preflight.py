@@ -13,7 +13,7 @@ def preflight(cfg):
     configure_environment(ROOT/'runs/probe-placeholder', cfg)
     result = inspect_inputs(cfg)
     result['data_counts'] = audit_dataset(cfg)
-    from data.get_datasets import get_class_splits, get_datasets
+    from .data import get_class_splits, get_datasets
     from data.augmentations import get_transform
     from models import vision_transformer, vision_transformer2
     from methods.clustering.faster_mix_k_means_pytorch import K_Means

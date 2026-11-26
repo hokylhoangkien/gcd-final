@@ -1812,3 +1812,10 @@ GPU no_abstain smoke/benchmark NOT RUN. Transfer only the new config to a
 historical checkout; do not pull/update runtime during active training. Wait
 for an available GPU, then check this config with --variant local and launch
 fresh; never resume a checkpoint from another ablation.
+
+
+## 2026-11-26 — RP2K integration workspace
+
+See reports/27_rp2k_workspace_audit.md. Work is isolated in branch
+feat/rp2k-crish-local from local-adaptive-acceptance commit 1c6ada8.
+The original dirty checkout and remote detector job are preserved.

@@ -26,7 +26,7 @@ def make_args(cfg):
 
 
 def run(cfg, run_dir, mode, checkpoint='', epoch=None):
-    from data.get_datasets import get_class_splits, get_datasets
+    from .data import get_class_splits, get_datasets
     from data.augmentations import get_transform
     from models import vision_transformer, vision_transformer2
     from project_utils.general_utils import seed_torch
@@ -39,7 +39,10 @@ def run(cfg, run_dir, mode, checkpoint='', epoch=None):
     from gcd_runtime.config import paths
     if not torch.cuda.is_available():
         raise RuntimeError('SelEx real-data worker requires NVIDIA CUDA')
-    args = get_class_splits(make_args(cfg))
+    args = make_args(cfg)
+    if cfg['dataset_name'] == 'rp2k':
+        args.rp2k_evaluation = mode != 'train'
+    args = get_class_splits(args)
     if upstream_policy(cfg):
         seed_training(cfg['seed'])
     else:
@@ -131,6 +134,12 @@ class SelExRuntime(EpochRuntime):
     def monitor_epoch(self, epoch, model):
         from gcd_runtime.monitoring import monitor_epoch, monitor_due
         from .monitoring import monitor_plain
+        if self.config['dataset_name'] == 'rp2k':
+            # Custom retail training keeps held-out test labels out of epoch
+            # monitoring/selection. Only optional train-pool SS diagnostics run.
+            if monitor_due(self.config, epoch):
+                monitor_epoch(self, epoch, model)
+            return
         if upstream_policy(self.config):
             self.plain_rng_pending = True
         monitor_plain(self, epoch, model)
@@ -226,7 +235,8 @@ def evaluate_ss(model, dataset, args, runtime):
         np.random.seed(0); torch.manual_seed(0)
     before_fit = rng_digest()
     fit = K_Means(k=k, tolerance=1e-4, max_iterations=args.ss_max_iter, init='k-means++',
-        n_init=args.ss_n_init, random_state=None, n_jobs=None, pairwise_batch_size=1024,
+        n_init=args.ss_n_init, random_state=None, n_jobs=None,
+        pairwise_batch_size=getattr(args, 'pairwise_batch_size', 1024),
         mode=None, protos=None,
         cluster_size=None if getattr(args, 'unbalanced', False) else math.ceil(len(truth)/k))
     fit.fit_mix(features[~mask].cuda(), features[mask].cuda(), truth[mask].cuda())

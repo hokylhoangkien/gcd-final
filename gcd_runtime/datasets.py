@@ -16,6 +16,8 @@ class DatasetSpec:
 
 
 DATASETS = {
+    # Class count is read from the prepared, fingerprinted custom split.
+    'rp2k': DatasetSpec('rp2k', 'rp2k', None, None, 0, ('manifest.json',), 0),
     'scars': DatasetSpec('scars', 'cars', 'scars_osr_splits.pkl',
         '28d471f0fb9e2c773e1255b8b447e542974f6617952203056a0635c638513d39', 196,
         ('devkit/cars_train_annos.mat', 'devkit/cars_test_annos_withlabels.mat')),
@@ -45,7 +47,7 @@ def image_paths(dataset, name):
         raise ValueError('CIFAR-100 stores pixel arrays; use sample IDs, not invented image paths')
     if name == 'scars':
         return tuple(map(str, dataset.data))
-    if name in ('aircraft', 'herbarium_19'):
+    if name in ('aircraft', 'herbarium_19', 'rp2k'):
         base = (Path(dataset.root)/'data/images').resolve() if name == 'aircraft' else Path(dataset.root).resolve()
         # Index path only: never unpack/read an unlabeled sample's target.
         paths = tuple(Path(row[0]).resolve() for row in dataset.samples)
@@ -66,7 +68,7 @@ def raw_targets(dataset, name):
     dataset_spec(name)
     if name == 'cifar100':
         return dataset.targets
-    if name in ('aircraft', 'herbarium_19'):
+    if name in ('aircraft', 'herbarium_19', 'rp2k'):
         return [row[1] for row in dataset.samples]
     return dataset.target if name == 'scars' else dataset.data['target'].tolist()
 
@@ -186,6 +188,9 @@ def validate_herbarium_layout(root):
 
 
 def whole_training_dataset(name, root):
+    if name == 'rp2k':
+        from .rp2k import ProductRows, read_rows
+        return ProductRows(root, read_rows(root, 'train_evaluation.jsonl'), None)
     if name == 'scars':
         from data.stanford_cars import CarsDataset
         return CarsDataset(train=True, data_dir=str(root))

@@ -39,6 +39,13 @@ def read_class_split(path, dataset_name):
 
 def check_split(path, dataset_name='scars'):
     spec = dataset_spec(dataset_name)
+    if dataset_name == 'rp2k':
+        from gcd_runtime.config import paths
+        from gcd_runtime.rp2k import load_manifest, digest
+        root = paths()[0]/'rp2k'
+        manifest = load_manifest(root)
+        return dict(kind='custom_rp2k_gcd_not_ssb', sha256=digest(root/'manifest.json'),
+                    known_count=manifest['known_count'], novel_count=manifest['novel_count'])
     if dataset_name == 'cifar100':
         # Upstream get_class_splits defines ranges; no SSB pickle exists here.
         protocol = dict(dataset_name='cifar100', known_classes=list(range(80)),
@@ -109,6 +116,8 @@ def main():
     path = ROOT / 'upstream/HypCD/data/ssb_splits' / filename if filename else None
     report = {'dataset_name': args.dataset, 'split': check_split(path, args.dataset), 'image_integrity': 'not_checked_no_manifest'}
     if args.manifest:
+        if args.dataset == 'rp2k':
+            parser.error('Use scripts/prepare_rp2k.py audit for the custom RP2K indexes')
         if args.dataset == 'cifar100':
             parser.error('CIFAR-100 array membership is audited by remote preflight, not a file-image manifest')
         if not args.data_root:

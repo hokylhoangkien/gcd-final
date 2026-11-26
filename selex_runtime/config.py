@@ -24,11 +24,26 @@ def validate_config(cfg, *, eval_every_epochs=None):
         raise ValueError('SelEx method must be baseline or crish')
     if type(cfg.get('require_intervention_smoke', False)) is not bool:
         raise ValueError('require_intervention_smoke must be boolean')
-    if cfg.get('dataset_name') not in ('scars', 'cub', 'aircraft', 'cifar100', 'herbarium_19') or cfg.get('dino') not in ('v1', 'v2'):
+    if cfg.get('dataset_name') not in ('scars', 'cub', 'aircraft', 'cifar100', 'herbarium_19', 'rp2k') or cfg.get('dino') not in ('v1', 'v2'):
         raise ValueError('Unsupported SelEx dataset or DINO backbone')
     # Do not insert new keys into historical profiles: existing resume snapshots
     # retain their exact configs. Herbarium explicitly declares its native mode.
-    if cfg['dataset_name'] == 'herbarium_19':
+    if cfg['dataset_name'] == 'rp2k':
+        if cfg.get('rp2k_subdir', 'rp2k') not in ('rp2k', 'rp2k/smoke'):
+            raise ValueError('Invalid RP2K data subdirectory')
+        if cfg.get('unbalanced') is not True:
+            raise ValueError('RP2K requires unbalanced=True for its long-tail class distribution')
+        fingerprint = cfg.get('rp2k_manifest_sha256')
+        if fingerprint is not None and (not isinstance(fingerprint, str) or len(fingerprint) != 64
+                or any(c not in '0123456789abcdef' for c in fingerprint)):
+            raise ValueError('Invalid RP2K manifest fingerprint')
+        if cfg.get('report_best_old_test', False) or cfg.get('evaluation_rng') != 'isolated':
+            raise ValueError('RP2K requires isolated evaluation and no test-based checkpoint selection')
+        if cfg.get('dino') != 'v2':
+            raise ValueError('The RP2K deployment profile requires DINOv2 reg4')
+        if type(cfg.get('pairwise_batch_size')) is not int or cfg['pairwise_batch_size'] < 1:
+            raise ValueError('RP2K requires a positive clustering pairwise_batch_size')
+    elif cfg['dataset_name'] == 'herbarium_19':
         if cfg.get('unbalanced') is not True:
             raise ValueError('Herbarium19 requires unbalanced=True in hierarchy and SS')
     elif cfg.get('unbalanced', False) is not False:

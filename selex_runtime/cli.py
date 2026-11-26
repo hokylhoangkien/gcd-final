@@ -14,7 +14,7 @@ def main():
     parser.add_argument('mode', nargs='?', default='train', choices=['train', 'check', 'smoke', 'evaluate'])
     parser.add_argument('--baseline', action='store_true', help='Updated SelEx without CRiSH')
     parser.add_argument('--config', type=Path, help='Exact SelEx config snapshot; also supports other seeds')
-    parser.add_argument('--dataset', choices=['scars', 'cub', 'aircraft', 'cifar100', 'herbarium_19'],
+    parser.add_argument('--dataset', choices=['scars', 'cub', 'aircraft', 'cifar100', 'herbarium_19', 'rp2k'],
                         help='Dataset for the matched 200-epoch DINOv2 profiles; default scars')
     parser.add_argument('--resume', type=Path)
     parser.add_argument('--checkpoint', type=Path)
@@ -85,6 +85,13 @@ def main():
     trial.update(epochs=1, max_steps_per_epoch=2, max_runtime_seconds=1800, ss_eval_every_epochs=0,
                  require_intervention_smoke=True)
     trial['crish']['warmup_epochs'] = 0
+    if cfg['dataset_name'] == 'rp2k':
+        # Full-pool extraction is not a bounded smoke for hundreds of thousands
+        # of images. Use the independently fingerprinted 16-class image subset.
+        smoke_digest = cfg.get('rp2k_smoke_manifest_sha256')
+        if not smoke_digest:
+            raise ValueError('Generate the RP2K plan, including its bounded smoke manifest, first')
+        trial.update(rp2k_subdir='rp2k/smoke', rp2k_manifest_sha256=smoke_digest)
     if trial.get('pair_reliability', {}).get('enabled'):
         trial['pair_reliability'].update(warmup_epochs=0, ramp_epochs=1)
     if trial.get('population_policy', {}).get('enabled'):

@@ -63,11 +63,21 @@ def inspect_inputs(cfg=None):
     sha = provenance['sha']
     name = (cfg or {}).get('dataset_name', 'scars')
     spec = dataset_spec(name)
-    split = check_split(upstream / 'data/ssb_splits'/spec.split_file if spec.split_file else None, name)
+    if name == 'rp2k':
+        from .rp2k import load_manifest, dataset_root
+        if not (cfg or {}).get('rp2k_manifest_sha256'):
+            raise RuntimeError('Prepare RP2K and generate a manifest-pinned run config first')
+        manifest = load_manifest(dataset_root(cfg), cfg['rp2k_manifest_sha256'])
+        split = dict(kind='custom_rp2k_gcd_not_ssb', sha256=cfg['rp2k_manifest_sha256'],
+                     known_count=manifest['known_count'], novel_count=manifest['novel_count'])
+    else:
+        split = check_split(upstream / 'data/ssb_splits'/spec.split_file if spec.split_file else None, name)
     data, weights, _ = paths()
     variant = (cfg or {}).get('dino', 'v1')
     weight = weights / ('dinov2_vitb14_reg4_pretrain.pth' if variant == 'v2' else 'dino_vitb16_pretrain.pth')
     root = data/spec.folder
+    if name == 'rp2k':
+        root = dataset_root(cfg)
     if name == 'herbarium_19':
         from .datasets import validate_herbarium_layout
         validate_herbarium_layout(root)
@@ -90,6 +100,9 @@ def audit_dataset(cfg=None):
     import argparse
     from .worker import configure_environment
     configure_environment(ROOT / 'runs/probe-placeholder', cfg)
+    if (cfg or {}).get('dataset_name') == 'rp2k':
+        from .rp2k import audit, dataset_root
+        return audit(dataset_root(cfg), cfg.get('rp2k_manifest_sha256'))
     from data.get_datasets import get_class_splits, get_datasets
     name = (cfg or {}).get('dataset_name', 'scars')
     spec = dataset_spec(name)

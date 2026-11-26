@@ -1,5 +1,12 @@
 # SelEx + CRiSH — hướng dẫn chạy 5 run đã chốt
 
+**Retail RP2K:** branch `feat/rp2k-crish-local` thêm adapter, split GCD tùy chỉnh,
+GPU smoke nhỏ và một run CRiSH local cho tích hợp planogram. Xem
+[hướng dẫn RP2K](reports/28_rp2k_gpu_quickstart.md). Chưa có kết quả GPU/retail;
+không thay thế các thí nghiệm Cars/CUB/Aircraft bên dưới. Bootstrap môi trường:
+`GCD_PYTHON=python3 bash scripts/bootstrap.sh cuda` trên Linux NVIDIA,
+Python 3.9–3.11. Chỉ chạy sau khi có máy GPU; không bootstrap CUDA trên Mac.
+
 **Cập nhật kế hoạch Cars ngày21/11:** chạy `evidence_only`, `random_proposal`
 và `no_abstain`, cùng seed1; tạm bỏ job FULL. Các config cũ vẫn được giữ nguyên.
 Config mới: `configs/requested_run5/scars_no_abstain_seed1.json`, chỉ khác
