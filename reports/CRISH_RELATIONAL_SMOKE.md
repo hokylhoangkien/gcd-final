@@ -56,7 +56,7 @@ Five images per class implies at most four same-class neighbors and a maximum pu
 | Local Cars smoke and sealed evaluator | Both completed under individual 300 s watchdogs. The first development run exposed Windows integer ID width; the final graph uses the repository's stable-ID conversion before checking uniqueness. |
 | Static checks | Python compilation, Ruff and Bash syntax for launch/resume passed |
 
-The controller test substitutes tiny committed fixtures for training workers and a geometry receipt for the offline GPU process. A real RunPod tmux launch, network download, full-size graph throughput, production VRAM, guards on real 100/150-epoch trajectories and a 200-epoch resume were not executed. The archive was created and verified locally with fixture checkpoints. A sealed-evaluator error on a future pod run is recorded in the bundle so that the checkpoint can still be retrieved.
+The controller test substitutes tiny committed fixtures for training workers and a geometry receipt for the offline GPU process. This original smoke used a reduced graph. Subsequent full-graph timing and generic Linux launch instructions are in the [standalone runbook](CRISH_RELATIONAL_LINUX.md). The original smoke did not exercise remote tmux, network download, real 100/150-epoch guards or a 200-epoch resume. The archive was created and verified locally with fixture checkpoints. A sealed-evaluator error on a future server run is recorded in the bundle so that the checkpoint can still be retrieved.
 
 ## Reproduction
 

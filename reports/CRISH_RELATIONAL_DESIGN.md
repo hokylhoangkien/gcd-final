@@ -87,51 +87,9 @@ Let $\Delta$ be candidate minus reference **mean percentage points** over exactl
 
 R0 always targets 200. The guard checks R0 completion, milestone availability, run identity, variant, matched protocol, contiguous epoch numbering and finite in-range window accuracies. Each decision records hashes of the input window rows and the exact deltas/reason. A stopped R1 may continue solely to supply R2's reference window by explicit request. The original NO-GO and the override remain in the journal. These thresholds manage compute; they are not tests of statistical significance.
 
-## RunPod operation and artifact recovery
+## Linux GPU operation and artifact recovery
 
-Use the same branch commit and DINO source/weights for the three variants. The tested runtime used Python 3.12 and PyTorch 2.6.0+cu124 with compatible torchvision, NumPy, SciPy, sklearn, pandas, Pillow, tqdm and loguru. The legacy upstream requirements pin an older torch. The shell entry points require Linux, tmux and GNU timeout. Use a persistent volume for data/run roots, and allow space for the retained checkpoints plus their export.
-
-From the repository root, set the actual paths on your pod. Each launch starts one named tmux session and writes a separate training log. Run R0 to completion before R1, then run R2 once its references are available. Commands below are for the subsequent experiment.
-
-~~~bash
-export SIMGCD_CARS_ROOT=/workspace/data/cars
-export SIMGCD_DINO_REPO=/workspace/dino
-export SIMGCD_DINO_WEIGHTS=/workspace/weights/dino_vitbase16_pretrain.pth
-export REL_RUN_ROOT=/workspace/runs/crish-relational
-export REL_TIMEOUT=48h
-bash scripts/run_relational.sh R0
-# After the matched R0 completes
-bash scripts/run_relational.sh R1
-# After the R1 reference windows are available
-bash scripts/run_relational.sh R2
-~~~
-
-At any interruption, use the same root and checkout. The worker atomically saves the complete model, SGD state, cosine scheduler, Python/NumPy/CPU/CUDA RNG and committed journal offsets every ten epochs, including 100, 150 and 200. It keeps each reached milestone and the latest checkpoint, once each. On recovery it restores RNG after initialization, truncates uncommitted metrics/relationship records and rebuilds the next epoch's graph. The append-only console log retains interrupted attempts. Lost work after an interruption is at most the current ten-epoch interval. If killed before epoch ten, rerun the start command.
-
-~~~bash
-bash scripts/resume_relational.sh R2
-# Only when R2 needs a later window from an early-stopped R1
-bash scripts/resume_relational.sh R1 --reference-through 150
-python -m relational.guard "$REL_RUN_ROOT" R2 150
-~~~
-
-Completion, NO-GO, BLOCKED and an explicit reference endpoint all trigger artifact export. The controller records status first, runs sealed endpoint geometry, then archives distinct retained checkpoints, full worker log, both journals, guard history, config/seed/commit, environment, status and geometry. If offline evaluation fails its reason is packaged with the weights; rerun the command below and re-export after fixing the issue. Export uses an allowlist, atomic archive replacement, per-member SHA256 and a separate archive SHA256. Dataset directories and input DINO files are outside the allowlist. The launcher never terminates the pod.
-
-~~~bash
-# Example repair of a missing sealed report for a stopped R2 at epoch 100
-python -m relational.offline "$REL_RUN_ROOT/R2/epoch-100.pt" "$REL_RUN_ROOT/R2/geometry.json"
-python -m relational.export export "$REL_RUN_ROOT/R2"
-~~~
-
-On the download machine, set the SSH address and port from RunPod, and use the actual archive name printed by the controller. For an R2 stop at epoch 100 with the paths above:
-
-~~~bash
-export POD_HOST=root@YOUR_POD_IP POD_PORT=YOUR_SSH_PORT
-scp -P "$POD_PORT" "$POD_HOST:/workspace/runs/crish-relational/exports/R2-epoch-100.tar" "$POD_HOST:/workspace/runs/crish-relational/exports/R2-epoch-100.tar.sha256" .
-python -m relational.export verify R2-epoch-100.tar
-~~~
-
-For example a completed R0 uses R0-epoch-200.tar. Only decommission a pod after the download machine verifies both the archive and its members. To migrate a trusted bundle, verify it, extract it into the matching variant directory under the new run root, restore the same source/environment and use the resume entry point. Checkpoints carry optimizer and RNG Python objects and should only be loaded from trusted runs.
+The [generic Linux runbook](CRISH_RELATIONAL_LINUX.md) covers installation, the full-graph benchmark, standalone R2, matched R0/R1/R2, manual decisions, recovery and verified SSH downloads. The decision table above applies to matched mode. Standalone R2 uses the same worker, loss, sampler, optimizer, 200-epoch schedule and v2 evaluation. It can run without reference trajectories and defaults to a manual review at completed epochs 100 and 150.
 
 ## Changes relative to E3
 

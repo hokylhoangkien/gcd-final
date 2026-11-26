@@ -48,7 +48,7 @@ def window(folder, variant, epoch, protocol):
     return [sum(column) * 100 / 20 for column in zip(*values)], digest.hexdigest()
 
 
-def evaluate(root, variant, epoch):
+def evaluate(root, variant, epoch, *, allow_missing_references=False):
     if variant not in ("R1", "R2") or epoch not in (100, 150):
         raise ValueError("Guards apply to R1/R2 at 100/150")
     result = {
@@ -65,7 +65,13 @@ def evaluate(root, variant, epoch):
             mean_all_pp=float(own[0]), mean_new_pp=float(own[1]), window_sha256=sha
         )
         for ref in ["R0"] if variant == "R1" else ["R0", "R1"]:
-            base, sha = window(root / ref, ref, epoch, protocol)
+            try:
+                base, sha = window(root / ref, ref, epoch, protocol)
+            except (OSError, ValueError, KeyError, ArithmeticError, TypeError) as exc:
+                if not allow_missing_references:
+                    raise
+                result.setdefault("unavailable_references", {})[ref] = str(exc)
+                continue
             da, dn = [x - y for x, y in zip(own, base)]
             result["comparisons"][ref] = {
                 "delta_all_pp": float(da),
@@ -75,6 +81,12 @@ def evaluate(root, variant, epoch):
             }
     except (OSError, ValueError, KeyError, ArithmeticError, TypeError) as exc:
         return dict(result, decision="BLOCKED", reason=str(exc))
+    if result.get("unavailable_references"):
+        return dict(
+            result,
+            decision="UNVERIFIED",
+            reason="One or more matched reference windows are unavailable",
+        )
     grades = {r["decision"] for r in result["comparisons"].values()}
     result["decision"] = next(
         g for g in ("NO-GO", "MARGINAL", "GRAY ZONE", "STRONG GO", "GO") if g in grades

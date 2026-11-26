@@ -29,13 +29,29 @@ def digest_stream(stream):
     return h.hexdigest()
 
 
-def export(folder):
-    files = [folder / name for name in ARTIFACTS] + checkpoints(folder)
-    if not checkpoints(folder):
+def export(folder, *, recovery=False):
+    saved = checkpoints(folder)
+    if not saved:
         raise ValueError("No committed checkpoint to export")
+    names = ARTIFACTS
+    if recovery:
+        # A periodic recovery checkpoint can precede the first milestone review.
+        names = tuple(
+            name for name in names if name not in ("status.json", "geometry.json")
+        )
+    files = [folder / name for name in names] + (saved[-1:] if recovery else saved)
+    for name in (
+        "standalone.json",
+        "review-100.json",
+        "review-150.json",
+        "controller.log",
+    ):
+        if (folder / name).is_file():
+            files.append(folder / name)
     output = folder.parent / "exports"
     output.mkdir(exist_ok=True)
-    bundle = output / f"{folder.name}-{checkpoints(folder)[-1].stem}.tar"
+    label = "recovery" if recovery else saved[-1].stem
+    bundle = output / f"{folder.name}-{label}.tar"
     tmp = bundle.with_suffix(".tar.tmp")
     sums = []
     with tarfile.open(tmp, "w") as tar:

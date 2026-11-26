@@ -120,18 +120,18 @@ class Graph:
         self.rows = 0
 
     def record(self):
-        return dict(
-            **self.health,
-            base=self.settings.baseline_weight,
-            edges=[
+        return self.health | {
+            "edge_count": self.health["edges"],
+            "base": self.settings.baseline_weight,
+            "edges": [
                 [u, v, vote, float(d)]
                 for (u, v), vote, d in zip(
                     self.edge_ids.tolist(), self.votes.tolist(), self.delta.tolist()
                 )
             ],
-            proposed_strengthen=int((self.delta > 0).sum()),
-            proposed_weaken=int((self.delta < 0).sum()),
-        )
+            "proposed_strengthen": int((self.delta > 0).sum()),
+            "proposed_weaken": int((self.delta < 0).sum()),
+        }
 
     def loss(self, features, ids):
         """Return edited and baseline losses on the same graph and pending optimizer exposures."""

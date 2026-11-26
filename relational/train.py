@@ -31,8 +31,9 @@ from model import (
     get_params_groups,
     info_nce_logits,
 )
+from relational.export import export
 from relational.graph import Settings, refresh
-from relational.state import append, restore, save, write_json
+from relational.state import MILESTONES, append, restore, save, write_json
 
 
 def sampler_for(data):
@@ -253,6 +254,7 @@ def stage(folder, variant, until):
     )
     criterion = DistillLoss(30, 200)
     start = restore(folder, identity, model, optimizer, scheduler)
+    standalone = (folder / "standalone.json").is_file()
     if until != next((e for e in (100, 150, 200) if e > start), None):
         raise ValueError("Stage must end at the next milestone")
     for epoch in range(start, until):
@@ -300,8 +302,13 @@ def stage(folder, variant, until):
         )
         print(metrics, flush=True)
         del graph
-        if completed % 10 == 0:
+        interrupt = standalone and (folder / "operator-request.json").is_file()
+        if completed % 10 == 0 or interrupt:
             save(folder, completed, identity, model, optimizer, scheduler)
+        if interrupt:
+            return
+        if standalone and completed % 10 == 0 and completed not in MILESTONES:
+            print(f"Recovery bundle: {export(folder, recovery=True)}", flush=True)
 
 
 if __name__ == "__main__":
