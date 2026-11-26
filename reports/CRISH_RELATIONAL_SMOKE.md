@@ -70,4 +70,4 @@ timeout 300s python -m relational.smoke dev_outputs/rel-smoke/smoke.json
 timeout 300s python -m relational.offline "$SIMGCD_DINO_WEIGHTS" dev_outputs/rel-smoke/sealed.json --reference
 ~~~
 
-Keep the initial settings locked for the first exploratory runs. The experiment's informative comparisons are R1 against R0 and R2 against both R1 and R0, with actual exposure and block-gradient diagnostics reported alongside ACC. A larger gradient alone would not resolve whether the edited relationships are semantically useful.
+This receipt documents the historical coefficient .1 on its original commit. The later full-graph, multi-batch diagnostic determines the pre-training coefficient for both R1 and R2. To reproduce the historical smoke, use the implementation commit above. [Current dose and supporting measurements](CRISH_RELATIONAL_SENSITIVITY.md)

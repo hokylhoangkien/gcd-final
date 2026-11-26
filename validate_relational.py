@@ -115,6 +115,33 @@ class Contracts(unittest.TestCase):
         self.assertEqual(list(sampler), expected)
         self.assertTrue(sampler.replacement)
 
+    def test_linear_gradient_basis_matches_direct_grid(self):
+        from relational.sensitivity_metrics import COEFFICIENTS, MAGNITUDES
+
+        # Fixed graph with one weakened and one strengthened edge, a replacement
+        # draw and a labeled row. Compare recombination to direct autograd.
+        def policy(edges, votes, cfg):
+            return torch.tensor([-cfg.magnitude, cfg.magnitude])
+
+        ids = torch.tensor([71, 82, 71, 999])
+        graph = self.graph(policy)
+        weight = torch.nn.Parameter(torch.tensor([[0.2, 0.3], [0.1, -0.4]]))
+        features = torch.arange(16).reshape(8, 2).float() @ weight
+        edited, plain, _ = graph.loss(features, ids)
+
+        def grad(value):
+            return torch.autograd.grad(value, weight, retain_graph=True)[0]
+
+        keep = grad(plain)
+        unit_edit = grad((edited - plain) / graph.settings.magnitude)
+        for delta in MAGNITUDES:
+            direct = self.graph(lambda e, v, cfg, d=delta: torch.tensor([-d, d]))
+            total = direct.loss(features, ids)[0]
+            for coeff in COEFFICIENTS:
+                torch.testing.assert_close(
+                    grad(coeff * total), coeff * (keep + delta * unit_edit)
+                )
+
     def test_repeated_draws_and_rejected_inputs(self):
         graph = self.graph(evidence)
         _, _, pending = graph.loss(torch.randn(8, 2), torch.tensor([5, 71, 71, 999]))
@@ -122,7 +149,8 @@ class Contracts(unittest.TestCase):
         out = graph.exposure_record(4)
         self.assertEqual(out["applied_edges"], [[5, 71, 3]])
         self.assertEqual(out["unique_edited_anchors"], 2)
-        self.assertEqual(out["effective_mass"], 0.1 * 0.75 / 4)
+        self.assertEqual(graph.settings.coefficient, 1.0)
+        self.assertEqual(out["effective_mass"], graph.settings.coefficient * 0.75 / 4)
         with self.assertRaises(ValueError):
             self.graph(lambda edges, votes, cfg: torch.full_like(votes, 2.0))
 

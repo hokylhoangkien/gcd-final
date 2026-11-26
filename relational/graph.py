@@ -19,7 +19,7 @@ class Settings:
     k: int = 5
     baseline_weight: float = 0.5
     magnitude: float = 0.25
-    coefficient: float = 0.1
+    coefficient: float = 1.0
     warmup: int = 10
 
 

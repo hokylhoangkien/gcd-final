@@ -2,7 +2,7 @@
 
 **R2 can start immediately without R0 or R1.** The default standalone run pauses after completed epochs 100 and 150, writes a review and exports a resumable checkpoint. Missing comparative evidence is reported as **UNVERIFIED**. An explicit decision advances the same optimizer and original 200-epoch cosine schedule. R0, R1 and matched R2 retain the original research guard.
 
-The experiment remains Stanford Cars SSB, seed 1, pretrained DINOv1 ViT-B/16, block 11, batch 128, two crops, FP32, SGD with initial LR .1, momentum .9, regularized decay .00005, ten warmup epochs, and terminal LR .0001. The graph uses exact reciprocal 5-NN, baseline weight .5, signed edit .25 and relational coefficient .1. Evaluation uses the official transductive v2 assignment. [Method and objective](CRISH_RELATIONAL_DESIGN.md)
+The experiment uses Stanford Cars SSB, seed 1, pretrained DINOv1 ViT-B/16, block 11, batch 128, two crops, FP32, SGD with initial LR .1, momentum .9, regularized decay .00005, ten warmup epochs, and terminal LR .0001. The graph uses exact reciprocal 5-NN, baseline weight .5, signed edit .25 and a shared **relational coefficient of 1.0 for R1 and R2**. Use a fresh output root and run future matched references on the same pinned checkout. The resume manifest includes the coefficient and Git commit. Evaluation uses the official transductive v2 assignment. [Method and objective](CRISH_RELATIONAL_DESIGN.md) · [Pre-training dose decision](CRISH_RELATIONAL_SENSITIVITY.md)
 
 ## 1. Set up the server
 
