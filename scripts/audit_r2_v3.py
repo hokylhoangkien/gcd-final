@@ -100,7 +100,7 @@ def decisions(arms):
     return policies
 
 
-def gradients(model, tokens, h, raw, legal, criterion, actions):
+def gradient_components(model, tokens, h, raw, legal, criterion, actions):
     proj, logits = model[1](h)
     teacher = raw.flatten(0, 1)
     plain = criterion(logits, teacher, 0)
@@ -117,9 +117,16 @@ def gradients(model, tokens, h, raw, legal, criterion, actions):
     gv, gb = both(loss)
     yield gv, gb
     for a in actions:
-        dv, db = both(
+        yield both(
             0.65 * (corrected_distill(logits, teacher, criterion, 0, [a], 0.2) - plain)
         )
+
+
+def gradients(model, tokens, h, raw, legal, criterion, actions):
+    parts = gradient_components(model, tokens, h, raw, legal, criterion, actions)
+    gv, gb = next(parts)
+    yield gv, gb
+    for dv, db in parts:
         yield gv + dv, gb + db
 
 
