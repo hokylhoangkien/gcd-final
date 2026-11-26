@@ -1,0 +1,88 @@
+{
+  "archive_sha256": "c30075fedad54a092980767c3eefd262050c6165ec75494bc02db9e5823099f6",
+  "members": [
+    "76e7ca475ec477794ee6a7d71a2d1861f9b28b181e2dde6270ff0541ba5c9a2a  config.json",
+    "4c22948dff6bcd4f9308c9ec772724ba95ad3e2725b5c613656d6688416ad6e3  environment.json",
+    "0638f98dabd235e2e7c03d39b58906cb363ab6dbe21f5b38b7913091fc92cf68  training.log",
+    "49b56e7c17f9955774ed577dac268eaa7840a935898ca8965500639557ef1995  metrics.jsonl",
+    "306cf5045e946356cc3d6756d5dd9d1527f22598c9bbc356df9e17d47cffd21e  relationships.jsonl",
+    "fd82d5e7da7dba2f35afe7681fb23dd2641d7db36c72a365d4950bd684f64265  guards.jsonl",
+    "679aa6b49a0ed6ed5e38026c7628e59ce36bf3d0fd34c8582e192de6d88e49e5  status.json",
+    "42b02532725f65c9f7b8d965a9b5dc38c351f4fdbbaa8735b9a3051c7d14017f  geometry.json",
+    "e9b5f482d8783742b441dc65e608ae097bef31e62ab53e0e41154725a76567ee  epoch-100.pt",
+    "12a2a659ad01583e98c266b9163b373ae25e4fb07292d7cfff58487d9517c56a  epoch-150.pt",
+    "eb8316f6f58c64c31119e96dcc8faa3608ac60faa9f92c114406f0d5d836398f  standalone.json",
+    "9b0a867cd33625982283d2d182cd55c62fdc6f528b3fe821d1a0bea0e405c37e  review-100.json",
+    "c38daba11f079295be3eb394dcc1b2524b783f5dba6cba669642d317f31bb7b2  review-150.json",
+    "83215d125dd9a974e4c1f9bc7a060f2b3ddaaf4047e54f05c84ace5124c5ea48  controller.log"
+  ],
+  "config": {
+    "variant": "R2",
+    "protocol": {
+      "seed": 1,
+      "epochs": 200,
+      "batch": 128,
+      "workers": 8,
+      "sampler": "official weighted replacement",
+      "backbone": "DINOv1 ViT-B/16",
+      "grad_from_block": 11,
+      "lr": 0.1,
+      "schedule": "cosine-200",
+      "eta_min": 0.0001,
+      "momentum": 0.9,
+      "decay": 5e-05,
+      "fp16": false,
+      "transform": "imagenet",
+      "views": 2,
+      "teacher": [
+        0.07,
+        0.04,
+        30
+      ],
+      "sup_weight": 0.35,
+      "memax": 1.0,
+      "split": "2f2b8a435f8caf5d2b7886a410484d25f8104b53f031a1d4aca13aba524931ce",
+      "evaluation": "v2",
+      "dino_sha256": "bf34ad0f424b9029b593e8dc3ed553bf26e88bcba0d32bf3e62a6209cb64c85e",
+      "dino_source": "b1f998d5f49ab43666b9fc6d007c5f6540c3ead2e8645e144f74045f63ff44d7",
+      "relational": {
+        "k": 5,
+        "baseline_weight": 0.5,
+        "magnitude": 0.25,
+        "coefficient": 1.0,
+        "warmup": 10
+      },
+      "deterministic": true,
+      "torch": "2.6.0+cu124",
+      "commit": "c87de5e81391720c8e020256bed72d843584c0cb"
+    }
+  },
+  "local_differences": {
+    "dino_source": [
+      "b1f998d5f49ab43666b9fc6d007c5f6540c3ead2e8645e144f74045f63ff44d7",
+      "5b2e1aafba969b710358598f13a37df75b56b43a81d29d21f76fa3593d18097e"
+    ]
+  },
+  "checkpoints": {
+    "100": {
+      "optimizer_entries": 19,
+      "next_lr": 0.05004999999999998,
+      "journal_bytes": {
+        "metrics.jsonl": 57820,
+        "relationships.jsonl": 17533584
+      },
+      "rng_components": 4,
+      "frozen_backbone_verified": true
+    },
+    "150": {
+      "optimizer_entries": 19,
+      "next_lr": 0.014730016279731946,
+      "journal_bytes": {
+        "metrics.jsonl": 88131,
+        "relationships.jsonl": 27648105
+      },
+      "rng_components": 4,
+      "frozen_backbone_verified": true
+    }
+  }
+}
