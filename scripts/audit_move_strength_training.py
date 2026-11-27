@@ -191,24 +191,41 @@ def run_batch(models, batch, pool, direct, seeds, epoch, criterion):
     return details
 
 
-def train(model, ds, ids, base, plan, pool, direct, sig, smoke):
+def train(
+    model,
+    ds,
+    ids,
+    base,
+    plan,
+    pool,
+    direct,
+    sig,
+    smoke,
+    *,
+    names=ARMS,
+    masses=MASS,
+    local=LOCAL,
+    paired_step=run_batch,
+):
+    initial_epoch = base["epoch"]
+    epochs = tuple(plan)
     done = (
-        [e for e in EPOCHS if (LOCAL / f"epoch-{e}.pt").is_file()] if not smoke else []
+        [e for e in epochs if (local / f"epoch-{e}.pt").is_file()] if not smoke else []
     )
-    prev = max(done, default=150)
-    if prev == EPOCHS[-1]:
-        if len(done) != len(EPOCHS):
+    prev = max(done, default=initial_epoch)
+    if prev == epochs[-1]:
+        if len(done) != len(epochs):
             raise ValueError(
                 "Missing earlier paired checkpoint needed for sealed analysis"
             )
         return
-    if prev == 150:
-        models = repair.make_arms(model, dict.fromkeys(ARMS, base), names=ARMS)
+    if prev == initial_epoch:
+        models = repair.make_arms(model, dict.fromkeys(names, base), names=names)
         results = {}
     else:
-        saved = audit.load_checkpoint(LOCAL / f"epoch-{prev}.pt")
+        saved = audit.load_checkpoint(local / f"epoch-{prev}.pt")
         assert saved["epoch"] == prev and saved["signature"] == sig
-        models = repair.make_arms(model, saved["state"], names=ARMS)
+        models = repair.make_arms(model, saved["state"], names=names)
         results = saved["records"]
         del saved
     criterion = audit.DistillLoss(30, 200)
@@ -221,11 +238,11 @@ def train(model, ds, ids, base, plan, pool, direct, sig, smoke):
         for j, (rr, ss) in enumerate(zip(rows, seeds, strict=True), 1):
             batch = repair.load_batch(model, ds, rr, ss[0])
             np.testing.assert_array_equal(batch["ids"].numpy(), ids[rr])
-            detail = run_batch(models, batch, pool, direct, ss, e, criterion)
+            detail = paired_step(models, batch, pool, direct, ss, e, criterion)
             ledger.append(detail)
             if smoke:
                 if detail["matching"]["applied"]:
-                    assert all(detail[a]["cls_edit_norm"] > 0 for a in ARMS[1:])
+                    assert all(detail[a]["cls_edit_norm"] > 0 for a in names[1:])
                     print(
                         "Exact matched strengths on real rows",
                         detail["matching"],
@@ -264,16 +281,16 @@ def train(model, ds, ids, base, plan, pool, direct, sig, smoke):
             results[str(e)][name] = {
                 "edits": count,
                 "exposure": count / rows.size,
-                "mass_total": count * MASS[name],
-                "weighted_batch_normalized_mass": count * MASS[name] * 0.65 / 128,
+                "mass_total": count * masses[name],
+                "weighted_batch_normalized_mass": count * masses[name] * 0.65 / 128,
                 "lr": sched.get_last_lr()[0],
                 "eligibility": dict(elig),
                 "unique_source_ids": len({m[1] for s in steps for m in s["moves"]}),
                 "mean_loss": float(np.mean([s["loss"] for s in steps])),
                 "peak_vram_bytes": max(s["peak_vram"] for s in steps),
             }
-        repair.save(models, LOCAL / f"epoch-{e}.pt", sig, e, results, ledger)
-        audit.write_json(LOCAL / "training-progress.json", json_native(results))
+        repair.save(models, local / f"epoch-{e}.pt", sig, e, results, ledger)
+        audit.write_json(local / "training-progress.json", json_native(results))
         print(
             "Saved paired checkpoint",
             e,
@@ -283,31 +300,37 @@ def train(model, ds, ids, base, plan, pool, direct, sig, smoke):
         )
 
 
-def load_finished(sig, plan, ids, pool, direct):
+def load_finished(
+    sig, plan, ids, pool, direct, *, names=ARMS, masses=MASS, local=LOCAL
+):
+    keep, *treated, random = names
     out, hashes, events = {}, {}, {}
     for e, (rows, _) in plan.items():
-        path = LOCAL / f"epoch-{e}.pt"
+        path = local / f"epoch-{e}.pt"
         hashes[str(e)] = audit.file_digest(path)
         saved = torch.load(path, map_location="cpu", weights_only=False, mmap=True)
         assert saved["signature"] == sig and saved["epoch"] == e
         steps = saved["batch_ledger"]
         assert len(steps) == len(rows)
         for j, (s, rr) in enumerate(zip(steps, rows, strict=True), 1):
-            assert s["S1"]["moves"] == s["S2"]["moves"] and not s["S0"]["moves"]
+            assert not s[keep]["moves"]
+            assert all(s[a]["moves"] == s[treated[0]]["moves"] for a in treated)
             assert (
-                len(s["S1"]["moves"])
-                == len(s["S3"]["moves"])
+                len(s[random]["moves"])
+                == len(s[treated[0]]["moves"])
                 == s["matching"]["applied"]
             )
-            for name in ARMS[1:]:
+            for name in names[1:]:
                 edits = s[name]["moves"]
                 if not edits:
                     continue
                 step_prob = s[name]
                 for k, (row, key, src, dst) in enumerate(edits):
                     assert int(ids[rr[row]]) == key and pool[key][:2] == (src, dst)
-                    assert name == "S3" or key in direct
-                    assert all(p >= MASS[name] for p in step_prob["teacher_source"][k])
+                    assert name == random or key in direct
+                    assert all(
+                        p >= masses[name] for p in step_prob["teacher_source"][k]
+                    )
                     events.setdefault((str(e), name), []).append(
                         (
                             j,
@@ -321,7 +344,7 @@ def load_finished(sig, plan, ids, pool, direct):
                             step_prob["student_destination"][k],
                         )
                     )
-        for name in ARMS:
+        for name in names:
             assert (
                 len(events.get((str(e), name), []))
                 == saved["records"][str(e)][name]["edits"]
@@ -331,7 +354,20 @@ def load_finished(sig, plan, ids, pool, direct):
 
 
 @torch.no_grad()
-def predictions(model, ds, center, base, saved, panel, tokens, events, sig):
+def predictions(
+    model,
+    ds,
+    center,
+    base,
+    saved,
+    panel,
+    tokens,
+    events,
+    sig,
+    *,
+    names=ARMS,
+    local=LOCAL,
+):
     panel_set = set(panel)
     pairs = {r[2]: (r[3], r[4]) for moves in events.values() for r in moves}
     sources = np.asarray(sorted(pairs), dtype=np.int64)
@@ -347,9 +383,9 @@ def predictions(model, ds, center, base, saved, panel, tokens, events, sig):
         "panel_n": len(panel),
         "pairs": np.asarray([pairs[k] for k in sources], dtype=np.int64).reshape(-1, 2),
     }
-    tags = {"150:shared": base["model"]}
+    tags = {f"{base['epoch']}:shared": base["model"]}
     tags.update(
-        {f"{e}:{a}": cp["state"][a]["model"] for e, cp in saved.items() for a in ARMS}
+        {f"{e}:{a}": cp["state"][a]["model"] for e, cp in saved.items() for a in names}
     )
     for tag, state in tags.items():
         for k in model[0].state_dict():
@@ -361,14 +397,14 @@ def predictions(model, ds, center, base, saved, panel, tokens, events, sig):
         )
         values[f"{tag}_features"] = h[: len(panel)].cpu().numpy()
         values[f"{tag}_logits"] = model[1].last_layer(h).cpu().numpy()
-    f = LOCAL / "frozen-endpoint-predictions.npz"
+    f = local / "frozen-endpoint-predictions.npz"
     np.savez(f, **values)
     provenance = {
         **sig,
         "predictions_sha256": audit.file_digest(f),
         "source_ids": sources.tolist(),
     }
-    audit.write_json(LOCAL / "sealed-input-provenance.json", json_native(provenance))
+    audit.write_json(local / "sealed-input-provenance.json", json_native(provenance))
     print("Frozen predictions for panel and MOVE sources", len(sources), flush=True)
     return values, provenance
 
@@ -383,7 +419,7 @@ def probabilities(logit, temp):
     return p / p.sum(1, keepdims=True)
 
 
-def endpoints(out, table, truth, events):
+def endpoints(out, table, truth, events, *, initial_epoch=150, names=ARMS):
     ids = out["ids"]
     n = int(out["panel_n"])
     y = truth[ids]
@@ -416,13 +452,23 @@ def endpoints(out, table, truth, events):
         "panel": ids[:n],
         "CLIP_sources": np.asarray(
             sorted(
-                {r[2] for (_, a), moves in events.items() if a == "S1" for r in moves}
+                {
+                    r[2]
+                    for (_, a), moves in events.items()
+                    if a == names[1]
+                    for r in moves
+                }
             ),
             dtype=int,
         ),
         "random_sources": np.asarray(
             sorted(
-                {r[2] for (_, a), moves in events.items() if a == "S3" for r in moves}
+                {
+                    r[2]
+                    for (_, a), moves in events.items()
+                    if a == names[-1]
+                    for r in moves
+                }
             ),
             dtype=int,
         ),
@@ -446,7 +492,10 @@ def endpoints(out, table, truth, events):
                     val[f"{h}_source"] = mean(p[ix, pairs[mask[n:], 0]])
                     val[f"{h}_destination"] = mean(p[ix, pairs[mask[n:], 1]])
                 transitions = {}
-                for anchor in ("150:shared", f"{tag.split(':')[0]}:S0"):
+                for anchor in (
+                    f"{initial_epoch}:shared",
+                    f"{tag.split(':')[0]}:{names[0]}",
+                ):
                     if anchor not in raw or anchor == tag:
                         continue
                     a = raw[anchor]

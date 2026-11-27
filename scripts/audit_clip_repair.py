@@ -31,7 +31,7 @@ START = 150
 END = 155
 
 
-def schedule(loader, ids, panel, initial):
+def schedule(loader, ids, panel, initial, *, start_epoch=START, end_epoch=END):
     weights = loader.sampler.weights.clone()
     weights[np.isin(ids, panel)] = 0
     sampler = torch.Generator().set_state(initial["rng"][2])
@@ -42,7 +42,7 @@ def schedule(loader, ids, panel, initial):
         ^ 529541
     )
     plans = {}
-    for epoch in range(START + 1, END + 1):
+    for epoch in range(start_epoch + 1, end_epoch + 1):
         torch.empty((), dtype=torch.int64).random_(generator=sampler)
         draw = torch.multinomial(weights, len(loader.dataset), True, generator=sampler)
         torch.empty((), dtype=torch.int64).random_(
