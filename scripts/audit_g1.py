@@ -202,7 +202,7 @@ def rate(v):
     return float(v.mean()) if v.size else None
 
 
-def evaluate(frozen, ids, q, bank, slots, truth):
+def evaluate(frozen, ids, q, bank, slots, truth, *, methods=METHODS, baseline="B11"):
     mp, coverage = align(
         ids[bank].tolist(), dict(zip(ids.tolist(), slots.tolist(), strict=True)), truth
     )
@@ -211,10 +211,10 @@ def evaluate(frozen, ids, q, bank, slots, truth):
     wrong = slot_class[slots[q]] != y
     pair_same = truth[ids[frozen["pairs"]]] == y[:, None]
     target_exists = np.isin(y, list(mp.values())) & wrong
-    preds = {m: slot_class[frozen[f"{m}_dest"]] == y[:, None] for m in METHODS}
-    base = preds["B11"][:, 0]
+    preds = {m: slot_class[frozen[f"{m}_dest"]] == y[:, None] for m in methods}
+    base = preds[baseline][:, 0]
     out = {}
-    for m in METHODS:
+    for m in methods:
         hit = preds[m]
         knn = truth[ids[frozen[f"{m}_neighbors"]]] == y[:, None]
         score = frozen[f"{m}_pair"]
@@ -254,7 +254,10 @@ def evaluate(frozen, ids, q, bank, slots, truth):
                 "correct_to_wrong_vs_final": rate(~hit[success, 0]),
                 "move_from_correct_source_to_wrong": rate(~hit[mask & ~wrong, 0]),
                 "purity1_on_final_misses": rate(
-                    knn[mask & (truth[ids[frozen["B11_neighbors"][:, 0]]] != y), 0]
+                    knn[
+                        mask & (truth[ids[frozen[f"{baseline}_neighbors"][:, 0]]] != y),
+                        0,
+                    ]
                 ),
             }
     return out, coverage
