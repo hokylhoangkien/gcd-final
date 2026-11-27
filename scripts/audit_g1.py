@@ -202,7 +202,18 @@ def rate(v):
     return float(v.mean()) if v.size else None
 
 
-def evaluate(frozen, ids, q, bank, slots, truth, *, methods=METHODS, baseline="B11"):
+def evaluate(
+    frozen,
+    ids,
+    q,
+    bank,
+    slots,
+    truth,
+    *,
+    methods=METHODS,
+    baseline="B11",
+    uniform_count=256,
+):
     mp, coverage = align(
         ids[bank].tolist(), dict(zip(ids.tolist(), slots.tolist(), strict=True)), truth
     )
@@ -220,10 +231,10 @@ def evaluate(frozen, ids, q, bank, slots, truth, *, methods=METHODS, baseline="B
         score = frozen[f"{m}_pair"]
         out[m] = {}
         for g, mask in (("All", y >= 0), ("Old", y < 98), ("New", y >= 98)):
-            p = pair_same[mask, :256]
-            h = pair_same[mask, 256:]
-            ordinary = score[mask, :256]
-            hard = score[mask, 256:]
+            p = pair_same[mask, :uniform_count]
+            h = pair_same[mask, uniform_count:]
+            ordinary = score[mask, :uniform_count]
+            hard = score[mask, uniform_count:]
             hard_scores = np.r_[ordinary[p], hard[~h]]
             failure = mask & wrong & ~base
             success = mask & wrong & base
