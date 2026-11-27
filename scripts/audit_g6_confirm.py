@@ -137,7 +137,7 @@ def estimate(delta, weights):
     }
 
 
-def corrections(out, truth):
+def corrections(out, truth, *, policies=POLICIES, baseline="D1"):
     ids, q, bank, slots = (out[k] for k in ("ids", "q", "bank", "slots"))
     mp, _ = align(
         ids[bank].tolist(), dict(zip(ids.tolist(), slots.tolist(), strict=True)), truth
@@ -149,7 +149,7 @@ def corrections(out, truth):
     result = {}
     for p in COVERAGES:
         actual, controls = {"KEEP": edits(before, before, [], before)}, {}
-        for det, ret in POLICIES.items():
+        for det, ret in policies.items():
             dest = out[f"{ret}_dest"][:, 0]
             allowed = (dest >= 0) & (dest != slots[q])
             after = table[dest] == y
@@ -179,7 +179,9 @@ def corrections(out, truth):
                     if n
                     else None,
                     "vs_keep": estimate(d, boot),
-                    "vs_d1": estimate(d - actual["D1"]["net"][mask], boot),
+                    f"vs_{baseline.lower()}": estimate(
+                        d - actual[baseline]["net"][mask], boot
+                    ),
                 }
                 if name in controls:
                     control = controls[name]
