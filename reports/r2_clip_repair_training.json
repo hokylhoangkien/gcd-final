@@ -1,0 +1,1297 @@
+{
+  "protocol": {
+    "base": "f5688ef",
+    "checkpoint_sha256": "12a2a659ad01583e98c266b9163b373ae25e4fb07292d7cfff58487d9517c56a",
+    "clip_cache_sha256": "13cc941ecfc2539fd5b2d9ba19c9fdfe3d271df1380c4931e5cccc91a46866a5",
+    "r2_cache_sha256": "42d33e689eb49e2a59cf4b22f8282939f7cea631c0cf4ef92303ba7e314a95a4",
+    "prior_panel_ids_sampled": 588,
+    "prior_panel_min_verified_draws": 66,
+    "pool_n": 5544,
+    "locked_n": 277,
+    "move_mass": 0.2,
+    "rows_per_epoch": 8064,
+    "sample_conditioning": "original weighted replacement with panel weights zeroed",
+    "base_objective": "full SimGCD without the R2 relational term",
+    "draws": {
+      "151": {
+        "rows": "9b4d24db54b5390a6674714929c6bcf8782e189a76e37eff798007c8b9afb6c9",
+        "seeds": "a3e0178ce9c0533b886bd221649b119d94299e820c703762d9507d14cfebfc10"
+      },
+      "152": {
+        "rows": "f209898797fed3b9e00625d9d07c1092309e6e0d19a8257396c318a8b8daba9f",
+        "seeds": "395c68ab38cde56f8ec9f81a3a1da3499c443e3c54f6baa50017cd913141bbc4"
+      },
+      "153": {
+        "rows": "59a55b5e73c11d94d3e43fe17e4480d21e1034dba1bd9765417f2a13e0006468",
+        "seeds": "03990904929ef145e9f1fc2a329e05e4adf6192a4e8de819281f5064aedd73e9"
+      },
+      "154": {
+        "rows": "71f5e6891ace6ffd56dfc0b1b9eded9b697ec6e694dc1a0254397c0f518144b0",
+        "seeds": "606edeca9fc7817769d2eda0ac70f747524311cee0a9ce7a48aab25e5fac7310"
+      },
+      "155": {
+        "rows": "bdbce34a1cff6f046c9692431164733a9bbf7e42be1aeca4d19bec578bd4c9d1",
+        "seeds": "bd1dfe75d133326e7788ced46e9176dc8f29c5ad89dca8d98aca43d760562661"
+      }
+    },
+    "policy_sha256": "acc8a063de968dfe87fd4f13bce2abba8275f196d13c2e8af231e13d84066e06"
+  },
+  "panel_rows": 588,
+  "reference_rows": 5556,
+  "epochs": {
+    "150": {
+      "shared": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23435373604297638,
+              "centroid_margin": -0.014451843686401844,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.281632661819458,
+              "centroid_margin": 0.07752269506454468,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18707482516765594,
+              "centroid_margin": -0.10642638802528381,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 0,
+        "exposure": 0.0,
+        "lr": 0.014730016279731946
+      }
+    },
+    "151": {
+      "T0": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23231293261051178,
+              "centroid_margin": -0.018267394974827766,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2768707573413849,
+              "centroid_margin": 0.07001245021820068,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18775510787963867,
+              "centroid_margin": -0.10654723644256592,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 0,
+        "exposure": 0.0,
+        "lr": 0.014179591426728717,
+        "mean_loss": 3.7034508160182407,
+        "eligibility": {},
+        "unique_applied_ids": 0,
+        "peak_vram_bytes": 1729581568
+      },
+      "T1": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23367345333099365,
+              "centroid_margin": -0.014120576903223991,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.27619048953056335,
+              "centroid_margin": 0.07381018996238708,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.19115647673606873,
+              "centroid_margin": -0.10205134004354477,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 182,
+        "exposure": 0.022569444444444444,
+        "lr": 0.014179591426728717,
+        "mean_loss": 3.7196252459571477,
+        "eligibility": {
+          "encounters": 182,
+          "match_shortfall": 0
+        },
+        "unique_applied_ids": 124,
+        "peak_vram_bytes": 1729581568
+      },
+      "T2": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5867346938775511
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47619047619047616
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6462585034013606
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5170068027210885
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23469386994838715,
+              "centroid_margin": -0.01675551012158394,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2775510251522064,
+              "centroid_margin": 0.0706143006682396,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.19183672964572906,
+              "centroid_margin": -0.10412533581256866,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 182,
+        "exposure": 0.022569444444444444,
+        "lr": 0.014179591426728717,
+        "mean_loss": 3.7191792102087113,
+        "eligibility": {
+          "encounters": 3770,
+          "stale": 1,
+          "low_mass": 1
+        },
+        "unique_applied_ids": 176,
+        "peak_vram_bytes": 1729581568
+      }
+    },
+    "152": {
+      "T0": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.22993196547031403,
+              "centroid_margin": -0.019535833969712257,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2768707275390625,
+              "centroid_margin": 0.06918525695800781,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18299320340156555,
+              "centroid_margin": -0.10825691372156143,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 0,
+        "exposure": 0.0,
+        "lr": 0.013638017060300496,
+        "mean_loss": 3.705461789691259,
+        "eligibility": {},
+        "unique_applied_ids": 0,
+        "peak_vram_bytes": 1729581568
+      },
+      "T1": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23231293261051178,
+              "centroid_margin": -0.01470834668725729,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.27823126316070557,
+              "centroid_margin": 0.07296540588140488,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.1863945573568344,
+              "centroid_margin": -0.1023821011185646,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 175,
+        "exposure": 0.021701388888888888,
+        "lr": 0.013638017060300496,
+        "mean_loss": 3.721292991486807,
+        "eligibility": {
+          "encounters": 177,
+          "match_shortfall": 0,
+          "low_mass": 2
+        },
+        "unique_applied_ids": 129,
+        "peak_vram_bytes": 1729581568
+      },
+      "T2": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23061224818229675,
+              "centroid_margin": -0.0201529823243618,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2768707573413849,
+              "centroid_margin": 0.06741144508123398,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18435373902320862,
+              "centroid_margin": -0.10771740972995758,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 175,
+        "exposure": 0.021701388888888888,
+        "lr": 0.013638017060300496,
+        "mean_loss": 3.719401919652545,
+        "eligibility": {
+          "encounters": 3789,
+          "low_mass": 3,
+          "stale": 7
+        },
+        "unique_applied_ids": 173,
+        "peak_vram_bytes": 1729581568
+      }
+    },
+    "153": {
+      "T0": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23299318552017212,
+              "centroid_margin": -0.015718676149845123,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.27619045972824097,
+              "centroid_margin": 0.07352657616138458,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18979592621326447,
+              "centroid_margin": -0.10496391355991364,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 0,
+        "exposure": 0.0,
+        "lr": 0.013105426805818438,
+        "mean_loss": 3.6942315101623535,
+        "eligibility": {},
+        "unique_applied_ids": 0,
+        "peak_vram_bytes": 1729581568
+      },
+      "T1": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23435372114181519,
+              "centroid_margin": -0.011105301789939404,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.27823129296302795,
+              "centroid_margin": 0.07676991075277328,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.1904761791229248,
+              "centroid_margin": -0.09898051619529724,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 211,
+        "exposure": 0.026165674603174604,
+        "lr": 0.013105426805818438,
+        "mean_loss": 3.7130278859819685,
+        "eligibility": {
+          "encounters": 212,
+          "match_shortfall": 0,
+          "low_mass": 1
+        },
+        "unique_applied_ids": 142,
+        "peak_vram_bytes": 1729581568
+      },
+      "T2": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23367345333099365,
+              "centroid_margin": -0.015346393920481205,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2768707275390625,
+              "centroid_margin": 0.07265203446149826,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.1904761791229248,
+              "centroid_margin": -0.10334482043981552,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 211,
+        "exposure": 0.026165674603174604,
+        "lr": 0.013105426805818438,
+        "mean_loss": 3.7120149778941323,
+        "eligibility": {
+          "encounters": 3853,
+          "low_mass": 2,
+          "stale": 3
+        },
+        "unique_applied_ids": 208,
+        "peak_vram_bytes": 1729581568
+      }
+    },
+    "154": {
+      "T0": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23333331942558289,
+              "centroid_margin": -0.018582506105303764,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.281632661819458,
+              "centroid_margin": 0.0717305913567543,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18503402173519135,
+              "centroid_margin": -0.10889560729265213,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 0,
+        "exposure": 0.0,
+        "lr": 0.01258195207195854,
+        "mean_loss": 3.7049297945840016,
+        "eligibility": {},
+        "unique_applied_ids": 0,
+        "peak_vram_bytes": 1729581568
+      },
+      "T1": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23469386994838715,
+              "centroid_margin": -0.011831190437078476,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.28027209639549255,
+              "centroid_margin": 0.07715615630149841,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18911564350128174,
+              "centroid_margin": -0.10081853717565536,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 187,
+        "exposure": 0.023189484126984128,
+        "lr": 0.01258195207195854,
+        "mean_loss": 3.7207131423647444,
+        "eligibility": {
+          "encounters": 187,
+          "match_shortfall": 0
+        },
+        "unique_applied_ids": 144,
+        "peak_vram_bytes": 1729581568
+      },
+      "T2": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5867346938775511
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47619047619047616
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6462585034013606
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5170068027210885
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23333331942558289,
+              "centroid_margin": -0.017293281853199005,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2789115607738495,
+              "centroid_margin": 0.07092083245515823,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18775510787963867,
+              "centroid_margin": -0.10550740361213684,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 187,
+        "exposure": 0.023189484126984128,
+        "lr": 0.01258195207195854,
+        "mean_loss": 3.7207135170225114,
+        "eligibility": {
+          "encounters": 3829,
+          "stale": 7
+        },
+        "unique_applied_ids": 186,
+        "peak_vram_bytes": 1729581568
+      }
+    },
+    "155": {
+      "T0": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23095238208770752,
+              "centroid_margin": -0.01815047673881054,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.27619045972824097,
+              "centroid_margin": 0.07097622752189636,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18571428954601288,
+              "centroid_margin": -0.10727718472480774,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 0,
+        "exposure": 0.0,
+        "lr": 0.012067722018278446,
+        "mean_loss": 3.686261233829317,
+        "eligibility": {},
+        "unique_applied_ids": 0,
+        "peak_vram_bytes": 1729581568
+      },
+      "T1": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5850340136054422
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23537413775920868,
+              "centroid_margin": -0.01236389297991991,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.28027209639549255,
+              "centroid_margin": 0.07556214183568954,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.1904761791229248,
+              "centroid_margin": -0.10028992593288422,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 197,
+        "exposure": 0.024429563492063492,
+        "lr": 0.012067722018278446,
+        "mean_loss": 3.7021487402537514,
+        "eligibility": {
+          "encounters": 200,
+          "match_shortfall": 0,
+          "stale": 3
+        },
+        "unique_applied_ids": 137,
+        "peak_vram_bytes": 1729581568
+      },
+      "T2": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5867346938775511
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.6972789115646258
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47619047619047616
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6462585034013606
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5170068027210885
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23265306651592255,
+              "centroid_margin": -0.017805108800530434,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2768707573413849,
+              "centroid_margin": 0.06877873092889786,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.1884353756904602,
+              "centroid_margin": -0.10438895225524902,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 197,
+        "exposure": 0.024429563492063492,
+        "lr": 0.012067722018278446,
+        "mean_loss": 3.702253462776305,
+        "eligibility": {
+          "encounters": 3850,
+          "stale": 7,
+          "low_mass": 2
+        },
+        "unique_applied_ids": 196,
+        "peak_vram_bytes": 1729581568
+      }
+    }
+  },
+  "paired_differences": {
+    "151": {
+      "T1-T0": {
+        "all": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0013605207204818726,
+          "centroid_margin": 0.004146818071603775
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": -0.0006802678108215332,
+          "centroid_margin": 0.0037977397441864014
+        },
+        "new": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0034013688564300537,
+          "centroid_margin": 0.004495896399021149
+        }
+      },
+      "T2-T0": {
+        "all": {
+          "fixed_accuracy_pp": 0.1700680272108901,
+          "rematched_accuracy_pp": 0.1700680272108901,
+          "purity5": 0.002380937337875366,
+          "centroid_margin": 0.0015118848532438278
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0006802678108215332,
+          "centroid_margin": 0.0006018504500389099
+        },
+        "new": {
+          "fixed_accuracy_pp": 0.34013605442176353,
+          "rematched_accuracy_pp": 0.3401360544217691,
+          "purity5": 0.004081621766090393,
+          "centroid_margin": 0.0024219006299972534
+        }
+      },
+      "T1-T2": {
+        "all": {
+          "fixed_accuracy_pp": -0.1700680272108901,
+          "rematched_accuracy_pp": -0.1700680272108901,
+          "purity5": -0.0010204166173934937,
+          "centroid_margin": 0.002634933218359947
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": -0.0013605356216430664,
+          "centroid_margin": 0.0031958892941474915
+        },
+        "new": {
+          "fixed_accuracy_pp": -0.34013605442176353,
+          "rematched_accuracy_pp": -0.3401360544217691,
+          "purity5": -0.0006802529096603394,
+          "centroid_margin": 0.0020739957690238953
+        }
+      }
+    },
+    "152": {
+      "T1-T0": {
+        "all": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.002380967140197754,
+          "centroid_margin": 0.0048274872824549675
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0013605356216430664,
+          "centroid_margin": 0.003780148923397064
+        },
+        "new": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.00340135395526886,
+          "centroid_margin": 0.005874812602996826
+        }
+      },
+      "T2-T0": {
+        "all": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.000680282711982727,
+          "centroid_margin": -0.0006171483546495438
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 2.9802322387695312e-08,
+          "centroid_margin": -0.0017738118767738342
+        },
+        "new": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0013605356216430664,
+          "centroid_margin": 0.0005395039916038513
+        }
+      },
+      "T1-T2": {
+        "all": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0017006844282150269,
+          "centroid_margin": 0.005444635637104511
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0013605058193206787,
+          "centroid_margin": 0.0055539608001708984
+        },
+        "new": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0020408183336257935,
+          "centroid_margin": 0.005335308611392975
+        }
+      }
+    },
+    "153": {
+      "T1-T0": {
+        "all": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0013605356216430664,
+          "centroid_margin": 0.00461337435990572
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0020408332347869873,
+          "centroid_margin": 0.0032433345913887024
+        },
+        "new": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0006802529096603394,
+          "centroid_margin": 0.005983397364616394
+        }
+      },
+      "T2-T0": {
+        "all": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0006802678108215332,
+          "centroid_margin": 0.0003722822293639183
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0006802678108215332,
+          "centroid_margin": -0.000874541699886322
+        },
+        "new": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0006802529096603394,
+          "centroid_margin": 0.001619093120098114
+        }
+      },
+      "T1-T2": {
+        "all": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0006802678108215332,
+          "centroid_margin": 0.0042410921305418015
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.001360565423965454,
+          "centroid_margin": 0.004117876291275024
+        },
+        "new": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0,
+          "centroid_margin": 0.00436430424451828
+        }
+      }
+    },
+    "154": {
+      "T1-T0": {
+        "all": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0013605505228042603,
+          "centroid_margin": 0.006751315668225288
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": -0.001360565423965454,
+          "centroid_margin": 0.00542556494474411
+        },
+        "new": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.004081621766090393,
+          "centroid_margin": 0.008077070116996765
+        }
+      },
+      "T2-T0": {
+        "all": {
+          "fixed_accuracy_pp": 0.1700680272108901,
+          "rematched_accuracy_pp": 0.1700680272108901,
+          "purity5": 0.0,
+          "centroid_margin": 0.0012892242521047592
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": -0.0027211010456085205,
+          "centroid_margin": -0.0008097589015960693
+        },
+        "new": {
+          "fixed_accuracy_pp": 0.34013605442176353,
+          "rematched_accuracy_pp": 0.3401360544217691,
+          "purity5": 0.0027210861444473267,
+          "centroid_margin": 0.0033882036805152893
+        }
+      },
+      "T1-T2": {
+        "all": {
+          "fixed_accuracy_pp": -0.1700680272108901,
+          "rematched_accuracy_pp": -0.1700680272108901,
+          "purity5": 0.0013605505228042603,
+          "centroid_margin": 0.005462091416120529
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0013605356216430664,
+          "centroid_margin": 0.0062353238463401794
+        },
+        "new": {
+          "fixed_accuracy_pp": -0.34013605442176353,
+          "rematched_accuracy_pp": -0.3401360544217691,
+          "purity5": 0.0013605356216430664,
+          "centroid_margin": 0.004688866436481476
+        }
+      }
+    },
+    "155": {
+      "T1-T0": {
+        "all": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.00442175567150116,
+          "centroid_margin": 0.005786583758890629
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.004081636667251587,
+          "centroid_margin": 0.004585914313793182
+        },
+        "new": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.004761889576911926,
+          "centroid_margin": 0.006987258791923523
+        }
+      },
+      "T2-T0": {
+        "all": {
+          "fixed_accuracy_pp": 0.1700680272108901,
+          "rematched_accuracy_pp": 0.1700680272108901,
+          "purity5": 0.0017006844282150269,
+          "centroid_margin": 0.0003453679382801056
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.0006802976131439209,
+          "centroid_margin": -0.0021974965929985046
+        },
+        "new": {
+          "fixed_accuracy_pp": 0.34013605442176353,
+          "rematched_accuracy_pp": 0.3401360544217691,
+          "purity5": 0.0027210861444473267,
+          "centroid_margin": 0.002888232469558716
+        }
+      },
+      "T1-T2": {
+        "all": {
+          "fixed_accuracy_pp": -0.1700680272108901,
+          "rematched_accuracy_pp": -0.1700680272108901,
+          "purity5": 0.002721071243286133,
+          "centroid_margin": 0.005441215820610523
+        },
+        "old": {
+          "fixed_accuracy_pp": 0.0,
+          "rematched_accuracy_pp": 0.0,
+          "purity5": 0.003401339054107666,
+          "centroid_margin": 0.006783410906791687
+        },
+        "new": {
+          "fixed_accuracy_pp": -0.34013605442176353,
+          "rematched_accuracy_pp": -0.3401360544217691,
+          "purity5": 0.0020408034324645996,
+          "centroid_margin": 0.004099026322364807
+        }
+      }
+    }
+  },
+  "elapsed_seconds": 2983.6560000000172
+}
