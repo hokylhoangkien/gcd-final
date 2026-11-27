@@ -78,7 +78,7 @@ def load_batch(model, ds, rows, step):
     return {"tokens": prefix(model[0], torch.cat(views)), "labels": legal, "ids": ids}
 
 
-def training_step(model, opt, batch, criterion, select):
+def training_step(model, opt, batch, criterion, select, *, epoch=EPOCH):
     model.train()
     backbone, head = model
     tokens = batch["tokens"]
@@ -90,12 +90,12 @@ def training_step(model, opt, batch, criterion, select):
     with torch.no_grad():
         probs = (logits.reshape(2, n, -1) / 0.04).softmax(-1)
     actions, entries, stats = select(probs, batch["ids"].tolist(), legal.tolist())
-    base = baseline(proj, logits, legal, legal >= 0, criterion, EPOCH)
+    base = baseline(proj, logits, legal, legal >= 0, criterion, epoch)
     loss = base
     if actions:
         delta = 0.65 * (
-            corrected_distill(logits, logits.detach(), criterion, EPOCH, actions, MASS)
-            - criterion(logits, logits.detach(), EPOCH)
+            corrected_distill(logits, logits.detach(), criterion, epoch, actions, MASS)
+            - criterion(logits, logits.detach(), epoch)
         )
         cls_delta, w_delta = torch.autograd.grad(
             delta, (h, head.last_layer.weight_v), retain_graph=True
