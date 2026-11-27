@@ -1,7 +1,7 @@
-"""Download only selected RPC exemplar images, or read a local official dataset.
+"""Prepare RPC product crops from a bulk ZIP or local official dataset.
 
-Nothing downloads at import. Kaggle credentials, if required, stay in Kaggle's
-normal environment/config. No full-dataset download or checkout-image download.
+Default: download one archive and reuse previously prepared crops. Optional
+per-file downloading remains explicit; nothing downloads during import.
 """
 
 from __future__ import annotations
@@ -13,10 +13,12 @@ import random
 import time
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from pathlib import Path
 
 from PIL import Image, ImageOps
 
+from .archive import ArchiveSource, ensure_archive
 from .common import digest, image_path, write_json
 
 HANDLE = "diyer22/retail-product-checkout-dataset/versions/5"
@@ -167,6 +169,8 @@ def main():
     parser.add_argument(
         "--source", type=Path, help="Optional local official RPC folder"
     )
+    parser.add_argument("--download-mode", choices=("zip", "files"), default="zip")
+    parser.add_argument("--archive", type=Path, default=Path("datasets/rpc-v5.zip"))
     parser.add_argument("--classes", type=int, default=40)
     parser.add_argument("--per-class", type=int, default=200)
     parser.add_argument("--seed", type=int, default=1)
@@ -192,8 +196,12 @@ def main():
         if not annotation_path.is_file():
             source = source / "retail_product_checkout"
             annotation_path = source / "instances_train2019.json"
-    else:
+    elif args.download_mode == "files":
         annotation_path = download_file("instances_train2019.json")
+    else:
+        with ArchiveSource(ensure_archive(args.archive)) as archived:
+            annotation_path = args.root / "instances_train2019.json"
+            annotation_path.write_bytes(archived.annotation_bytes())
     annotation = json.loads(annotation_path.read_text())
     groups = candidates(annotation)
     eligible = sorted(k for k, v in groups.items() if len(v) >= args.per_class)
@@ -213,9 +221,11 @@ def main():
     excluded_downloads = []
     missing_streak = 0
     print(
-        f"Preparing {args.classes} classes x {args.per_class} product crops; resumable cache, no full RPC archive",
+        f"Preparing {args.classes} classes x {args.per_class} product crops; {'local folder' if source else args.download_mode}; reusing existing crops",
         flush=True,
     )
+
+    archived = None
 
     def materialize(row):
         target = (
@@ -226,23 +236,25 @@ def main():
         )
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.exists():
-            try:
-                path = (
-                    source / "train2019" / row["source_file"]
-                    if source
-                    else download_file(
-                        "retail_product_checkout/train2019/" + row["source_file"]
+            if archived is not None:
+                with archived.open_image(row["source_file"]) as stream:
+                    image = crop_product(stream, row["bbox"])
+            else:
+                try:
+                    path = (
+                        source / "train2019" / row["source_file"]
+                        if source
+                        else download_file(
+                            "retail_product_checkout/train2019/" + row["source_file"]
+                        )
                     )
-                )
-            except RemoteFileMissing:
-                # Keep the per-class quota by trying the next seeded candidate.
-                # Gold labels are only used by the dataset builder, never CRISH.
-                print(
-                    f"Unavailable in both RPC layouts, trying replacement: {row['source_file']}",
-                    flush=True,
-                )
-                return dict(row, unavailable=True)
-            image = crop_product(path, row["bbox"])
+                except RemoteFileMissing:
+                    print(
+                        f"Unavailable in both RPC layouts, trying replacement: {row['source_file']}",
+                        flush=True,
+                    )
+                    return dict(row, unavailable=True)
+                image = crop_product(path, row["bbox"])
             temp = target.with_suffix(".tmp")
             image.save(temp, format="PNG")
             temp.replace(target)
@@ -250,7 +262,10 @@ def main():
             checksum = hashlib.sha256(image.convert("RGB").tobytes()).hexdigest()
         return dict(row, path=target.relative_to(args.root).as_posix(), sha256=checksum)
 
-    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+    with ExitStack() as stack:
+        if not source and args.download_mode == "zip":
+            archived = stack.enter_context(ArchiveSource(args.archive))
+        pool = stack.enter_context(ThreadPoolExecutor(max_workers=args.workers))
         for category in classes:
             # Small ordered windows bound downloads and preserve reproducible selection.
             offset = 0

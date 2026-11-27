@@ -10,7 +10,7 @@
 
 ## Implementation
 
-- Prepare RPC v5: download only annotations/selected exemplar files via pinned kagglehub, or read a local official tree; crop bbox with margin, preserve aspect ratio on white pad, detect exact decoded-pixel duplicates and write a deterministic manifest.
+- Prepare RPC v5: default to one full archive via the pinned kagglehub client and read only selected exemplars without full extraction. Reuse existing product crops. Local official folders and explicit per-file downloads remain supported. Crop bbox with margin, preserve aspect ratio on white pad, detect exact decoded-pixel duplicates and write a deterministic manifest.
 - Default subset: 40 randomly ordered SKU classes, 200 images/class, 70/15/15 holdout, 20 known/20 novel, 50% legally labeled known training images. Randomized ordering avoids making known/novel simply the low/high category IDs.
 - Training datasets discard hidden targets and expose `-1` for unlabeled rows. Validation/test images do not enter the train loader or CRISH snapshot/probe/scoring pool.
 - Reuse the existing global `EpochRepairs` and SimGCD losses; train only DINO block 11 plus head. Guarantee a 50:50 labeled/unlabeled batch, with replacement.
@@ -34,11 +34,12 @@ ruff check --select E4,E7,E9,F,I planogram_rpc deployment tests_rpc
 git diff --check
 ```
 
-- CPU protocol suite: **12 tests passed**, including end-to-end preparation of a temporary 160-image fixture, RPC 404 alternate-path handling, same-SKU missing-image replacement with preserved quotas and cached crops, non-skippable auth/server errors, corruption rejection, train-label masking, deterministic balanced batches, the actual RPC objective/backward, checkpoint/RNG recovery with bitwise-identical next optimizer update, SS-KMeans fixed known assignments, product-level retrieval margin, dynamic-batch TorchScript and deployment contract/checksum rejection.
+- CPU protocol suite: **14 tests passed**, including end-to-end preparation of a temporary 160-image fixture, ZIP/local manifest parity, crop reuse, root/nested archive layout selection, archive reuse, partial-download preservation/retry and disk guard, RPC 404 alternate-path handling, same-SKU missing-image replacement with preserved quotas, non-skippable auth/server errors, corruption rejection, train-label masking, deterministic balanced batches, the actual RPC objective/backward, checkpoint/RNG recovery with bitwise-identical next optimizer update, SS-KMeans fixed known assignments, product-level retrieval margin, dynamic-batch TorchScript and deployment contract/checksum rejection.
 - The image fixture also passed through the existing global E3 selector and new training objective, backward/update, exposure accounting and epoch close. This is execution verification, not a learned performance result.
 - Existing `validate_global_crish.py` passed: fold/ID separation, frozen state/RNG, natural confirmation, timeout prefix, stale guard and exposure/persistence semantics.
 - Downloaded and parsed the **real RPC v5 train annotation** with kagglehub 0.3.13: 53,739 exemplar images, 200 classes, 125 classes with at least 200 candidate images.
 - Downloaded **one real exemplar** `038900004095_camera0-13.jpg` (category 112), decoded its official bbox and successfully generated the RGB 256×256 crop. No full subset download was attempted locally.
+- The pinned client's archive endpoint returned HTTP 200, ZIP magic, and Content-Length 27,205,167,166 bytes with its User-Agent. Only headers/first four bytes were inspected locally. Three filenames reported as 404 by the rented host returned HTTP 200 via the same pinned dataset from the local probe, so missing files are not established; per-file IP/request limiting is a possible cause. Bulk ZIP transport avoids thousands of these API requests. Full archive transfer remains unverified on the rental host.
 - Cloned the pinned official DINO source into a temporary folder, instantiated actual ViT-B/16 **with random weights**, and successfully traced/exported it on CPU with finite output and batch-2 numerical parity. No pretrained weights were downloaded locally.
 
 ## Remaining verification on rented GPU

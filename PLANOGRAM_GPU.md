@@ -53,17 +53,25 @@ Không dùng `pip install -r requirements.txt` cũ cho runner này.
 bash scripts/planogram/run.sh prepare
 ```
 
-Lệnh tải annotation và **chỉ các ảnh exemplar cần lấy**, không tải toàn bộ archive
-15 GB, không tải checkout test scenes. Cache ảnh gốc của Kaggle vẫn chiếm ổ đĩa;
-crop PNG được lưu riêng. Mỗi file có tối đa ba lần thử tải. Nếu mạng bị ngắt, chạy
-lại lệnh; cache và crop hoàn tất được giữ lại. Public download đã kiểm tra với
-annotation và một ảnh thật; việc tải toàn bộ subset sẽ chạy trên máy GPU.
+Mặc định tải **một ZIP RPC v5** về `datasets/rpc-v5.zip` rồi đọc trực tiếp những
+ảnh cần dùng, không giải nén toàn bộ archive. Link Kaggle đã kiểm tra trả khoảng
+**27 GB**, khác con số 15 GB trên trang project. Script yêu cầu khoảng **30 GB còn
+trống** cho ZIP và crop còn thiếu; kiểm tra bằng `df -h .`.
 
-Nếu một ảnh trả 404, downloader thử cả đường dẫn nested và root của RPC v5.
-Nếu cả hai đều 404, builder ghi `download_errors.jsonl`, lấy ứng viên tiếp theo
-cùng SKU và vẫn yêu cầu đủ 200 ảnh/SKU. Năm ảnh liên tiếp không truy cập được sẽ
-dừng để kiểm tra nguồn. Lỗi xác thực/quyền truy cập và lỗi mạng không bị coi là
-ảnh thiếu. Ảnh crop đã có được dùng lại khi chạy lại `prepare`.
+Các crop đã tải từ bản cũ được dùng lại; không xóa dataset/cache hay đổi subset.
+Nếu mạng ngắt, chạy lại `prepare`: `.zip.part` được giữ và client thử resume nếu
+máy chủ hỗ trợ Range. ZIP hoàn tất được dùng lại, không tải lại. Không gọi API tải
+từng ảnh trong chế độ ZIP. Nếu subset đã có manifest hoàn chỉnh, bước prepare chỉ
+kiểm tra dữ liệu và không tải ZIP.
+
+Chuyển từ bản tải từng file đang lỗi: đợi job dừng về dấu nhắc trong tmux,
+`git pull --ff-only`, rồi chạy lại `bash scripts/planogram/run.sh prepare`.
+Không cần bootstrap hay clone lại. Chỉ cập nhật source trước khi training bắt đầu.
+
+Nếu ZIP nằm trên ổ đĩa khác, dùng `--archive /data/rpc-v5.zip`. Chế độ tải từng file
+cũ còn ở `--download-mode files`, gồm thử đường dẫn thay thế và ghi file 404, nhưng
+không phải mặc định do có thể gặp giới hạn request từ Kaggle. Tải ZIP thay đổi
+cách lấy dữ liệu; cấu hình 40 SKU / 200 epoch / batch 128 vẫn giữ nguyên.
 
 Kaggle đôi khi yêu cầu đăng nhập/xác thực: cấu hình tài khoản bằng cơ chế của
 [kagglehub](https://github.com/Kaggle/kagglehub#authenticate) nếu có lỗi 401/403;

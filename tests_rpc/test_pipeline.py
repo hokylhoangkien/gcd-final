@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import io
 import json
 import shutil
 import sys
 import tempfile
 import types
 import unittest
+import zipfile
 from collections import defaultdict
 from pathlib import Path
 from unittest.mock import patch
@@ -22,6 +24,7 @@ from torch import nn
 from crish.experiment import atomic_checkpoint, load_checkpoint, restore_rng, rng_state
 from crish.global_repair import EpochRepairs
 from model import DINOHead, DistillLoss
+from planogram_rpc.archive import ArchiveSource, ensure_archive
 from planogram_rpc.common import digest, image_path
 from planogram_rpc.data import BalancedBatches, training_data
 from planogram_rpc.export import export_model
@@ -41,6 +44,61 @@ class PipelineTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         torch.set_num_threads(1)
+
+    def test_bulk_download_retry_preserves_partial_and_checks_disk(self):
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w") as archive:
+            archive.writestr("instances_train2019.json", b"{}")
+        payload = buffer.getvalue()
+        calls = []
+        test = self
+
+        class Client:
+            def download_file(self, url, destination, handle):
+                path = Path(destination)
+                calls.append(destination)
+                if len(calls) == 1:
+                    path.write_bytes(b"partial")
+                    raise ConnectionError("interrupted")
+                test.assertEqual(path.read_bytes(), b"partial")
+                path.write_bytes(payload)
+
+        stubs = {
+            name: types.ModuleType(name)
+            for name in (
+                "kagglehub",
+                "kagglehub.clients",
+                "kagglehub.handle",
+                "kagglehub.http_resolver",
+            )
+        }
+        stubs["kagglehub.clients"].KaggleApiV1Client = Client
+        stubs["kagglehub.handle"].parse_dataset_handle = lambda value: value
+        stubs["kagglehub.http_resolver"]._build_dataset_download_url_path = (
+            lambda handle, path: "rpc-v5"
+        )
+        with (
+            tempfile.TemporaryDirectory() as folder,
+            patch.dict(sys.modules, stubs),
+            patch("planogram_rpc.archive.time.sleep"),
+        ):
+            path = Path(folder) / "rpc.zip"
+            with patch(
+                "planogram_rpc.archive.shutil.disk_usage",
+                return_value=types.SimpleNamespace(free=100 * 2**30),
+            ):
+                self.assertEqual(ensure_archive(path), path)
+            self.assertEqual(len(calls), 2)
+            self.assertFalse(path.with_suffix(".zip.part").exists())
+            with ArchiveSource(path) as archive:
+                self.assertEqual(archive.annotation_bytes(), b"{}")
+            with patch(
+                "planogram_rpc.archive.shutil.disk_usage",
+                return_value=types.SimpleNamespace(free=0),
+            ):
+                with self.assertRaisesRegex(OSError, "30 GB"):
+                    ensure_archive(Path(folder) / "another.zip")
+            self.assertEqual(len(calls), 2)
 
     def test_rpc_404_tries_alternate_layout(self):
         error = RuntimeError("not found")
@@ -342,6 +400,8 @@ class PipelineTest(unittest.TestCase):
 
             remote_args = [
                 "prepare",
+                "--download-mode",
+                "files",
                 "--root",
                 str(remote_root),
                 "--classes",
@@ -365,6 +425,48 @@ class PipelineTest(unittest.TestCase):
             self.assertFalse(
                 any(r["source_file"] == unavailable for r in remote_manifest["images"])
             )
+            # Switching to bulk ZIP preserves class/image choices and existing
+            # crops, while making ZERO per-image network calls.
+            archive_path = Path(folder) / "rpc-v5.zip"
+            with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
+                for file in source.rglob("*"):
+                    if file.is_file():
+                        archive.write(
+                            file,
+                            "retail_product_checkout/"
+                            + file.relative_to(source).as_posix(),
+                        )
+            zip_root = Path(folder) / "zip-prepared"
+            cached_path = zip_root / cached["path"]
+            cached_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(root / cached["path"], cached_path)
+            before = cached_path.stat().st_mtime_ns
+            zip_args = [
+                "prepare",
+                "--root",
+                str(zip_root),
+                "--archive",
+                str(archive_path),
+                "--classes",
+                "4",
+                "--per-class",
+                "40",
+                "--workers",
+                "2",
+            ]
+            with (
+                patch("sys.argv", zip_args),
+                patch(
+                    "planogram_rpc.prepare.download_file",
+                    side_effect=AssertionError("Unexpected per-file network request"),
+                ),
+            ):
+                prepare()
+            self.assertEqual(
+                json.loads((zip_root / "manifest.json").read_text()), manifest
+            )
+            self.assertEqual(cached_path.stat().st_mtime_ns, before)
+            self.assertFalse((zip_root / "retail_product_checkout").exists())
             # Exercise the new image-only RPC dataset with the EXISTING global
             # CRISH selector and the real RPC training objective on CPU.
             args = configure(parser().parse_args(["--device", "cpu", "--fp32"]))
@@ -410,6 +512,26 @@ class PipelineTest(unittest.TestCase):
             Image.new("RGB", (16, 16)).save(path)
             with self.assertRaises(ValueError):
                 crop_product(path, [100, 100, 5, 5])
+
+    def test_zip_layout_preference_and_completed_archive_reuse(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "rpc.zip"
+            with zipfile.ZipFile(path, "w") as archive:
+                archive.writestr("instances_train2019.json", b"root")
+                archive.writestr("train2019/a.jpg", b"root-image")
+            self.assertEqual(ensure_archive(path), path)  # No kagglehub/network needed.
+            with ArchiveSource(path) as archive:
+                self.assertEqual(archive.annotation_bytes(), b"root")
+                with archive.open_image("a.jpg") as stream:
+                    self.assertEqual(stream.read(), b"root-image")
+                with self.assertRaises(ValueError):
+                    archive.open_image("../outside.jpg")
+            with zipfile.ZipFile(path, "a") as archive:
+                archive.writestr(
+                    "retail_product_checkout/instances_train2019.json", b"nested"
+                )
+            with ArchiveSource(path) as archive:
+                self.assertEqual(archive.annotation_bytes(), b"nested")
 
 
 if __name__ == "__main__":
