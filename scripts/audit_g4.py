@@ -157,10 +157,10 @@ def temporal(old, out, cache, receipt):
     return methods, identity, history
 
 
-def sealed(out, truth, methods):
+def sealed(out, truth, methods, *, baseline="Current"):
     ids, q, bank, slots = (out[k] for k in ("ids", "q", "bank", "slots"))
     metrics, coverage = g1.evaluate(
-        out, ids, q, bank, slots, truth, methods=methods, baseline="Current"
+        out, ids, q, bank, slots, truth, methods=methods, baseline=baseline
     )
     labels = truth[ids[q]]
 
