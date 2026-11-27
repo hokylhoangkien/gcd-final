@@ -206,8 +206,9 @@ def train(
     masses=MASS,
     local=LOCAL,
     paired_step=run_batch,
+    resume=None,
 ):
-    initial_epoch = base["epoch"]
+    initial_epoch = base["epoch"] if resume is None else resume["epoch"]
     epochs = tuple(plan)
     done = (
         [e for e in epochs if (local / f"epoch-{e}.pt").is_file()] if not smoke else []
@@ -220,8 +221,9 @@ def train(
             )
         return
     if prev == initial_epoch:
-        models = repair.make_arms(model, dict.fromkeys(names, base), names=names)
-        results = {}
+        arms = dict.fromkeys(names, base) if resume is None else resume["state"]
+        models = repair.make_arms(model, arms, names=names)
+        results = {} if resume is None else dict(resume["records"])
     else:
         saved = audit.load_checkpoint(local / f"epoch-{prev}.pt")
         assert saved["epoch"] == prev and saved["signature"] == sig
