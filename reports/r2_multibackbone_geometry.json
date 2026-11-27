@@ -1,0 +1,2646 @@
+{
+  "base": "d9e37ce",
+  "exploratory": true,
+  "dinov2": {
+    "weights_sha256": "0b8b82f85de91b424aded121c7e1dcc2b7bc6d0adeea651bf73a13307fad8c73",
+    "upstream_url": "https://dl.fbaipublicfiles.com/dinov2/dinov2_vitb14/dinov2_vitb14_pretrain.pth",
+    "source_sha256": "a05971bd74b990404636abc158b717bc04ebad4f7dda59e717e96645c2bda102",
+    "preprocessing": {
+      "short_side": 256,
+      "crop": [
+        224,
+        224
+      ],
+      "interpolation": "bicubic",
+      "mean": [
+        0.48500001430511475,
+        0.4560000002384186,
+        0.4059999883174896
+      ],
+      "std": [
+        0.2290000021457672,
+        0.2240000069141388,
+        0.22499999403953552
+      ],
+      "color": "RGB",
+      "torchvision": "0.21.0+cu124"
+    },
+    "rows": 6144,
+    "feature": "L2-normalized final CLS",
+    "torch": "2.6.0+cu124",
+    "cache_sha256": "f3d5aefdd02a5bc5a40d432c3d2378f422adfb406f6a11bdb54e8745bc7ab975",
+    "reused": false
+  },
+  "coverage_percent": [
+    10,
+    20,
+    40
+  ],
+  "g1_sha256": "0a68d0523047b6cfa438b1a78fc6c7455e0c7ce2cef592d625ded62a65dc4e4f",
+  "dinov1_cache_sha256": "42d33e689eb49e2a59cf4b22f8282939f7cea631c0cf4ef92303ba7e314a95a4",
+  "snapshots": {
+    "100": {
+      "checkpoint_sha256": "e9b5f482d8783742b441dc65e608ae097bef31e62ab53e0e41154725a76567ee",
+      "g1_manifest_sha256": "e4035daa8a576d79f45521f446f5e5eb9965e4229460478f2be632fefca8e357",
+      "frozen_sha256": "62930e482933a3ad23285d6a8349b9f90a1ca787ff40d2cc5c273a6db52fdf14",
+      "metrics": {
+        "M0": {
+          "All": {
+            "queries": 1024,
+            "wrong_source": 470,
+            "mapped_wrong": 388,
+            "pair_positive": 1487,
+            "pair_negative": 260657,
+            "hard_negative": 49026,
+            "purity": {
+              "1": 0.6396484375,
+              "5": 0.5638671875,
+              "10": 0.5205078125
+            },
+            "pair_auc": 0.9436362038124247,
+            "hard_auc": 0.4497618312186079,
+            "detection_auc": 0.6498118135033413,
+            "destination_recall": {
+              "1": 0.2404255319148936,
+              "3": 0.39787234042553193,
+              "5": 0.4957446808510638
+            },
+            "destination_recall_mapped": {
+              "1": 0.2912371134020619,
+              "3": 0.48195876288659795,
+              "5": 0.6005154639175257
+            },
+            "final_failure_n": 357,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.20728291316526612,
+              "5": 0.33613445378151263
+            },
+            "final_success_n": 113,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 102,
+                "tp": 69,
+                "errors": 470,
+                "coverage": 0.099609375,
+                "precision": 0.6764705882352942,
+                "recall": 0.14680851063829786,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 204,
+                "tp": 128,
+                "errors": 470,
+                "coverage": 0.19921875,
+                "precision": 0.6274509803921569,
+                "recall": 0.2723404255319149,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 409,
+                "tp": 226,
+                "errors": 470,
+                "coverage": 0.3994140625,
+                "precision": 0.5525672371638142,
+                "recall": 0.4808510638297872,
+                "stable_error_recall": null
+              }
+            }
+          },
+          "Old": {
+            "queries": 310,
+            "wrong_source": 81,
+            "mapped_wrong": 69,
+            "pair_positive": 300,
+            "pair_negative": 79060,
+            "hard_negative": 15830,
+            "purity": {
+              "1": 0.7161290322580646,
+              "5": 0.6670967741935484,
+              "10": 0.6293548387096775
+            },
+            "pair_auc": 0.953954802259887,
+            "hard_auc": 0.6464596757212044,
+            "detection_auc": 0.7903930131004366,
+            "destination_recall": {
+              "1": 0.2839506172839506,
+              "3": 0.3950617283950617,
+              "5": 0.49382716049382713
+            },
+            "destination_recall_mapped": {
+              "1": 0.3333333333333333,
+              "3": 0.463768115942029,
+              "5": 0.5797101449275363
+            },
+            "final_failure_n": 58,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.15517241379310345,
+              "5": 0.29310344827586204
+            },
+            "final_success_n": 23,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 19,
+                "tp": 14,
+                "errors": 81,
+                "coverage": 0.06129032258064516,
+                "precision": 0.7368421052631579,
+                "recall": 0.1728395061728395,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 41,
+                "tp": 23,
+                "errors": 81,
+                "coverage": 0.13225806451612904,
+                "precision": 0.5609756097560976,
+                "recall": 0.2839506172839506,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 76,
+                "tp": 40,
+                "errors": 81,
+                "coverage": 0.24516129032258063,
+                "precision": 0.5263157894736842,
+                "recall": 0.49382716049382713,
+                "stable_error_recall": null
+              }
+            }
+          },
+          "New": {
+            "queries": 714,
+            "wrong_source": 389,
+            "mapped_wrong": 319,
+            "pair_positive": 1187,
+            "pair_negative": 181597,
+            "hard_negative": 33196,
+            "purity": {
+              "1": 0.6064425770308123,
+              "5": 0.5190476190476191,
+              "10": 0.47324929971988794
+            },
+            "pair_auc": 0.9384292679070204,
+            "hard_auc": 0.3777461287090851,
+            "detection_auc": 0.5493612813921297,
+            "destination_recall": {
+              "1": 0.23136246786632392,
+              "3": 0.39845758354755784,
+              "5": 0.4961439588688946
+            },
+            "destination_recall_mapped": {
+              "1": 0.28213166144200624,
+              "3": 0.48589341692789967,
+              "5": 0.6050156739811913
+            },
+            "final_failure_n": 299,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.21739130434782608,
+              "5": 0.34448160535117056
+            },
+            "final_success_n": 90,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 83,
+                "tp": 55,
+                "errors": 389,
+                "coverage": 0.11624649859943978,
+                "precision": 0.6626506024096386,
+                "recall": 0.14138817480719795,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 163,
+                "tp": 105,
+                "errors": 389,
+                "coverage": 0.22829131652661064,
+                "precision": 0.6441717791411042,
+                "recall": 0.2699228791773779,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 333,
+                "tp": 186,
+                "errors": 389,
+                "coverage": 0.46638655462184875,
+                "precision": 0.5585585585585585,
+                "recall": 0.4781491002570694,
+                "stable_error_recall": null
+              }
+            }
+          }
+        },
+        "M1": {
+          "All": {
+            "queries": 1024,
+            "wrong_source": 470,
+            "mapped_wrong": 388,
+            "pair_positive": 1487,
+            "pair_negative": 260657,
+            "hard_negative": 49026,
+            "purity": {
+              "1": 0.2265625,
+              "5": 0.139453125,
+              "10": 0.1060546875
+            },
+            "pair_auc": 0.6342710624827168,
+            "hard_auc": 0.4684065296069656,
+            "detection_auc": 0.538562869652047,
+            "destination_recall": {
+              "1": 0.0574468085106383,
+              "3": 0.1148936170212766,
+              "5": 0.14042553191489363
+            },
+            "destination_recall_mapped": {
+              "1": 0.06958762886597938,
+              "3": 0.13917525773195877,
+              "5": 0.17010309278350516
+            },
+            "final_failure_n": 357,
+            "failure_recovery": {
+              "1": 0.0392156862745098,
+              "3": 0.07282913165266107,
+              "5": 0.09523809523809523
+            },
+            "final_success_n": 113,
+            "correct_to_wrong_vs_final": 0.8849557522123894,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.1111111111111111,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 102,
+                "tp": 49,
+                "errors": 470,
+                "coverage": 0.099609375,
+                "precision": 0.4803921568627451,
+                "recall": 0.10425531914893617,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 204,
+                "tp": 102,
+                "errors": 470,
+                "coverage": 0.19921875,
+                "precision": 0.5,
+                "recall": 0.2170212765957447,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 409,
+                "tp": 203,
+                "errors": 470,
+                "coverage": 0.3994140625,
+                "precision": 0.4963325183374083,
+                "recall": 0.4319148936170213,
+                "stable_error_recall": null
+              }
+            }
+          },
+          "Old": {
+            "queries": 310,
+            "wrong_source": 81,
+            "mapped_wrong": 69,
+            "pair_positive": 300,
+            "pair_negative": 79060,
+            "hard_negative": 15830,
+            "purity": {
+              "1": 0.18387096774193548,
+              "5": 0.11225806451612903,
+              "10": 0.08
+            },
+            "pair_auc": 0.639976789779914,
+            "hard_auc": 0.5062515266371868,
+            "detection_auc": 0.48444660089492697,
+            "destination_recall": {
+              "1": 0.08641975308641975,
+              "3": 0.12345679012345678,
+              "5": 0.1728395061728395
+            },
+            "destination_recall_mapped": {
+              "1": 0.10144927536231885,
+              "3": 0.14492753623188406,
+              "5": 0.2028985507246377
+            },
+            "final_failure_n": 58,
+            "failure_recovery": {
+              "1": 0.034482758620689655,
+              "3": 0.05172413793103448,
+              "5": 0.06896551724137931
+            },
+            "final_success_n": 23,
+            "correct_to_wrong_vs_final": 0.782608695652174,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.07954545454545454,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 41,
+                "tp": 8,
+                "errors": 81,
+                "coverage": 0.13225806451612904,
+                "precision": 0.1951219512195122,
+                "recall": 0.09876543209876543,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 80,
+                "tp": 19,
+                "errors": 81,
+                "coverage": 0.25806451612903225,
+                "precision": 0.2375,
+                "recall": 0.2345679012345679,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 150,
+                "tp": 37,
+                "errors": 81,
+                "coverage": 0.4838709677419355,
+                "precision": 0.24666666666666667,
+                "recall": 0.4567901234567901,
+                "stable_error_recall": null
+              }
+            }
+          },
+          "New": {
+            "queries": 714,
+            "wrong_source": 389,
+            "mapped_wrong": 319,
+            "pair_positive": 1187,
+            "pair_negative": 181597,
+            "hard_negative": 33196,
+            "purity": {
+              "1": 0.24509803921568626,
+              "5": 0.15126050420168066,
+              "10": 0.11736694677871148
+            },
+            "pair_auc": 0.6309357140037519,
+            "hard_auc": 0.4499368358039504,
+            "detection_auc": 0.5860707929602531,
+            "destination_recall": {
+              "1": 0.05141388174807198,
+              "3": 0.11311053984575835,
+              "5": 0.13367609254498714
+            },
+            "destination_recall_mapped": {
+              "1": 0.06269592476489028,
+              "3": 0.13793103448275862,
+              "5": 0.16300940438871472
+            },
+            "final_failure_n": 299,
+            "failure_recovery": {
+              "1": 0.04013377926421405,
+              "3": 0.07692307692307693,
+              "5": 0.10033444816053512
+            },
+            "final_success_n": 90,
+            "correct_to_wrong_vs_final": 0.9111111111111111,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.12099644128113879,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 61,
+                "tp": 41,
+                "errors": 389,
+                "coverage": 0.08543417366946779,
+                "precision": 0.6721311475409836,
+                "recall": 0.10539845758354756,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 124,
+                "tp": 83,
+                "errors": 389,
+                "coverage": 0.17366946778711484,
+                "precision": 0.6693548387096774,
+                "recall": 0.2133676092544987,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 259,
+                "tp": 166,
+                "errors": 389,
+                "coverage": 0.3627450980392157,
+                "precision": 0.640926640926641,
+                "recall": 0.4267352185089974,
+                "stable_error_recall": null
+              }
+            }
+          }
+        },
+        "M2": {
+          "All": {
+            "queries": 1024,
+            "wrong_source": 470,
+            "mapped_wrong": 388,
+            "pair_positive": 1487,
+            "pair_negative": 260657,
+            "hard_negative": 49026,
+            "purity": {
+              "1": 0.56640625,
+              "5": 0.43125,
+              "10": 0.35234375
+            },
+            "pair_auc": 0.8936955036842794,
+            "hard_auc": 0.5944927565574568,
+            "detection_auc": 0.6886051156002766,
+            "destination_recall": {
+              "1": 0.18936170212765957,
+              "3": 0.33404255319148934,
+              "5": 0.37659574468085105
+            },
+            "destination_recall_mapped": {
+              "1": 0.22938144329896906,
+              "3": 0.40463917525773196,
+              "5": 0.45618556701030927
+            },
+            "final_failure_n": 357,
+            "failure_recovery": {
+              "1": 0.12044817927170869,
+              "3": 0.24089635854341737,
+              "5": 0.2801120448179272
+            },
+            "final_success_n": 113,
+            "correct_to_wrong_vs_final": 0.5929203539823009,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.3902439024390244,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 102,
+                "tp": 74,
+                "errors": 470,
+                "coverage": 0.099609375,
+                "precision": 0.7254901960784313,
+                "recall": 0.1574468085106383,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 204,
+                "tp": 139,
+                "errors": 470,
+                "coverage": 0.19921875,
+                "precision": 0.6813725490196079,
+                "recall": 0.2957446808510638,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 409,
+                "tp": 261,
+                "errors": 470,
+                "coverage": 0.3994140625,
+                "precision": 0.6381418092909535,
+                "recall": 0.5553191489361702,
+                "stable_error_recall": null
+              }
+            }
+          },
+          "Old": {
+            "queries": 310,
+            "wrong_source": 81,
+            "mapped_wrong": 69,
+            "pair_positive": 300,
+            "pair_negative": 79060,
+            "hard_negative": 15830,
+            "purity": {
+              "1": 0.49032258064516127,
+              "5": 0.35096774193548386,
+              "10": 0.26903225806451614
+            },
+            "pair_auc": 0.8853845602495996,
+            "hard_auc": 0.6156350810696989,
+            "detection_auc": 0.6350746670979568,
+            "destination_recall": {
+              "1": 0.2839506172839506,
+              "3": 0.3950617283950617,
+              "5": 0.41975308641975306
+            },
+            "destination_recall_mapped": {
+              "1": 0.3333333333333333,
+              "3": 0.463768115942029,
+              "5": 0.4927536231884058
+            },
+            "final_failure_n": 58,
+            "failure_recovery": {
+              "1": 0.20689655172413793,
+              "3": 0.29310344827586204,
+              "5": 0.3275862068965517
+            },
+            "final_success_n": 23,
+            "correct_to_wrong_vs_final": 0.5217391304347826,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.3068181818181818,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 34,
+                "tp": 12,
+                "errors": 81,
+                "coverage": 0.10967741935483871,
+                "precision": 0.35294117647058826,
+                "recall": 0.14814814814814814,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 69,
+                "tp": 29,
+                "errors": 81,
+                "coverage": 0.22258064516129034,
+                "precision": 0.42028985507246375,
+                "recall": 0.35802469135802467,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 138,
+                "tp": 49,
+                "errors": 81,
+                "coverage": 0.44516129032258067,
+                "precision": 0.35507246376811596,
+                "recall": 0.6049382716049383,
+                "stable_error_recall": null
+              }
+            }
+          },
+          "New": {
+            "queries": 714,
+            "wrong_source": 389,
+            "mapped_wrong": 319,
+            "pair_positive": 1187,
+            "pair_negative": 181597,
+            "hard_negative": 33196,
+            "purity": {
+              "1": 0.5994397759103641,
+              "5": 0.4661064425770308,
+              "10": 0.388515406162465
+            },
+            "pair_auc": 0.8952399268942344,
+            "hard_auc": 0.5777519936476954,
+            "detection_auc": 0.7329009294047855,
+            "destination_recall": {
+              "1": 0.16966580976863754,
+              "3": 0.3213367609254499,
+              "5": 0.3676092544987147
+            },
+            "destination_recall_mapped": {
+              "1": 0.20689655172413793,
+              "3": 0.39184952978056425,
+              "5": 0.4482758620689655
+            },
+            "final_failure_n": 299,
+            "failure_recovery": {
+              "1": 0.10367892976588629,
+              "3": 0.23076923076923078,
+              "5": 0.2709030100334448
+            },
+            "final_success_n": 90,
+            "correct_to_wrong_vs_final": 0.6111111111111112,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.41637010676156583,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 68,
+                "tp": 62,
+                "errors": 389,
+                "coverage": 0.09523809523809523,
+                "precision": 0.9117647058823529,
+                "recall": 0.15938303341902313,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 135,
+                "tp": 110,
+                "errors": 389,
+                "coverage": 0.18907563025210083,
+                "precision": 0.8148148148148148,
+                "recall": 0.2827763496143959,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 271,
+                "tp": 212,
+                "errors": 389,
+                "coverage": 0.3795518207282913,
+                "precision": 0.7822878228782287,
+                "recall": 0.5449871465295629,
+                "stable_error_recall": null
+              }
+            }
+          }
+        },
+        "M3": {
+          "All": {
+            "queries": 1024,
+            "wrong_source": 470,
+            "mapped_wrong": 388,
+            "pair_positive": 1487,
+            "pair_negative": 260657,
+            "hard_negative": 49026,
+            "purity": {
+              "1": 0.67578125,
+              "5": 0.6044921875,
+              "10": 0.5453125
+            },
+            "pair_auc": 0.9580363206616387,
+            "hard_auc": 0.5128415110755637,
+            "detection_auc": 0.6993624702358092,
+            "destination_recall": {
+              "1": 0.2723404255319149,
+              "3": 0.44042553191489364,
+              "5": 0.5425531914893617
+            },
+            "destination_recall_mapped": {
+              "1": 0.32989690721649484,
+              "3": 0.5335051546391752,
+              "5": 0.6572164948453608
+            },
+            "final_failure_n": 357,
+            "failure_recovery": {
+              "1": 0.09803921568627451,
+              "3": 0.2773109243697479,
+              "5": 0.4005602240896359
+            },
+            "final_success_n": 113,
+            "correct_to_wrong_vs_final": 0.17699115044247787,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.3170731707317073,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 102,
+                "tp": 75,
+                "errors": 470,
+                "coverage": 0.099609375,
+                "precision": 0.7352941176470589,
+                "recall": 0.1595744680851064,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 204,
+                "tp": 147,
+                "errors": 470,
+                "coverage": 0.19921875,
+                "precision": 0.7205882352941176,
+                "recall": 0.3127659574468085,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 409,
+                "tp": 254,
+                "errors": 470,
+                "coverage": 0.3994140625,
+                "precision": 0.6210268948655256,
+                "recall": 0.5404255319148936,
+                "stable_error_recall": null
+              }
+            }
+          },
+          "Old": {
+            "queries": 310,
+            "wrong_source": 81,
+            "mapped_wrong": 69,
+            "pair_positive": 300,
+            "pair_negative": 79060,
+            "hard_negative": 15830,
+            "purity": {
+              "1": 0.7258064516129032,
+              "5": 0.6645161290322581,
+              "10": 0.6
+            },
+            "pair_auc": 0.9673711948730922,
+            "hard_auc": 0.6437322594230365,
+            "detection_auc": 0.7555124265459054,
+            "destination_recall": {
+              "1": 0.32098765432098764,
+              "3": 0.43209876543209874,
+              "5": 0.5802469135802469
+            },
+            "destination_recall_mapped": {
+              "1": 0.37681159420289856,
+              "3": 0.5072463768115942,
+              "5": 0.6811594202898551
+            },
+            "final_failure_n": 58,
+            "failure_recovery": {
+              "1": 0.10344827586206896,
+              "3": 0.2413793103448276,
+              "5": 0.43103448275862066
+            },
+            "final_success_n": 23,
+            "correct_to_wrong_vs_final": 0.13043478260869565,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.2840909090909091,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 23,
+                "tp": 14,
+                "errors": 81,
+                "coverage": 0.07419354838709677,
+                "precision": 0.6086956521739131,
+                "recall": 0.1728395061728395,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 43,
+                "tp": 26,
+                "errors": 81,
+                "coverage": 0.13870967741935483,
+                "precision": 0.6046511627906976,
+                "recall": 0.32098765432098764,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 82,
+                "tp": 40,
+                "errors": 81,
+                "coverage": 0.2645161290322581,
+                "precision": 0.4878048780487805,
+                "recall": 0.49382716049382713,
+                "stable_error_recall": null
+              }
+            }
+          },
+          "New": {
+            "queries": 714,
+            "wrong_source": 389,
+            "mapped_wrong": 319,
+            "pair_positive": 1187,
+            "pair_negative": 181597,
+            "hard_negative": 33196,
+            "purity": {
+              "1": 0.65406162464986,
+              "5": 0.5784313725490197,
+              "10": 0.5215686274509804
+            },
+            "pair_auc": 0.9540792157146954,
+            "hard_auc": 0.4584984914596241,
+            "detection_auc": 0.6551315008898556,
+            "destination_recall": {
+              "1": 0.2622107969151671,
+              "3": 0.442159383033419,
+              "5": 0.5347043701799485
+            },
+            "destination_recall_mapped": {
+              "1": 0.31974921630094044,
+              "3": 0.5391849529780565,
+              "5": 0.6520376175548589
+            },
+            "final_failure_n": 299,
+            "failure_recovery": {
+              "1": 0.09698996655518395,
+              "3": 0.2842809364548495,
+              "5": 0.39464882943143814
+            },
+            "final_success_n": 90,
+            "correct_to_wrong_vs_final": 0.18888888888888888,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.3274021352313167,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 79,
+                "tp": 61,
+                "errors": 389,
+                "coverage": 0.11064425770308123,
+                "precision": 0.7721518987341772,
+                "recall": 0.15681233933161953,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 161,
+                "tp": 121,
+                "errors": 389,
+                "coverage": 0.22549019607843138,
+                "precision": 0.7515527950310559,
+                "recall": 0.3110539845758355,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 327,
+                "tp": 214,
+                "errors": 389,
+                "coverage": 0.4579831932773109,
+                "precision": 0.654434250764526,
+                "recall": 0.5501285347043702,
+                "stable_error_recall": null
+              }
+            }
+          }
+        },
+        "M4": {
+          "All": {
+            "queries": 1024,
+            "wrong_source": 470,
+            "mapped_wrong": 388,
+            "pair_positive": 1487,
+            "pair_negative": 260657,
+            "hard_negative": 49026,
+            "purity": {
+              "1": 0.6396484375,
+              "5": 0.5638671875,
+              "10": 0.5205078125
+            },
+            "pair_auc": 0.9436362038124247,
+            "hard_auc": 0.4497618312186079,
+            "detection_auc": 0.6886051156002766,
+            "destination_recall": {
+              "1": 0.2404255319148936,
+              "3": 0.39787234042553193,
+              "5": 0.4957446808510638
+            },
+            "destination_recall_mapped": {
+              "1": 0.2912371134020619,
+              "3": 0.48195876288659795,
+              "5": 0.6005154639175257
+            },
+            "final_failure_n": 357,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.20728291316526612,
+              "5": 0.33613445378151263
+            },
+            "final_success_n": 113,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 102,
+                "tp": 74,
+                "errors": 470,
+                "coverage": 0.099609375,
+                "precision": 0.7254901960784313,
+                "recall": 0.1574468085106383,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 204,
+                "tp": 139,
+                "errors": 470,
+                "coverage": 0.19921875,
+                "precision": 0.6813725490196079,
+                "recall": 0.2957446808510638,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 409,
+                "tp": 261,
+                "errors": 470,
+                "coverage": 0.3994140625,
+                "precision": 0.6381418092909535,
+                "recall": 0.5553191489361702,
+                "stable_error_recall": null
+              }
+            }
+          },
+          "Old": {
+            "queries": 310,
+            "wrong_source": 81,
+            "mapped_wrong": 69,
+            "pair_positive": 300,
+            "pair_negative": 79060,
+            "hard_negative": 15830,
+            "purity": {
+              "1": 0.7161290322580646,
+              "5": 0.6670967741935484,
+              "10": 0.6293548387096775
+            },
+            "pair_auc": 0.953954802259887,
+            "hard_auc": 0.6464596757212044,
+            "detection_auc": 0.6350746670979568,
+            "destination_recall": {
+              "1": 0.2839506172839506,
+              "3": 0.3950617283950617,
+              "5": 0.49382716049382713
+            },
+            "destination_recall_mapped": {
+              "1": 0.3333333333333333,
+              "3": 0.463768115942029,
+              "5": 0.5797101449275363
+            },
+            "final_failure_n": 58,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.15517241379310345,
+              "5": 0.29310344827586204
+            },
+            "final_success_n": 23,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 34,
+                "tp": 12,
+                "errors": 81,
+                "coverage": 0.10967741935483871,
+                "precision": 0.35294117647058826,
+                "recall": 0.14814814814814814,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 69,
+                "tp": 29,
+                "errors": 81,
+                "coverage": 0.22258064516129034,
+                "precision": 0.42028985507246375,
+                "recall": 0.35802469135802467,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 138,
+                "tp": 49,
+                "errors": 81,
+                "coverage": 0.44516129032258067,
+                "precision": 0.35507246376811596,
+                "recall": 0.6049382716049383,
+                "stable_error_recall": null
+              }
+            }
+          },
+          "New": {
+            "queries": 714,
+            "wrong_source": 389,
+            "mapped_wrong": 319,
+            "pair_positive": 1187,
+            "pair_negative": 181597,
+            "hard_negative": 33196,
+            "purity": {
+              "1": 0.6064425770308123,
+              "5": 0.5190476190476191,
+              "10": 0.47324929971988794
+            },
+            "pair_auc": 0.9384292679070204,
+            "hard_auc": 0.3777461287090851,
+            "detection_auc": 0.7329009294047855,
+            "destination_recall": {
+              "1": 0.23136246786632392,
+              "3": 0.39845758354755784,
+              "5": 0.4961439588688946
+            },
+            "destination_recall_mapped": {
+              "1": 0.28213166144200624,
+              "3": 0.48589341692789967,
+              "5": 0.6050156739811913
+            },
+            "final_failure_n": 299,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.21739130434782608,
+              "5": 0.34448160535117056
+            },
+            "final_success_n": 90,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 68,
+                "tp": 62,
+                "errors": 389,
+                "coverage": 0.09523809523809523,
+                "precision": 0.9117647058823529,
+                "recall": 0.15938303341902313,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 135,
+                "tp": 110,
+                "errors": 389,
+                "coverage": 0.18907563025210083,
+                "precision": 0.8148148148148148,
+                "recall": 0.2827763496143959,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 271,
+                "tp": 212,
+                "errors": 389,
+                "coverage": 0.3795518207282913,
+                "precision": 0.7822878228782287,
+                "recall": 0.5449871465295629,
+                "stable_error_recall": null
+              }
+            }
+          }
+        },
+        "M5": {
+          "All": {
+            "queries": 1024,
+            "wrong_source": 470,
+            "mapped_wrong": 388,
+            "pair_positive": 1487,
+            "pair_negative": 260657,
+            "hard_negative": 49026,
+            "purity": {
+              "1": 0.6396484375,
+              "5": 0.5638671875,
+              "10": 0.5205078125
+            },
+            "pair_auc": 0.9436362038124247,
+            "hard_auc": 0.4497618312186079,
+            "detection_auc": 0.6588966126430601,
+            "destination_recall": {
+              "1": 0.2404255319148936,
+              "3": 0.39787234042553193,
+              "5": 0.4957446808510638
+            },
+            "destination_recall_mapped": {
+              "1": 0.2912371134020619,
+              "3": 0.48195876288659795,
+              "5": 0.6005154639175257
+            },
+            "final_failure_n": 357,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.20728291316526612,
+              "5": 0.33613445378151263
+            },
+            "final_success_n": 113,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 102,
+                "tp": 64,
+                "errors": 470,
+                "coverage": 0.099609375,
+                "precision": 0.6274509803921569,
+                "recall": 0.13617021276595745,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 204,
+                "tp": 123,
+                "errors": 470,
+                "coverage": 0.19921875,
+                "precision": 0.6029411764705882,
+                "recall": 0.26170212765957446,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 409,
+                "tp": 242,
+                "errors": 470,
+                "coverage": 0.3994140625,
+                "precision": 0.5916870415647921,
+                "recall": 0.5148936170212766,
+                "stable_error_recall": null
+              }
+            }
+          },
+          "Old": {
+            "queries": 310,
+            "wrong_source": 81,
+            "mapped_wrong": 69,
+            "pair_positive": 300,
+            "pair_negative": 79060,
+            "hard_negative": 15830,
+            "purity": {
+              "1": 0.7161290322580646,
+              "5": 0.6670967741935484,
+              "10": 0.6293548387096775
+            },
+            "pair_auc": 0.953954802259887,
+            "hard_auc": 0.6464596757212044,
+            "detection_auc": 0.6368806943770553,
+            "destination_recall": {
+              "1": 0.2839506172839506,
+              "3": 0.3950617283950617,
+              "5": 0.49382716049382713
+            },
+            "destination_recall_mapped": {
+              "1": 0.3333333333333333,
+              "3": 0.463768115942029,
+              "5": 0.5797101449275363
+            },
+            "final_failure_n": 58,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.15517241379310345,
+              "5": 0.29310344827586204
+            },
+            "final_success_n": 23,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 31,
+                "tp": 10,
+                "errors": 81,
+                "coverage": 0.1,
+                "precision": 0.3225806451612903,
+                "recall": 0.12345679012345678,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 70,
+                "tp": 24,
+                "errors": 81,
+                "coverage": 0.22580645161290322,
+                "precision": 0.34285714285714286,
+                "recall": 0.2962962962962963,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 132,
+                "tp": 43,
+                "errors": 81,
+                "coverage": 0.4258064516129032,
+                "precision": 0.32575757575757575,
+                "recall": 0.5308641975308642,
+                "stable_error_recall": null
+              }
+            }
+          },
+          "New": {
+            "queries": 714,
+            "wrong_source": 389,
+            "mapped_wrong": 319,
+            "pair_positive": 1187,
+            "pair_negative": 181597,
+            "hard_negative": 33196,
+            "purity": {
+              "1": 0.6064425770308123,
+              "5": 0.5190476190476191,
+              "10": 0.47324929971988794
+            },
+            "pair_auc": 0.9384292679070204,
+            "hard_auc": 0.3777461287090851,
+            "detection_auc": 0.6893889657899941,
+            "destination_recall": {
+              "1": 0.23136246786632392,
+              "3": 0.39845758354755784,
+              "5": 0.4961439588688946
+            },
+            "destination_recall_mapped": {
+              "1": 0.28213166144200624,
+              "3": 0.48589341692789967,
+              "5": 0.6050156739811913
+            },
+            "final_failure_n": 299,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.21739130434782608,
+              "5": 0.34448160535117056
+            },
+            "final_success_n": 90,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": null,
+            "persistent_error_n": null,
+            "stable_slot_error_auc": null,
+            "stable_error_auc": null,
+            "flags": {
+              "10": {
+                "n": 71,
+                "tp": 54,
+                "errors": 389,
+                "coverage": 0.09943977591036414,
+                "precision": 0.7605633802816901,
+                "recall": 0.13881748071979436,
+                "stable_error_recall": null
+              },
+              "20": {
+                "n": 134,
+                "tp": 99,
+                "errors": 389,
+                "coverage": 0.1876750700280112,
+                "precision": 0.7388059701492538,
+                "recall": 0.2544987146529563,
+                "stable_error_recall": null
+              },
+              "40": {
+                "n": 277,
+                "tp": 199,
+                "errors": 389,
+                "coverage": 0.38795518207282914,
+                "precision": 0.7184115523465704,
+                "recall": 0.5115681233933161,
+                "stable_error_recall": null
+              }
+            }
+          }
+        }
+      },
+      "bank_alignment": {
+        "unmatched_slots": [
+          102,
+          116,
+          131,
+          141,
+          154,
+          155,
+          162,
+          176,
+          183,
+          184,
+          191,
+          194
+        ],
+        "active_unmatched_slots": [
+          102,
+          131,
+          162,
+          183,
+          184,
+          191,
+          194
+        ],
+        "unmatched_classes": [
+          77,
+          78,
+          87,
+          98,
+          108,
+          113,
+          115,
+          136,
+          148,
+          153,
+          182,
+          195
+        ],
+        "alignment_accuracy": 0.55078125
+      }
+    },
+    "150": {
+      "checkpoint_sha256": "12a2a659ad01583e98c266b9163b373ae25e4fb07292d7cfff58487d9517c56a",
+      "g1_manifest_sha256": "c881604d08b3f0d645bb55f1eccbe023dc95fb422ff701aba96334b82b4e0011",
+      "frozen_sha256": "7866171c6cfb7dcb7a6a501a21c6df87df8d66cbb55c67b0697c775d906fe4ab",
+      "metrics": {
+        "M0": {
+          "All": {
+            "queries": 1024,
+            "wrong_source": 469,
+            "mapped_wrong": 384,
+            "pair_positive": 1487,
+            "pair_negative": 260657,
+            "hard_negative": 49237,
+            "purity": {
+              "1": 0.6240234375,
+              "5": 0.551953125,
+              "10": 0.51630859375
+            },
+            "pair_auc": 0.9417471010137621,
+            "hard_auc": 0.4360727144100616,
+            "detection_auc": 0.6180948539157494,
+            "destination_recall": {
+              "1": 0.24946695095948826,
+              "3": 0.40085287846481876,
+              "5": 0.5010660980810234
+            },
+            "destination_recall_mapped": {
+              "1": 0.3046875,
+              "3": 0.4895833333333333,
+              "5": 0.6119791666666666
+            },
+            "final_failure_n": 352,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.20170454545454544,
+              "5": 0.3352272727272727
+            },
+            "final_success_n": 117,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": 444,
+            "persistent_error_n": 452,
+            "stable_slot_error_auc": 0.6153849228875012,
+            "stable_error_auc": 0.5943616029822927,
+            "flags": {
+              "10": {
+                "n": 102,
+                "tp": 59,
+                "errors": 469,
+                "coverage": 0.099609375,
+                "precision": 0.5784313725490197,
+                "recall": 0.1257995735607676,
+                "stable_error_recall": 0.10810810810810811
+              },
+              "20": {
+                "n": 204,
+                "tp": 108,
+                "errors": 469,
+                "coverage": 0.19921875,
+                "precision": 0.5294117647058824,
+                "recall": 0.2302771855010661,
+                "stable_error_recall": 0.2072072072072072
+              },
+              "40": {
+                "n": 409,
+                "tp": 224,
+                "errors": 469,
+                "coverage": 0.3994140625,
+                "precision": 0.5476772616136919,
+                "recall": 0.47761194029850745,
+                "stable_error_recall": 0.46396396396396394
+              }
+            }
+          },
+          "Old": {
+            "queries": 310,
+            "wrong_source": 84,
+            "mapped_wrong": 75,
+            "pair_positive": 300,
+            "pair_negative": 79060,
+            "hard_negative": 15926,
+            "purity": {
+              "1": 0.6935483870967742,
+              "5": 0.6432258064516129,
+              "10": 0.6103225806451613
+            },
+            "pair_auc": 0.9528071506872419,
+            "hard_auc": 0.6222489430281719,
+            "detection_auc": 0.7481563421828908,
+            "destination_recall": {
+              "1": 0.32142857142857145,
+              "3": 0.47619047619047616,
+              "5": 0.5476190476190477
+            },
+            "destination_recall_mapped": {
+              "1": 0.36,
+              "3": 0.5333333333333333,
+              "5": 0.6133333333333333
+            },
+            "final_failure_n": 57,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.22807017543859648,
+              "5": 0.3333333333333333
+            },
+            "final_success_n": 27,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": 78,
+            "persistent_error_n": 79,
+            "stable_slot_error_auc": 0.7414908100748809,
+            "stable_error_auc": 0.728393015030946,
+            "flags": {
+              "10": {
+                "n": 22,
+                "tp": 10,
+                "errors": 84,
+                "coverage": 0.07096774193548387,
+                "precision": 0.45454545454545453,
+                "recall": 0.11904761904761904,
+                "stable_error_recall": 0.08974358974358974
+              },
+              "20": {
+                "n": 39,
+                "tp": 19,
+                "errors": 84,
+                "coverage": 0.12580645161290321,
+                "precision": 0.48717948717948717,
+                "recall": 0.2261904761904762,
+                "stable_error_recall": 0.1794871794871795
+              },
+              "40": {
+                "n": 80,
+                "tp": 42,
+                "errors": 84,
+                "coverage": 0.25806451612903225,
+                "precision": 0.525,
+                "recall": 0.5,
+                "stable_error_recall": 0.47435897435897434
+              }
+            }
+          },
+          "New": {
+            "queries": 714,
+            "wrong_source": 385,
+            "mapped_wrong": 309,
+            "pair_positive": 1187,
+            "pair_negative": 181597,
+            "hard_negative": 33311,
+            "purity": {
+              "1": 0.5938375350140056,
+              "5": 0.5123249299719888,
+              "10": 0.47549019607843135
+            },
+            "pair_auc": 0.9358833637379349,
+            "hard_auc": 0.3704225301887395,
+            "detection_auc": 0.5210594876248372,
+            "destination_recall": {
+              "1": 0.23376623376623376,
+              "3": 0.38441558441558443,
+              "5": 0.4909090909090909
+            },
+            "destination_recall_mapped": {
+              "1": 0.2912621359223301,
+              "3": 0.47896440129449835,
+              "5": 0.6116504854368932
+            },
+            "final_failure_n": 295,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.19661016949152543,
+              "5": 0.33559322033898303
+            },
+            "final_success_n": 90,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": 366,
+            "persistent_error_n": 373,
+            "stable_slot_error_auc": 0.5200163666121113,
+            "stable_error_auc": 0.49879090509390117,
+            "flags": {
+              "10": {
+                "n": 80,
+                "tp": 49,
+                "errors": 385,
+                "coverage": 0.11204481792717087,
+                "precision": 0.6125,
+                "recall": 0.12727272727272726,
+                "stable_error_recall": 0.11202185792349727
+              },
+              "20": {
+                "n": 165,
+                "tp": 89,
+                "errors": 385,
+                "coverage": 0.23109243697478993,
+                "precision": 0.5393939393939394,
+                "recall": 0.23116883116883116,
+                "stable_error_recall": 0.21311475409836064
+              },
+              "40": {
+                "n": 329,
+                "tp": 182,
+                "errors": 385,
+                "coverage": 0.46078431372549017,
+                "precision": 0.5531914893617021,
+                "recall": 0.4727272727272727,
+                "stable_error_recall": 0.46174863387978143
+              }
+            }
+          }
+        },
+        "M1": {
+          "All": {
+            "queries": 1024,
+            "wrong_source": 469,
+            "mapped_wrong": 384,
+            "pair_positive": 1487,
+            "pair_negative": 260657,
+            "hard_negative": 49237,
+            "purity": {
+              "1": 0.2265625,
+              "5": 0.139453125,
+              "10": 0.1060546875
+            },
+            "pair_auc": 0.6342710624827168,
+            "hard_auc": 0.4706442983000616,
+            "detection_auc": 0.5337405635913098,
+            "destination_recall": {
+              "1": 0.06183368869936034,
+              "3": 0.12153518123667377,
+              "5": 0.14712153518123666
+            },
+            "destination_recall_mapped": {
+              "1": 0.07552083333333333,
+              "3": 0.1484375,
+              "5": 0.1796875
+            },
+            "final_failure_n": 352,
+            "failure_recovery": {
+              "1": 0.03409090909090909,
+              "3": 0.06818181818181818,
+              "5": 0.09375
+            },
+            "final_success_n": 117,
+            "correct_to_wrong_vs_final": 0.8547008547008547,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.11168831168831168,
+            "stable_error_n": 444,
+            "persistent_error_n": 452,
+            "stable_slot_error_auc": 0.5375808501962791,
+            "stable_error_auc": 0.541383193538366,
+            "flags": {
+              "10": {
+                "n": 102,
+                "tp": 50,
+                "errors": 469,
+                "coverage": 0.099609375,
+                "precision": 0.49019607843137253,
+                "recall": 0.10660980810234541,
+                "stable_error_recall": 0.11261261261261261
+              },
+              "20": {
+                "n": 204,
+                "tp": 102,
+                "errors": 469,
+                "coverage": 0.19921875,
+                "precision": 0.5,
+                "recall": 0.21748400852878466,
+                "stable_error_recall": 0.22297297297297297
+              },
+              "40": {
+                "n": 409,
+                "tp": 199,
+                "errors": 469,
+                "coverage": 0.3994140625,
+                "precision": 0.48655256723716384,
+                "recall": 0.42430703624733473,
+                "stable_error_recall": 0.4391891891891892
+              }
+            }
+          },
+          "Old": {
+            "queries": 310,
+            "wrong_source": 84,
+            "mapped_wrong": 75,
+            "pair_positive": 300,
+            "pair_negative": 79060,
+            "hard_negative": 15926,
+            "purity": {
+              "1": 0.18387096774193548,
+              "5": 0.11225806451612903,
+              "10": 0.08
+            },
+            "pair_auc": 0.639976789779914,
+            "hard_auc": 0.5077904056260203,
+            "detection_auc": 0.48841129372102826,
+            "destination_recall": {
+              "1": 0.08333333333333333,
+              "3": 0.11904761904761904,
+              "5": 0.16666666666666666
+            },
+            "destination_recall_mapped": {
+              "1": 0.09333333333333334,
+              "3": 0.13333333333333333,
+              "5": 0.18666666666666668
+            },
+            "final_failure_n": 57,
+            "failure_recovery": {
+              "1": 0.03508771929824561,
+              "3": 0.05263157894736842,
+              "5": 0.08771929824561403
+            },
+            "final_success_n": 27,
+            "correct_to_wrong_vs_final": 0.8148148148148148,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.06315789473684211,
+            "stable_error_n": 78,
+            "persistent_error_n": 79,
+            "stable_slot_error_auc": 0.48496709779895625,
+            "stable_error_auc": 0.4840296198054819,
+            "flags": {
+              "10": {
+                "n": 41,
+                "tp": 9,
+                "errors": 84,
+                "coverage": 0.13225806451612904,
+                "precision": 0.21951219512195122,
+                "recall": 0.10714285714285714,
+                "stable_error_recall": 0.11538461538461539
+              },
+              "20": {
+                "n": 82,
+                "tp": 22,
+                "errors": 84,
+                "coverage": 0.2645161290322581,
+                "precision": 0.2682926829268293,
+                "recall": 0.2619047619047619,
+                "stable_error_recall": 0.2564102564102564
+              },
+              "40": {
+                "n": 150,
+                "tp": 37,
+                "errors": 84,
+                "coverage": 0.4838709677419355,
+                "precision": 0.24666666666666667,
+                "recall": 0.44047619047619047,
+                "stable_error_recall": 0.44871794871794873
+              }
+            }
+          },
+          "New": {
+            "queries": 714,
+            "wrong_source": 385,
+            "mapped_wrong": 309,
+            "pair_positive": 1187,
+            "pair_negative": 181597,
+            "hard_negative": 33311,
+            "purity": {
+              "1": 0.24509803921568626,
+              "5": 0.15126050420168066,
+              "10": 0.11736694677871148
+            },
+            "pair_auc": 0.6309357140037519,
+            "hard_auc": 0.45245892675641125,
+            "detection_auc": 0.5765365333754392,
+            "destination_recall": {
+              "1": 0.05714285714285714,
+              "3": 0.12207792207792208,
+              "5": 0.14285714285714285
+            },
+            "destination_recall_mapped": {
+              "1": 0.07119741100323625,
+              "3": 0.15210355987055016,
+              "5": 0.1779935275080906
+            },
+            "final_failure_n": 295,
+            "failure_recovery": {
+              "1": 0.03389830508474576,
+              "3": 0.0711864406779661,
+              "5": 0.09491525423728814
+            },
+            "final_success_n": 90,
+            "correct_to_wrong_vs_final": 0.8666666666666667,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.12758620689655173,
+            "stable_error_n": 366,
+            "persistent_error_n": 373,
+            "stable_slot_error_auc": 0.5835351882160393,
+            "stable_error_auc": 0.5875102066453113,
+            "flags": {
+              "10": {
+                "n": 61,
+                "tp": 41,
+                "errors": 385,
+                "coverage": 0.08543417366946779,
+                "precision": 0.6721311475409836,
+                "recall": 0.10649350649350649,
+                "stable_error_recall": 0.11202185792349727
+              },
+              "20": {
+                "n": 122,
+                "tp": 80,
+                "errors": 385,
+                "coverage": 0.17086834733893558,
+                "precision": 0.6557377049180327,
+                "recall": 0.2077922077922078,
+                "stable_error_recall": 0.21584699453551912
+              },
+              "40": {
+                "n": 259,
+                "tp": 162,
+                "errors": 385,
+                "coverage": 0.3627450980392157,
+                "precision": 0.6254826254826255,
+                "recall": 0.42077922077922075,
+                "stable_error_recall": 0.4371584699453552
+              }
+            }
+          }
+        },
+        "M2": {
+          "All": {
+            "queries": 1024,
+            "wrong_source": 469,
+            "mapped_wrong": 384,
+            "pair_positive": 1487,
+            "pair_negative": 260657,
+            "hard_negative": 49237,
+            "purity": {
+              "1": 0.56640625,
+              "5": 0.43125,
+              "10": 0.35234375
+            },
+            "pair_auc": 0.8936955036842794,
+            "hard_auc": 0.5984907018014881,
+            "detection_auc": 0.6918957336867784,
+            "destination_recall": {
+              "1": 0.19616204690831557,
+              "3": 0.3304904051172708,
+              "5": 0.36886993603411516
+            },
+            "destination_recall_mapped": {
+              "1": 0.23958333333333334,
+              "3": 0.4036458333333333,
+              "5": 0.4505208333333333
+            },
+            "final_failure_n": 352,
+            "failure_recovery": {
+              "1": 0.11647727272727272,
+              "3": 0.22727272727272727,
+              "5": 0.26136363636363635
+            },
+            "final_success_n": 117,
+            "correct_to_wrong_vs_final": 0.5641025641025641,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.4155844155844156,
+            "stable_error_n": 444,
+            "persistent_error_n": 452,
+            "stable_slot_error_auc": 0.6910902883823564,
+            "stable_error_auc": 0.6896784715750233,
+            "flags": {
+              "10": {
+                "n": 102,
+                "tp": 75,
+                "errors": 469,
+                "coverage": 0.099609375,
+                "precision": 0.7352941176470589,
+                "recall": 0.15991471215351813,
+                "stable_error_recall": 0.16216216216216217
+              },
+              "20": {
+                "n": 204,
+                "tp": 140,
+                "errors": 469,
+                "coverage": 0.19921875,
+                "precision": 0.6862745098039216,
+                "recall": 0.29850746268656714,
+                "stable_error_recall": 0.30855855855855857
+              },
+              "40": {
+                "n": 409,
+                "tp": 263,
+                "errors": 469,
+                "coverage": 0.3994140625,
+                "precision": 0.6430317848410758,
+                "recall": 0.5607675906183369,
+                "stable_error_recall": 0.5675675675675675
+              }
+            }
+          },
+          "Old": {
+            "queries": 310,
+            "wrong_source": 84,
+            "mapped_wrong": 75,
+            "pair_positive": 300,
+            "pair_negative": 79060,
+            "hard_negative": 15926,
+            "purity": {
+              "1": 0.49032258064516127,
+              "5": 0.35096774193548386,
+              "10": 0.26903225806451614
+            },
+            "pair_auc": 0.8853845602495996,
+            "hard_auc": 0.6181880781949852,
+            "detection_auc": 0.6426991150442477,
+            "destination_recall": {
+              "1": 0.2976190476190476,
+              "3": 0.4166666666666667,
+              "5": 0.44047619047619047
+            },
+            "destination_recall_mapped": {
+              "1": 0.3333333333333333,
+              "3": 0.4666666666666667,
+              "5": 0.49333333333333335
+            },
+            "final_failure_n": 57,
+            "failure_recovery": {
+              "1": 0.22807017543859648,
+              "3": 0.3157894736842105,
+              "5": 0.3508771929824561
+            },
+            "final_success_n": 27,
+            "correct_to_wrong_vs_final": 0.5555555555555556,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.3368421052631579,
+            "stable_error_n": 78,
+            "persistent_error_n": 79,
+            "stable_slot_error_auc": 0.636147038801906,
+            "stable_error_auc": 0.6308023872679045,
+            "flags": {
+              "10": {
+                "n": 36,
+                "tp": 15,
+                "errors": 84,
+                "coverage": 0.11612903225806452,
+                "precision": 0.4166666666666667,
+                "recall": 0.17857142857142858,
+                "stable_error_recall": 0.16666666666666666
+              },
+              "20": {
+                "n": 68,
+                "tp": 29,
+                "errors": 84,
+                "coverage": 0.21935483870967742,
+                "precision": 0.4264705882352941,
+                "recall": 0.34523809523809523,
+                "stable_error_recall": 0.34615384615384615
+              },
+              "40": {
+                "n": 139,
+                "tp": 52,
+                "errors": 84,
+                "coverage": 0.4483870967741935,
+                "precision": 0.37410071942446044,
+                "recall": 0.6190476190476191,
+                "stable_error_recall": 0.6153846153846154
+              }
+            }
+          },
+          "New": {
+            "queries": 714,
+            "wrong_source": 385,
+            "mapped_wrong": 309,
+            "pair_positive": 1187,
+            "pair_negative": 181597,
+            "hard_negative": 33311,
+            "purity": {
+              "1": 0.5994397759103641,
+              "5": 0.4661064425770308,
+              "10": 0.388515406162465
+            },
+            "pair_auc": 0.8952399268942344,
+            "hard_auc": 0.5822855230443318,
+            "detection_auc": 0.7338491295938104,
+            "destination_recall": {
+              "1": 0.17402597402597403,
+              "3": 0.3116883116883117,
+              "5": 0.35324675324675325
+            },
+            "destination_recall_mapped": {
+              "1": 0.2168284789644013,
+              "3": 0.3883495145631068,
+              "5": 0.4401294498381877
+            },
+            "final_failure_n": 295,
+            "failure_recovery": {
+              "1": 0.09491525423728814,
+              "3": 0.21016949152542372,
+              "5": 0.2440677966101695
+            },
+            "final_success_n": 90,
+            "correct_to_wrong_vs_final": 0.5666666666666667,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.4413793103448276,
+            "stable_error_n": 366,
+            "persistent_error_n": 373,
+            "stable_slot_error_auc": 0.7346563011456629,
+            "stable_error_auc": 0.7322953960178381,
+            "flags": {
+              "10": {
+                "n": 66,
+                "tp": 60,
+                "errors": 385,
+                "coverage": 0.09243697478991597,
+                "precision": 0.9090909090909091,
+                "recall": 0.15584415584415584,
+                "stable_error_recall": 0.16120218579234974
+              },
+              "20": {
+                "n": 136,
+                "tp": 111,
+                "errors": 385,
+                "coverage": 0.19047619047619047,
+                "precision": 0.8161764705882353,
+                "recall": 0.2883116883116883,
+                "stable_error_recall": 0.3005464480874317
+              },
+              "40": {
+                "n": 270,
+                "tp": 211,
+                "errors": 385,
+                "coverage": 0.37815126050420167,
+                "precision": 0.7814814814814814,
+                "recall": 0.548051948051948,
+                "stable_error_recall": 0.5573770491803278
+              }
+            }
+          }
+        },
+        "M3": {
+          "All": {
+            "queries": 1024,
+            "wrong_source": 469,
+            "mapped_wrong": 384,
+            "pair_positive": 1487,
+            "pair_negative": 260657,
+            "hard_negative": 49237,
+            "purity": {
+              "1": 0.658203125,
+              "5": 0.591796875,
+              "10": 0.53857421875
+            },
+            "pair_auc": 0.9570799857591246,
+            "hard_auc": 0.5086277523044702,
+            "detection_auc": 0.6728135384851803,
+            "destination_recall": {
+              "1": 0.2771855010660981,
+              "3": 0.4541577825159915,
+              "5": 0.5309168443496801
+            },
+            "destination_recall_mapped": {
+              "1": 0.3385416666666667,
+              "3": 0.5546875,
+              "5": 0.6484375
+            },
+            "final_failure_n": 352,
+            "failure_recovery": {
+              "1": 0.09659090909090909,
+              "3": 0.29261363636363635,
+              "5": 0.3806818181818182
+            },
+            "final_success_n": 117,
+            "correct_to_wrong_vs_final": 0.1794871794871795,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.3142857142857143,
+            "stable_error_n": 444,
+            "persistent_error_n": 452,
+            "stable_slot_error_auc": 0.6706228962958817,
+            "stable_error_auc": 0.6547918608263436,
+            "flags": {
+              "10": {
+                "n": 102,
+                "tp": 76,
+                "errors": 469,
+                "coverage": 0.099609375,
+                "precision": 0.7450980392156863,
+                "recall": 0.16204690831556504,
+                "stable_error_recall": 0.16216216216216217
+              },
+              "20": {
+                "n": 204,
+                "tp": 143,
+                "errors": 469,
+                "coverage": 0.19921875,
+                "precision": 0.7009803921568627,
+                "recall": 0.3049040511727079,
+                "stable_error_recall": 0.29954954954954954
+              },
+              "40": {
+                "n": 409,
+                "tp": 241,
+                "errors": 469,
+                "coverage": 0.3994140625,
+                "precision": 0.589242053789731,
+                "recall": 0.5138592750533049,
+                "stable_error_recall": 0.5067567567567568
+              }
+            }
+          },
+          "Old": {
+            "queries": 310,
+            "wrong_source": 84,
+            "mapped_wrong": 75,
+            "pair_positive": 300,
+            "pair_negative": 79060,
+            "hard_negative": 15926,
+            "purity": {
+              "1": 0.7161290322580646,
+              "5": 0.6451612903225806,
+              "10": 0.5806451612903226
+            },
+            "pair_auc": 0.9661524158866683,
+            "hard_auc": 0.6319765373184311,
+            "detection_auc": 0.6949009692372524,
+            "destination_recall": {
+              "1": 0.35714285714285715,
+              "3": 0.5238095238095238,
+              "5": 0.5952380952380952
+            },
+            "destination_recall_mapped": {
+              "1": 0.4,
+              "3": 0.5866666666666667,
+              "5": 0.6666666666666666
+            },
+            "final_failure_n": 57,
+            "failure_recovery": {
+              "1": 0.14035087719298245,
+              "3": 0.3684210526315789,
+              "5": 0.40350877192982454
+            },
+            "final_success_n": 27,
+            "correct_to_wrong_vs_final": 0.18518518518518517,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.2736842105263158,
+            "stable_error_n": 78,
+            "persistent_error_n": 79,
+            "stable_slot_error_auc": 0.6828908554572272,
+            "stable_error_auc": 0.6734637488947834,
+            "flags": {
+              "10": {
+                "n": 27,
+                "tp": 17,
+                "errors": 84,
+                "coverage": 0.08709677419354839,
+                "precision": 0.6296296296296297,
+                "recall": 0.20238095238095238,
+                "stable_error_recall": 0.19230769230769232
+              },
+              "20": {
+                "n": 45,
+                "tp": 26,
+                "errors": 84,
+                "coverage": 0.14516129032258066,
+                "precision": 0.5777777777777777,
+                "recall": 0.30952380952380953,
+                "stable_error_recall": 0.3076923076923077
+              },
+              "40": {
+                "n": 92,
+                "tp": 38,
+                "errors": 84,
+                "coverage": 0.2967741935483871,
+                "precision": 0.41304347826086957,
+                "recall": 0.4523809523809524,
+                "stable_error_recall": 0.4358974358974359
+              }
+            }
+          },
+          "New": {
+            "queries": 714,
+            "wrong_source": 385,
+            "mapped_wrong": 309,
+            "pair_positive": 1187,
+            "pair_negative": 181597,
+            "hard_negative": 33311,
+            "purity": {
+              "1": 0.6330532212885154,
+              "5": 0.5686274509803921,
+              "10": 0.5203081232492998
+            },
+            "pair_auc": 0.9532172364092039,
+            "hard_auc": 0.4566811912254167,
+            "detection_auc": 0.6451505940867642,
+            "destination_recall": {
+              "1": 0.2597402597402597,
+              "3": 0.43896103896103894,
+              "5": 0.5168831168831168
+            },
+            "destination_recall_mapped": {
+              "1": 0.32362459546925565,
+              "3": 0.5469255663430421,
+              "5": 0.6440129449838188
+            },
+            "final_failure_n": 295,
+            "failure_recovery": {
+              "1": 0.08813559322033898,
+              "3": 0.27796610169491526,
+              "5": 0.376271186440678
+            },
+            "final_success_n": 90,
+            "correct_to_wrong_vs_final": 0.17777777777777778,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.3275862068965517,
+            "stable_error_n": 366,
+            "persistent_error_n": 373,
+            "stable_slot_error_auc": 0.6453600654664484,
+            "stable_error_auc": 0.6275909176559261,
+            "flags": {
+              "10": {
+                "n": 75,
+                "tp": 59,
+                "errors": 385,
+                "coverage": 0.10504201680672269,
+                "precision": 0.7866666666666666,
+                "recall": 0.15324675324675324,
+                "stable_error_recall": 0.1557377049180328
+              },
+              "20": {
+                "n": 159,
+                "tp": 117,
+                "errors": 385,
+                "coverage": 0.22268907563025211,
+                "precision": 0.7358490566037735,
+                "recall": 0.3038961038961039,
+                "stable_error_recall": 0.2978142076502732
+              },
+              "40": {
+                "n": 317,
+                "tp": 203,
+                "errors": 385,
+                "coverage": 0.44397759103641454,
+                "precision": 0.6403785488958991,
+                "recall": 0.5272727272727272,
+                "stable_error_recall": 0.5218579234972678
+              }
+            }
+          }
+        },
+        "M4": {
+          "All": {
+            "queries": 1024,
+            "wrong_source": 469,
+            "mapped_wrong": 384,
+            "pair_positive": 1487,
+            "pair_negative": 260657,
+            "hard_negative": 49237,
+            "purity": {
+              "1": 0.6240234375,
+              "5": 0.551953125,
+              "10": 0.51630859375
+            },
+            "pair_auc": 0.9417471010137621,
+            "hard_auc": 0.4360727144100616,
+            "detection_auc": 0.6918957336867784,
+            "destination_recall": {
+              "1": 0.24946695095948826,
+              "3": 0.40085287846481876,
+              "5": 0.5010660980810234
+            },
+            "destination_recall_mapped": {
+              "1": 0.3046875,
+              "3": 0.4895833333333333,
+              "5": 0.6119791666666666
+            },
+            "final_failure_n": 352,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.20170454545454544,
+              "5": 0.3352272727272727
+            },
+            "final_success_n": 117,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": 444,
+            "persistent_error_n": 452,
+            "stable_slot_error_auc": 0.6910902883823564,
+            "stable_error_auc": 0.6896784715750233,
+            "flags": {
+              "10": {
+                "n": 102,
+                "tp": 75,
+                "errors": 469,
+                "coverage": 0.099609375,
+                "precision": 0.7352941176470589,
+                "recall": 0.15991471215351813,
+                "stable_error_recall": 0.16216216216216217
+              },
+              "20": {
+                "n": 204,
+                "tp": 140,
+                "errors": 469,
+                "coverage": 0.19921875,
+                "precision": 0.6862745098039216,
+                "recall": 0.29850746268656714,
+                "stable_error_recall": 0.30855855855855857
+              },
+              "40": {
+                "n": 409,
+                "tp": 263,
+                "errors": 469,
+                "coverage": 0.3994140625,
+                "precision": 0.6430317848410758,
+                "recall": 0.5607675906183369,
+                "stable_error_recall": 0.5675675675675675
+              }
+            }
+          },
+          "Old": {
+            "queries": 310,
+            "wrong_source": 84,
+            "mapped_wrong": 75,
+            "pair_positive": 300,
+            "pair_negative": 79060,
+            "hard_negative": 15926,
+            "purity": {
+              "1": 0.6935483870967742,
+              "5": 0.6432258064516129,
+              "10": 0.6103225806451613
+            },
+            "pair_auc": 0.9528071506872419,
+            "hard_auc": 0.6222489430281719,
+            "detection_auc": 0.6426991150442477,
+            "destination_recall": {
+              "1": 0.32142857142857145,
+              "3": 0.47619047619047616,
+              "5": 0.5476190476190477
+            },
+            "destination_recall_mapped": {
+              "1": 0.36,
+              "3": 0.5333333333333333,
+              "5": 0.6133333333333333
+            },
+            "final_failure_n": 57,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.22807017543859648,
+              "5": 0.3333333333333333
+            },
+            "final_success_n": 27,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": 78,
+            "persistent_error_n": 79,
+            "stable_slot_error_auc": 0.636147038801906,
+            "stable_error_auc": 0.6308023872679045,
+            "flags": {
+              "10": {
+                "n": 36,
+                "tp": 15,
+                "errors": 84,
+                "coverage": 0.11612903225806452,
+                "precision": 0.4166666666666667,
+                "recall": 0.17857142857142858,
+                "stable_error_recall": 0.16666666666666666
+              },
+              "20": {
+                "n": 68,
+                "tp": 29,
+                "errors": 84,
+                "coverage": 0.21935483870967742,
+                "precision": 0.4264705882352941,
+                "recall": 0.34523809523809523,
+                "stable_error_recall": 0.34615384615384615
+              },
+              "40": {
+                "n": 139,
+                "tp": 52,
+                "errors": 84,
+                "coverage": 0.4483870967741935,
+                "precision": 0.37410071942446044,
+                "recall": 0.6190476190476191,
+                "stable_error_recall": 0.6153846153846154
+              }
+            }
+          },
+          "New": {
+            "queries": 714,
+            "wrong_source": 385,
+            "mapped_wrong": 309,
+            "pair_positive": 1187,
+            "pair_negative": 181597,
+            "hard_negative": 33311,
+            "purity": {
+              "1": 0.5938375350140056,
+              "5": 0.5123249299719888,
+              "10": 0.47549019607843135
+            },
+            "pair_auc": 0.9358833637379349,
+            "hard_auc": 0.3704225301887395,
+            "detection_auc": 0.7338491295938104,
+            "destination_recall": {
+              "1": 0.23376623376623376,
+              "3": 0.38441558441558443,
+              "5": 0.4909090909090909
+            },
+            "destination_recall_mapped": {
+              "1": 0.2912621359223301,
+              "3": 0.47896440129449835,
+              "5": 0.6116504854368932
+            },
+            "final_failure_n": 295,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.19661016949152543,
+              "5": 0.33559322033898303
+            },
+            "final_success_n": 90,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": 366,
+            "persistent_error_n": 373,
+            "stable_slot_error_auc": 0.7346563011456629,
+            "stable_error_auc": 0.7322953960178381,
+            "flags": {
+              "10": {
+                "n": 66,
+                "tp": 60,
+                "errors": 385,
+                "coverage": 0.09243697478991597,
+                "precision": 0.9090909090909091,
+                "recall": 0.15584415584415584,
+                "stable_error_recall": 0.16120218579234974
+              },
+              "20": {
+                "n": 136,
+                "tp": 111,
+                "errors": 385,
+                "coverage": 0.19047619047619047,
+                "precision": 0.8161764705882353,
+                "recall": 0.2883116883116883,
+                "stable_error_recall": 0.3005464480874317
+              },
+              "40": {
+                "n": 270,
+                "tp": 211,
+                "errors": 385,
+                "coverage": 0.37815126050420167,
+                "precision": 0.7814814814814814,
+                "recall": 0.548051948051948,
+                "stable_error_recall": 0.5573770491803278
+              }
+            }
+          }
+        },
+        "M5": {
+          "All": {
+            "queries": 1024,
+            "wrong_source": 469,
+            "mapped_wrong": 384,
+            "pair_positive": 1487,
+            "pair_negative": 260657,
+            "hard_negative": 49237,
+            "purity": {
+              "1": 0.6240234375,
+              "5": 0.551953125,
+              "10": 0.51630859375
+            },
+            "pair_auc": 0.9417471010137621,
+            "hard_auc": 0.4360727144100616,
+            "detection_auc": 0.6668760444879848,
+            "destination_recall": {
+              "1": 0.24946695095948826,
+              "3": 0.40085287846481876,
+              "5": 0.5010660980810234
+            },
+            "destination_recall_mapped": {
+              "1": 0.3046875,
+              "3": 0.4895833333333333,
+              "5": 0.6119791666666666
+            },
+            "final_failure_n": 352,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.20170454545454544,
+              "5": 0.3352272727272727
+            },
+            "final_success_n": 117,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": 444,
+            "persistent_error_n": 452,
+            "stable_slot_error_auc": 0.6668592147237301,
+            "stable_error_auc": 0.6714410531220876,
+            "flags": {
+              "10": {
+                "n": 102,
+                "tp": 60,
+                "errors": 469,
+                "coverage": 0.099609375,
+                "precision": 0.5882352941176471,
+                "recall": 0.1279317697228145,
+                "stable_error_recall": 0.13513513513513514
+              },
+              "20": {
+                "n": 204,
+                "tp": 123,
+                "errors": 469,
+                "coverage": 0.19921875,
+                "precision": 0.6029411764705882,
+                "recall": 0.2622601279317697,
+                "stable_error_recall": 0.2725225225225225
+              },
+              "40": {
+                "n": 409,
+                "tp": 242,
+                "errors": 469,
+                "coverage": 0.3994140625,
+                "precision": 0.5916870415647921,
+                "recall": 0.5159914712153518,
+                "stable_error_recall": 0.5247747747747747
+              }
+            }
+          },
+          "Old": {
+            "queries": 310,
+            "wrong_source": 84,
+            "mapped_wrong": 75,
+            "pair_positive": 300,
+            "pair_negative": 79060,
+            "hard_negative": 15926,
+            "purity": {
+              "1": 0.6935483870967742,
+              "5": 0.6432258064516129,
+              "10": 0.6103225806451613
+            },
+            "pair_auc": 0.9528071506872419,
+            "hard_auc": 0.6222489430281719,
+            "detection_auc": 0.6595554150863886,
+            "destination_recall": {
+              "1": 0.32142857142857145,
+              "3": 0.47619047619047616,
+              "5": 0.5476190476190477
+            },
+            "destination_recall_mapped": {
+              "1": 0.36,
+              "3": 0.5333333333333333,
+              "5": 0.6133333333333333
+            },
+            "final_failure_n": 57,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.22807017543859648,
+              "5": 0.3333333333333333
+            },
+            "final_success_n": 27,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": 78,
+            "persistent_error_n": 79,
+            "stable_slot_error_auc": 0.6567676423871115,
+            "stable_error_auc": 0.6515251989389921,
+            "flags": {
+              "10": {
+                "n": 30,
+                "tp": 8,
+                "errors": 84,
+                "coverage": 0.0967741935483871,
+                "precision": 0.26666666666666666,
+                "recall": 0.09523809523809523,
+                "stable_error_recall": 0.10256410256410256
+              },
+              "20": {
+                "n": 69,
+                "tp": 27,
+                "errors": 84,
+                "coverage": 0.22258064516129034,
+                "precision": 0.391304347826087,
+                "recall": 0.32142857142857145,
+                "stable_error_recall": 0.32051282051282054
+              },
+              "40": {
+                "n": 135,
+                "tp": 45,
+                "errors": 84,
+                "coverage": 0.43548387096774194,
+                "precision": 0.3333333333333333,
+                "recall": 0.5357142857142857,
+                "stable_error_recall": 0.5256410256410257
+              }
+            }
+          },
+          "New": {
+            "queries": 714,
+            "wrong_source": 385,
+            "mapped_wrong": 309,
+            "pair_positive": 1187,
+            "pair_negative": 181597,
+            "hard_negative": 33311,
+            "purity": {
+              "1": 0.5938375350140056,
+              "5": 0.5123249299719888,
+              "10": 0.47549019607843135
+            },
+            "pair_auc": 0.9358833637379349,
+            "hard_auc": 0.3704225301887395,
+            "detection_auc": 0.6910867248253266,
+            "destination_recall": {
+              "1": 0.23376623376623376,
+              "3": 0.38441558441558443,
+              "5": 0.4909090909090909
+            },
+            "destination_recall_mapped": {
+              "1": 0.2912621359223301,
+              "3": 0.47896440129449835,
+              "5": 0.6116504854368932
+            },
+            "final_failure_n": 295,
+            "failure_recovery": {
+              "1": 0.0,
+              "3": 0.19661016949152543,
+              "5": 0.33559322033898303
+            },
+            "final_success_n": 90,
+            "correct_to_wrong_vs_final": 0.0,
+            "move_from_correct_source_to_wrong": 1.0,
+            "purity1_on_final_misses": 0.0,
+            "stable_error_n": 366,
+            "persistent_error_n": 373,
+            "stable_slot_error_auc": 0.6920008183306056,
+            "stable_error_auc": 0.6991473525532316,
+            "flags": {
+              "10": {
+                "n": 72,
+                "tp": 52,
+                "errors": 385,
+                "coverage": 0.10084033613445378,
+                "precision": 0.7222222222222222,
+                "recall": 0.13506493506493505,
+                "stable_error_recall": 0.14207650273224043
+              },
+              "20": {
+                "n": 135,
+                "tp": 96,
+                "errors": 385,
+                "coverage": 0.18907563025210083,
+                "precision": 0.7111111111111111,
+                "recall": 0.24935064935064935,
+                "stable_error_recall": 0.26229508196721313
+              },
+              "40": {
+                "n": 274,
+                "tp": 197,
+                "errors": 385,
+                "coverage": 0.38375350140056025,
+                "precision": 0.718978102189781,
+                "recall": 0.5116883116883116,
+                "stable_error_recall": 0.5245901639344263
+              }
+            }
+          }
+        }
+      },
+      "bank_alignment": {
+        "unmatched_slots": [
+          102,
+          116,
+          131,
+          141,
+          154,
+          155,
+          162,
+          176,
+          183,
+          184,
+          191,
+          194
+        ],
+        "active_unmatched_slots": [
+          102,
+          131,
+          162,
+          183,
+          184,
+          191,
+          194
+        ],
+        "unmatched_classes": [
+          77,
+          78,
+          98,
+          108,
+          113,
+          115,
+          136,
+          148,
+          153,
+          178,
+          182,
+          195
+        ],
+        "alignment_accuracy": 0.55078125
+      }
+    }
+  },
+  "seconds": 150.28200000000652
+}
