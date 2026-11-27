@@ -1,5 +1,6 @@
 """G2 patch-token geometry on the frozen R2 checkpoints and G1 Cars IDs."""
 
+import argparse
 import copy
 import json
 import time
@@ -139,6 +140,8 @@ def match(disk, q, shortlist):
 
 
 def short_pack(score, q, shortlist, slots):
+    if not np.isfinite(score).all():
+        raise ValueError("Shortlist peer scores must be finite")
     rows = np.arange(len(q))[:, None]
     order = np.argsort(-score, axis=1, kind="stable")
     rank = shortlist[rows, order]
@@ -151,7 +154,7 @@ def short_pack(score, q, shortlist, slots):
     return {
         "neighbors": rank[:, :10],
         "pair": np.tile(score, (1, 2)),
-        "wrong": support.max(1) - own,
+        "wrong": support.max(1) - own,  # -inf marks no competing slot.
         "dest": dest,
     }
 
@@ -197,7 +200,25 @@ def freeze(final, mean, spatial, disk, base, q, bank, ids, slots):
     return full, short
 
 
-def evaluate(full, short, ids, q, bank, slots, truth):
+def shortlist_eligible(short, q, slots):
+    peers, repeated = np.split(short["pairs"], 2, axis=1)
+    np.testing.assert_array_equal(peers, repeated)
+    eligible = (slots[peers] != slots[q, None]).any(axis=1)
+    for method in SHORT:
+        scores = short[f"{method}_wrong"]
+        dest = short[f"{method}_dest"]
+        if (
+            not np.array_equal(np.isfinite(scores), eligible)
+            or not np.array_equal(np.isneginf(scores), ~eligible)
+            or not np.array_equal((dest >= 0).any(axis=1), eligible)
+        ):
+            raise ValueError(
+                f"{method}: scores or destinations disagree with slot availability"
+            )
+    return eligible
+
+
+def evaluate(full, short, ids, q, bank, slots, truth, eligible):
     result = {}
     for scope, records, methods, n in (
         ("full", full, FULL, 256),
@@ -213,6 +234,7 @@ def evaluate(full, short, ids, q, bank, slots, truth):
             methods=methods,
             baseline=methods[0],
             uniform_count=n,
+            detection_eligible=eligible if scope == "shortlist" else None,
         )
     mp, _ = align(
         ids[bank].tolist(), dict(zip(ids.tolist(), slots.tolist(), strict=True)), truth
@@ -221,9 +243,17 @@ def evaluate(full, short, ids, q, bank, slots, truth):
     y = truth[ids[q]]
     wrong = table[slots[q]] != y
     available = (table[slots[short["pairs"][:, :64]]] == y[:, None]).any(1)
-    ceiling = {}
+    ceiling, detection = {}, {}
     for group, group_mask in (("All", y >= 0), ("Old", y < 98), ("New", y >= 98)):
         mask = group_mask & wrong
+        excluded = group_mask & ~eligible
+        detection[group] = {
+            "queries": int(group_mask.sum()),
+            "eligible": int((group_mask & eligible).sum()),
+            "excluded": int(excluded.sum()),
+            "coverage": g1.rate(eligible[group_mask]),
+            "excluded_wrong_source": int((excluded & wrong).sum()),
+        }
         ceiling[group] = {
             "wrong_sources": int(mask.sum()),
             "reachable": int((mask & available).sum()),
@@ -247,7 +277,7 @@ def evaluate(full, short, ids, q, bank, slots, truth):
                         ((table[p] == y) | (table[base] == y))[mask]
                     ),
                 )
-    return result, coverage, ceiling
+    return result, coverage, ceiling, detection
 
 
 def report(result):
@@ -284,6 +314,12 @@ def report(result):
             "of wrong-source queries with a correct top-1 destination from either scoring rule."
         ),
         "",
+        (
+            "Shortlist error AUROC uses a common subset for all three shortlist rules. "
+            "Eligible queries have at least one peer in a different slot. Each excluded query "
+            "has a structural −∞ score for all three rules. All other metrics keep their original denominators."
+        ),
+        "",
         "| Epoch / group / rule | Purity@1/5/10 | Pair / hard AUC | Error AUC | Destination R@1/3/5 | Recovery / regression | Either-correct |",
         "|---|---|---|---:|---|---|---:|",
     ]
@@ -318,9 +354,22 @@ def report(result):
             )
     lines += [
         "",
+        "## Shortlist error AUROC coverage",
+        "",
+        "| Epoch / group | Eligible / queries | Excluded | Excluded wrong sources | Coverage |",
+        "|---|---:|---:|---:|---:|",
+    ]
+    for epoch, snapshot in result["snapshots"].items():
+        for group, m in snapshot["detection_coverage"].items():
+            lines.append(
+                f"| {epoch} / {group} | {m['eligible']} / {m['queries']} | "
+                f"{m['excluded']} | {m['excluded_wrong_source']} | {f(m['coverage'])} |"
+            )
+    lines += [
+        "",
         (
-            f"Runtime {result['seconds'] / 60:.1f} minutes. Exact prefix cache reused for "
-            f"{result['prefix_cached_rows']} images; the shared frozen prefix ran once per remaining image."
+            f"Sealed evaluation took {result['sealed_seconds']:.1f} seconds. The frozen predictions "
+            f"reused exact prefix tokens for {result['prefix_cached_rows']} images."
         ),
         "",
         "[Counts, disagreement metrics and frozen prediction digests](r2_patch_geometry.json)",
@@ -329,7 +378,6 @@ def report(result):
 
 
 def main():
-    t0 = time.monotonic()
     LOCAL.mkdir(exist_ok=True)
     info = json.loads(G1_REPORT.read_text())
     ids = np.load(g1.WORK / "ids.npy")
@@ -345,7 +393,6 @@ def main():
         "local_chunk": PATCH_CHUNK,
         "snapshots": {},
     }
-    inputs = {}
     for idx, epoch in enumerate(g1.EPOCHS, 1):
         key = str(epoch)
         manifest = g1.LOCAL / f"frozen-{epoch}.npz"
@@ -356,7 +403,6 @@ def main():
             assert np.array_equal(base["ids"], ids)
             assert ids[q].tolist() == info["query_ids"]
             assert len(bank) == info["bank"] and not np.intersect1d(q, bank).size
-            inputs[key] = (q, bank, slots)
             disk, mean, spatial = patch[epoch]
             full, short = freeze(
                 final[idx, 0], mean, spatial, disk, base, q, bank, ids, slots
@@ -378,13 +424,25 @@ def main():
         }
         print("Frozen G2", epoch, flush=True)
     write_json(LOCAL / "frozen-provenance.json", result)
-    from scripts.audit_r2_evidence import sealed_labels
+    seal()
 
-    truth = sealed_labels()
+
+def seal():
+    t0 = time.monotonic()
+    provenance = LOCAL / "frozen-provenance.json"
+    result = json.loads(provenance.read_text())
+    result["frozen_provenance_sha256"] = file_digest(provenance)
+    if file_digest(G1_REPORT) != result["g1_report_sha256"]:
+        raise ValueError("G1 report hash differs from frozen provenance")
+    if result["snapshots"].keys() != {str(epoch) for epoch in g1.EPOCHS}:
+        raise ValueError("Frozen provenance must cover both checkpoints")
+
+    inputs = {}
     for key, snapshot in result["snapshots"].items():
         path = LOCAL / f"frozen-{key}.npz"
-        assert file_digest(path) == snapshot["frozen_sha256"]
-        with np.load(path) as frozen:
+        if file_digest(path) != snapshot["frozen_sha256"]:
+            raise ValueError(f"{path}: SHA256 differs from frozen provenance")
+        with np.load(path, allow_pickle=False) as frozen:
             full = {
                 k.removeprefix("full_"): frozen[k]
                 for k in frozen.files
@@ -395,14 +453,37 @@ def main():
                 for k in frozen.files
                 if k.startswith("short_")
             }
-        metrics, coverage, ceiling = evaluate(full, short, ids, *inputs[key], truth)
-        snapshot.update(
-            metrics=metrics, bank_alignment=coverage, coverage_ceiling=ceiling
+            ids, q, bank, slots = (frozen[k] for k in ("ids", "q", "bank", "slots"))
+        eligible = shortlist_eligible(short, q, slots)
+        inputs[key] = full, short, ids, q, bank, slots, eligible
+        print(
+            f"Verified G2 {key} SHA256 and {int((~eligible).sum())} structural exclusions",
+            flush=True,
         )
-    result["seconds"] = time.monotonic() - t0
+
+    from scripts.audit_r2_evidence import sealed_labels
+
+    truth = sealed_labels()
+    for key, snapshot in result["snapshots"].items():
+        full, short, ids, q, bank, slots, eligible = inputs[key]
+        metrics, coverage, ceiling, detection = evaluate(
+            full, short, ids, q, bank, slots, truth, eligible
+        )
+        snapshot.update(
+            metrics=metrics,
+            bank_alignment=coverage,
+            coverage_ceiling=ceiling,
+            detection_coverage=detection,
+        )
+    result["sealed_seconds"] = time.monotonic() - t0
     report(result)
     write_json(OUT, json_native(result))
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--sealed-only", action="store_true")
+    if parser.parse_args().sealed_only:
+        seal()
+    else:
+        main()

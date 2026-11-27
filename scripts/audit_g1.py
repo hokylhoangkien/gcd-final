@@ -213,6 +213,7 @@ def evaluate(
     methods=METHODS,
     baseline="B11",
     uniform_count=256,
+    detection_eligible=None,
 ):
     mp, coverage = align(
         ids[bank].tolist(), dict(zip(ids.tolist(), slots.tolist(), strict=True)), truth
@@ -238,6 +239,9 @@ def evaluate(
             hard_scores = np.r_[ordinary[p], hard[~h]]
             failure = mask & wrong & ~base
             success = mask & wrong & base
+            detection = (
+                mask if detection_eligible is None else mask & detection_eligible
+            )
             out[m][g] = {
                 "queries": int(mask.sum()),
                 "wrong_source": int((mask & wrong).sum()),
@@ -250,7 +254,7 @@ def evaluate(
                 "hard_auc": auc(
                     np.r_[np.ones(p.sum()), np.zeros((~h).sum())], hard_scores
                 ),
-                "detection_auc": auc(wrong[mask], frozen[f"{m}_wrong"][mask]),
+                "detection_auc": auc(wrong[detection], frozen[f"{m}_wrong"][detection]),
                 "destination_recall": {
                     k: rate(hit[mask & wrong, :k].any(1)) for k in (1, 3, 5)
                 },
