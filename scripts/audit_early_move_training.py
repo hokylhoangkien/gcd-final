@@ -112,7 +112,7 @@ def setup():
     )
 
 
-def paired_batch(models, batch, pool, direct, seeds, epoch, criterion):
+def paired_batch(models, batch, pool, direct, seeds, epoch, criterion, *, names=ARMS):
     candidates, counters = {}, {}
     for a, lookup in (("E1", direct), ("E2", pool)):
         repair.seed_all(seeds[1])
@@ -130,7 +130,8 @@ def paired_batch(models, batch, pool, direct, seeds, epoch, criterion):
             "applied": n,
         }
     }
-    for a, actions in zip(ARMS, ([], candidates["E1"][:n], random), strict=True):
+    selected = {"E0": [], "E1": candidates["E1"][:n], "E2": random}
+    for a in names:
         repair.seed_all(seeds[1])
         model, opt, _ = models[a]
         moves, row = audit.training_step(
@@ -138,7 +139,7 @@ def paired_batch(models, batch, pool, direct, seeds, epoch, criterion):
             opt,
             batch,
             criterion,
-            match.selector(actions, pool if a == "E2" else direct, MASSES[a]),
+            match.selector(selected[a], pool if a == "E2" else direct, MASSES[a]),
             epoch=epoch - 1,
             mass=MASSES[a],
         )
