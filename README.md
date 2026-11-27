@@ -1,5 +1,10 @@
 # Parametric Classification for Generalized Category Discovery: A Baseline Study
 
+**Planogram RPC training:** see [PLANOGRAM_GPU.md](PLANOGRAM_GPU.md) for the
+isolated `feat/train-planogram` workflow, paste-ready GPU commands, 200-epoch /
+batch-128 CRISH training, last checkpoint, final-only SS-KMeans and SKU retrieval.
+The original Cars/CUB/Aircraft training entrypoints below are preserved.
+
 
 <p align="center">
     <a href="https://openaccess.thecvf.com/content/ICCV2023/html/Wen_Parametric_Classification_for_Generalized_Category_Discovery_A_Baseline_Study_ICCV_2023_paper.html"><img src="https://img.shields.io/badge/-ICCV%202023-68488b"></a>

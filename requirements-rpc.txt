@@ -1,0 +1,6 @@
+# Install torch/torchvision separately using the CUDA wheel index in bootstrap.sh.
+numpy==1.26.4
+scipy==1.13.1
+Pillow==11.1.0
+kagglehub==0.3.13
+tqdm==4.67.1

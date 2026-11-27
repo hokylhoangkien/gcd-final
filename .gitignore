@@ -1,2 +1,10 @@
 __pycache__
 dev_outputs
+.venv-rpc/
+datasets/
+assets_local/
+runs/
+logs_rpc/
+*.pyc
+.ruff_cache/
+.DS_Store
