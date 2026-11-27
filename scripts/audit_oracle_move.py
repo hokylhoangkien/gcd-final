@@ -78,7 +78,7 @@ def load_batch(model, ds, rows, step):
     return {"tokens": prefix(model[0], torch.cat(views)), "labels": legal, "ids": ids}
 
 
-def training_step(model, opt, batch, criterion, select, *, epoch=EPOCH):
+def training_step(model, opt, batch, criterion, select, *, epoch=EPOCH, mass=MASS):
     model.train()
     backbone, head = model
     tokens = batch["tokens"]
@@ -94,7 +94,7 @@ def training_step(model, opt, batch, criterion, select, *, epoch=EPOCH):
     loss = base
     if actions:
         delta = 0.65 * (
-            corrected_distill(logits, logits.detach(), criterion, epoch, actions, MASS)
+            corrected_distill(logits, logits.detach(), criterion, epoch, actions, mass)
             - criterion(logits, logits.detach(), epoch)
         )
         cls_delta, w_delta = torch.autograd.grad(
@@ -216,14 +216,19 @@ def accuracy(pred, truth, mapping):
 
 @torch.no_grad()
 def assess(model, center_tokens, labels, fixed):
+    model.eval()
+    h = F.normalize(torch.cat([encode(model[0], tok) for tok in center_tokens]), dim=-1)
+    pred = model[1].last_layer(h).argmax(-1).cpu().numpy()
+    return assess_features(h, pred, labels, fixed)
+
+
+@torch.no_grad()
+def assess_features(h, pred, labels, fixed):
     y = np.asarray(labels)
     if y.ndim != 1 or not len(y) or not np.issubdtype(y.dtype, np.integer):
         raise ValueError("Expected a nonempty vector of integer Cars class indices")
     if y.min() < 0 or y.max() >= 196:
         raise ValueError("Cars class indices must be in [0, 195]")
-    model.eval()
-    h = F.normalize(torch.cat([encode(model[0], tok) for tok in center_tokens]), dim=-1)
-    pred = model[1].last_layer(h).argmax(-1).cpu().numpy()
     idx = list(range(len(y)))
     remap, _ = align(idx, dict(zip(idx, pred, strict=True)), y)
     sim = h @ h.T

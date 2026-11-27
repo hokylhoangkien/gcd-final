@@ -104,10 +104,10 @@ def lock_policies(model, ids, slots, clip, aug, panel):
     return candidates, len(candidates) // 20, ids[nonpanel].tolist()
 
 
-def options(prob, keys, legal, pool):
+def options(prob, keys, legal, pool, *, strength=oracle.MASS):
     src = prob.mean(0).argmax(-1)
     mass = (
-        (prob.gather(2, src[None, :, None].expand(2, -1, 1)) >= oracle.MASS)
+        (prob.gather(2, src[None, :, None].expand(2, -1, 1)) >= strength)
         .all(0)
         .flatten()
         .tolist()
@@ -129,7 +129,7 @@ def options(prob, keys, legal, pool):
 
 
 @torch.no_grad()
-def live_pool(model, batch, pool):
+def live_pool(model, batch, pool, *, strength=oracle.MASS):
     model.train()
     h = oracle.encode(model[0], batch["tokens"])
     logits = (
@@ -140,6 +140,7 @@ def live_pool(model, batch, pool):
         batch["ids"].tolist(),
         batch["labels"].tolist(),
         pool,
+        strength=strength,
     )
 
 
@@ -301,12 +302,12 @@ def load_inputs():
     )
 
 
-def make_arms(model, state):
+def make_arms(model, state, *, names=ARMS):
     models = {}
-    for name in ARMS:
+    for name in names:
         network = (
             model
-            if name == "T0"
+            if name == names[0]
             else torch.nn.Sequential(copy.deepcopy(model[0]), DINOHead(768, 196)).cuda()
         )
         opt, sched = oracle.restore(network, state[name])
