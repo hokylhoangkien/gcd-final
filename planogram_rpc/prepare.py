@@ -22,16 +22,33 @@ from .common import digest, image_path, write_json
 HANDLE = "diyer22/retail-product-checkout-dataset/versions/5"
 
 
+class RemoteFileMissing(FileNotFoundError):
+    """Both official RPC file layouts returned HTTP 404."""
+
+
 def download_file(name):
     import kagglehub
 
-    for attempt in range(3):
-        try:
-            return Path(kagglehub.dataset_download(HANDLE, path=name))
-        except Exception:
-            if attempt == 2:
-                raise
-            time.sleep(2 ** (attempt + 1))
+    prefix = "retail_product_checkout/"
+    alternative = name[len(prefix) :] if name.startswith(prefix) else prefix + name
+    last_missing = None
+    for filename in (name, alternative):
+        for attempt in range(3):
+            try:
+                return Path(kagglehub.dataset_download(HANDLE, path=filename))
+            except Exception as error:
+                status = getattr(getattr(error, "response", None), "status_code", None)
+                if status == 404:
+                    last_missing = error
+                    break  # Try the other official layout, not the same missing URL.
+                if status is not None and status < 500 and status not in (408, 429):
+                    raise  # Authentication/permission errors must never be skipped.
+                if attempt == 2:
+                    raise
+                time.sleep(2 ** (attempt + 1))
+    raise RemoteFileMissing(
+        f"HTTP 404 for both RPC paths: {name} and {alternative}"
+    ) from last_missing
 
 
 def candidates(annotation):
@@ -193,6 +210,8 @@ def main():
         plans[category] = rows
     selected = defaultdict(list)
     seen = set()
+    excluded_downloads = []
+    missing_streak = 0
     print(
         f"Preparing {args.classes} classes x {args.per_class} product crops; resumable cache, no full RPC archive",
         flush=True,
@@ -207,13 +226,22 @@ def main():
         )
         target.parent.mkdir(parents=True, exist_ok=True)
         if not target.exists():
-            path = (
-                source / "train2019" / row["source_file"]
-                if source
-                else download_file(
-                    "retail_product_checkout/train2019/" + row["source_file"]
+            try:
+                path = (
+                    source / "train2019" / row["source_file"]
+                    if source
+                    else download_file(
+                        "retail_product_checkout/train2019/" + row["source_file"]
+                    )
                 )
-            )
+            except RemoteFileMissing:
+                # Keep the per-class quota by trying the next seeded candidate.
+                # Gold labels are only used by the dataset builder, never CRISH.
+                print(
+                    f"Unavailable in both RPC layouts, trying replacement: {row['source_file']}",
+                    flush=True,
+                )
+                return dict(row, unavailable=True)
             image = crop_product(path, row["bbox"])
             temp = target.with_suffix(".tmp")
             image.save(temp, format="PNG")
@@ -232,6 +260,22 @@ def main():
                     + min(args.workers, args.per_class - len(selected[category]))
                 ]
                 for row in pool.map(materialize, window):
+                    if row.get("unavailable"):
+                        missing_streak += 1
+                        excluded = {
+                            k: row[k]
+                            for k in ("source_id", "source_file", "source_category")
+                        }
+                        excluded["reason"] = "HTTP 404 in both official file layouts"
+                        excluded_downloads.append(excluded)
+                        with (args.root / "download_errors.jsonl").open("a") as stream:
+                            stream.write(json.dumps(excluded) + "\n")
+                        if missing_streak >= 5:
+                            raise RuntimeError(
+                                "Five consecutive images returned 404 in both RPC layouts. Stopping to avoid silently skipping a broken source. Existing crops are preserved; see download_errors.jsonl."
+                            )
+                        continue
+                    missing_streak = 0
                     if row["sha256"] not in seen:
                         seen.add(row["sha256"])
                         selected[category].append(row)
@@ -257,6 +301,7 @@ def main():
             for i, k in enumerate(classes)
         ],
         "images": assign_splits(selected, classes, len(classes) // 2, args.seed),
+        "excluded_downloads": excluded_downloads,
         "protocol": "custom exemplar holdout; 70/15/15 per SKU; exact decoded crop duplicates excluded; not the official RPC checkout benchmark",
     }
     counts = verify(args.root, manifest)

@@ -59,6 +59,12 @@ crop PNG được lưu riêng. Mỗi file có tối đa ba lần thử tải. N�
 lại lệnh; cache và crop hoàn tất được giữ lại. Public download đã kiểm tra với
 annotation và một ảnh thật; việc tải toàn bộ subset sẽ chạy trên máy GPU.
 
+Nếu một ảnh trả 404, downloader thử cả đường dẫn nested và root của RPC v5.
+Nếu cả hai đều 404, builder ghi `download_errors.jsonl`, lấy ứng viên tiếp theo
+cùng SKU và vẫn yêu cầu đủ 200 ảnh/SKU. Năm ảnh liên tiếp không truy cập được sẽ
+dừng để kiểm tra nguồn. Lỗi xác thực/quyền truy cập và lỗi mạng không bị coi là
+ảnh thiếu. Ảnh crop đã có được dùng lại khi chạy lại `prepare`.
+
 Kaggle đôi khi yêu cầu đăng nhập/xác thực: cấu hình tài khoản bằng cơ chế của
 [kagglehub](https://github.com/Kaggle/kagglehub#authenticate) nếu có lỗi 401/403;
 không đưa token vào Git. Nếu đã có RPC trên ổ đĩa, dùng:

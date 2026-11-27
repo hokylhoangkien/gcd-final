@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import shutil
 import sys
 import tempfile
 import types
@@ -25,7 +26,13 @@ from planogram_rpc.common import digest, image_path
 from planogram_rpc.data import BalancedBatches, training_data
 from planogram_rpc.export import export_model
 from planogram_rpc.metrics import cluster_accuracy, distances, retrieval, ss_kmeans
-from planogram_rpc.prepare import assign_splits, crop_product, verify
+from planogram_rpc.prepare import (
+    RemoteFileMissing,
+    assign_splits,
+    crop_product,
+    download_file,
+    verify,
+)
 from planogram_rpc.prepare import main as prepare
 from planogram_rpc.train import configure, objective, parser
 
@@ -34,6 +41,47 @@ class PipelineTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         torch.set_num_threads(1)
+
+    def test_rpc_404_tries_alternate_layout(self):
+        error = RuntimeError("not found")
+        error.response = types.SimpleNamespace(status_code=404)
+        module = types.ModuleType("kagglehub")
+        from unittest.mock import Mock
+
+        module.dataset_download = Mock(side_effect=[error, "/cached/product.jpg"])
+        with patch.dict(sys.modules, {"kagglehub": module}):
+            self.assertEqual(
+                download_file("retail_product_checkout/train2019/a.jpg"),
+                Path("/cached/product.jpg"),
+            )
+        self.assertEqual(
+            [c.kwargs["path"] for c in module.dataset_download.call_args_list],
+            ["retail_product_checkout/train2019/a.jpg", "train2019/a.jpg"],
+        )
+
+    def test_only_confirmed_404_becomes_missing_file(self):
+        from unittest.mock import Mock
+
+        module = types.ModuleType("kagglehub")
+        for status in (401, 403, 404, 429, 503):
+            error = RuntimeError(f"HTTP {status}")
+            error.response = types.SimpleNamespace(status_code=status)
+            module.dataset_download = Mock(side_effect=error)
+            with (
+                patch.dict(sys.modules, {"kagglehub": module}),
+                patch("planogram_rpc.prepare.time.sleep"),
+            ):
+                if status == 404:
+                    with self.assertRaises(RemoteFileMissing):
+                        download_file("retail_product_checkout/train2019/a.jpg")
+                    self.assertEqual(module.dataset_download.call_count, 2)
+                else:
+                    with self.assertRaises(RuntimeError):
+                        download_file("retail_product_checkout/train2019/a.jpg")
+                    self.assertEqual(
+                        module.dataset_download.call_count,
+                        1 if status in (401, 403) else 3,
+                    )
 
     def test_defaults_preserve_requested_recipe(self):
         args = configure(parser().parse_args([]))
@@ -238,8 +286,8 @@ class PipelineTest(unittest.TestCase):
             annotation = {"images": [], "annotations": [], "categories": []}
             for c in range(4):
                 annotation["categories"].append({"id": c + 1, "name": f"sku-{c}"})
-                for i in range(40):
-                    key = c * 40 + i
+                for i in range(41):
+                    key = c * 41 + i
                     filename = f"{key}.png"
                     array = np.random.default_rng(key).integers(
                         0, 256, (18, 24, 3), dtype=np.uint8
@@ -272,6 +320,51 @@ class PipelineTest(unittest.TestCase):
             )
             with patch("sys.argv", argv):
                 prepare()
+            # One remote 404 must be replaced from the seeded reserve without
+            # losing the class quota or redownloading already materialized crops.
+            remote_root = Path(folder) / "remote-prepared"
+            unavailable = manifest["images"][0]["source_file"]
+            cached = next(
+                r for r in manifest["images"] if r["source_file"] != unavailable
+            )
+            (remote_root / cached["path"]).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(root / cached["path"], remote_root / cached["path"])
+
+            def remote_file(name):
+                if name.endswith("instances_train2019.json"):
+                    return source / "instances_train2019.json"
+                filename = Path(name).name
+                if filename == unavailable:
+                    raise RemoteFileMissing(filename)
+                if filename == cached["source_file"]:
+                    raise AssertionError("Existing crop was downloaded again")
+                return source / "train2019" / filename
+
+            remote_args = [
+                "prepare",
+                "--root",
+                str(remote_root),
+                "--classes",
+                "4",
+                "--per-class",
+                "40",
+                "--workers",
+                "2",
+            ]
+            with (
+                patch("sys.argv", remote_args),
+                patch("planogram_rpc.prepare.download_file", side_effect=remote_file),
+            ):
+                prepare()
+            remote_manifest = json.loads((remote_root / "manifest.json").read_text())
+            self.assertEqual(
+                verify(remote_root, remote_manifest),
+                {"train": 112, "val": 24, "test": 24},
+            )
+            self.assertEqual(len(remote_manifest["excluded_downloads"]), 1)
+            self.assertFalse(
+                any(r["source_file"] == unavailable for r in remote_manifest["images"])
+            )
             # Exercise the new image-only RPC dataset with the EXISTING global
             # CRISH selector and the real RPC training objective on CPU.
             args = configure(parser().parse_args(["--device", "cpu", "--fp32"]))

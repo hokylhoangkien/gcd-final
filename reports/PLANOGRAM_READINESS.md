@@ -34,7 +34,7 @@ ruff check --select E4,E7,E9,F,I planogram_rpc deployment tests_rpc
 git diff --check
 ```
 
-- CPU protocol suite: **10 tests passed**, including end-to-end preparation of a temporary 160-image fixture, corruption rejection, train-label masking, deterministic balanced batches, the actual RPC objective/backward, checkpoint/RNG recovery with bitwise-identical next optimizer update, SS-KMeans fixed known assignments, product-level retrieval margin, dynamic-batch TorchScript and deployment contract/checksum rejection.
+- CPU protocol suite: **12 tests passed**, including end-to-end preparation of a temporary 160-image fixture, RPC 404 alternate-path handling, same-SKU missing-image replacement with preserved quotas and cached crops, non-skippable auth/server errors, corruption rejection, train-label masking, deterministic balanced batches, the actual RPC objective/backward, checkpoint/RNG recovery with bitwise-identical next optimizer update, SS-KMeans fixed known assignments, product-level retrieval margin, dynamic-batch TorchScript and deployment contract/checksum rejection.
 - The image fixture also passed through the existing global E3 selector and new training objective, backward/update, exposure accounting and epoch close. This is execution verification, not a learned performance result.
 - Existing `validate_global_crish.py` passed: fold/ID separation, frozen state/RNG, natural confirmation, timeout prefix, stale guard and exposure/persistence semantics.
 - Downloaded and parsed the **real RPC v5 train annotation** with kagglehub 0.3.13: 53,739 exemplar images, 200 classes, 125 classes with at least 200 candidate images.
