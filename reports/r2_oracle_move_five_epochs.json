@@ -1,0 +1,841 @@
+{
+  "verification": {
+    "history": "d33300599a6c4b3a7d56e321693aebe10db48e4215dd0c1e41158ac9f3850f66",
+    "endpoints": {
+      "O0": "13961593c260df698b42e8901ae77be15f159e53d79c19b10c62686e46367d63",
+      "O5": "dc4012d61ed5cbf8201a2ec080d9b5911ae2db6f321b86442c49d0d9e11e5896",
+      "O6": "a98aadbe024cd2a55cda8672cdf8b6c4bfa853797f712699e7f0a66c9dba7d9d"
+    },
+    "plans": {
+      "2": "54b2d813f219d16c86ed38badd90173f308f5e26d10e35c153f001d66cc850cc",
+      "3": "1a2ae7b402b0906fdb6a58de04f4f78e38089edf77afcd85c82e167d07ee2c1b",
+      "4": "9ada85e7871df9a3803e5d80a9671f80cf2601325d96573f8386a1239768ba5d",
+      "5": "b9025bf45283acbdc12d240f503d2d37c2482509f5b7f32d211e7ae3e945d018"
+    }
+  },
+  "epochs": {
+    "1": {
+      "O0": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5901360544217688
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7210884353741497
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.45918367346938777
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23741497099399567,
+              "centroid_margin": -0.016125675290822983,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.28639453649520874,
+              "centroid_margin": 0.07596289366483688,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.1884353756904602,
+              "centroid_margin": -0.10821425169706345,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 0,
+        "rows": 8064,
+        "exposure": 0.0,
+        "matched_stale": 0,
+        "matched_low_mass": 0
+      },
+      "O5": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5867346938775511
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7108843537414966
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.46258503401360546
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.641156462585034
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7687074829931972
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.2428571730852127,
+              "centroid_margin": -0.0018546339124441147,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2897959351539612,
+              "centroid_margin": 0.0876111090183258,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.19591836631298065,
+              "centroid_margin": -0.09132037311792374,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 806,
+        "rows": 8064,
+        "exposure": 0.09995039682539683,
+        "matched_stale": 0,
+        "matched_low_mass": 0
+      },
+      "O6": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5867346938775511
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.717687074829932
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.4557823129251701
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.641156462585034
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7721088435374149
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5102040816326531
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23741497099399567,
+              "centroid_margin": -0.01258176937699318,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2857142686843872,
+              "centroid_margin": 0.0776183158159256,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18911564350128174,
+              "centroid_margin": -0.10278185456991196,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 802,
+        "rows": 8064,
+        "exposure": 0.09945436507936507,
+        "matched_stale": 2,
+        "matched_low_mass": 2
+      }
+    },
+    "2": {
+      "O0": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5918367346938775
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7210884353741497
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.46258503401360546
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6428571428571429
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5102040816326531
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.2380952388048172,
+              "centroid_margin": -0.012376554310321808,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.28707483410835266,
+              "centroid_margin": 0.08208547532558441,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18911564350128174,
+              "centroid_margin": -0.10683858394622803,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 0,
+        "rows": 8064,
+        "exposure": 0.0,
+        "matched_stale": 0,
+        "matched_low_mass": 0
+      },
+      "O5": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5986394557823129
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7312925170068028
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.46598639455782315
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6462585034013606
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7857142857142857
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5068027210884354
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.2459183782339096,
+              "centroid_margin": 0.003567207371816039,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2938775420188904,
+              "centroid_margin": 0.09372884780168533,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.19795919954776764,
+              "centroid_margin": -0.08659444004297256,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 806,
+        "rows": 8064,
+        "exposure": 0.09995039682539683,
+        "matched_stale": 0,
+        "matched_low_mass": 0
+      },
+      "O6": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5901360544217688
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7210884353741497
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.45918367346938777
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.641156462585034
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5068027210884354
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.2380952388048172,
+              "centroid_margin": -0.01121114008128643,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.28435376286506653,
+              "centroid_margin": 0.07975593954324722,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.19183672964572906,
+              "centroid_margin": -0.10217821598052979,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 802,
+        "rows": 8064,
+        "exposure": 0.09945436507936507,
+        "matched_stale": 2,
+        "matched_low_mass": 2
+      }
+    },
+    "3": {
+      "O0": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5901360544217688
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7210884353741497
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.45918367346938777
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6428571428571429
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7721088435374149
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.2360544204711914,
+              "centroid_margin": -0.011026090942323208,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2829931676387787,
+              "centroid_margin": 0.08289355039596558,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18911564350128174,
+              "centroid_margin": -0.10494574159383774,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 0,
+        "rows": 8064,
+        "exposure": 0.0,
+        "matched_stale": 0,
+        "matched_low_mass": 0
+      },
+      "O5": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5986394557823129
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7244897959183674
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.47278911564625853
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6428571428571429
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7789115646258503
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5068027210884354
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.2469387650489807,
+              "centroid_margin": 0.010120397433638573,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2904762029647827,
+              "centroid_margin": 0.09472846239805222,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.2034013718366623,
+              "centroid_margin": -0.07448766380548477,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 806,
+        "rows": 8064,
+        "exposure": 0.09995039682539683,
+        "matched_stale": 0,
+        "matched_low_mass": 0
+      },
+      "O6": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5918367346938775
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7244897959183674
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.45918367346938777
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6445578231292517
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7721088435374149
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5170068027210885
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23877549171447754,
+              "centroid_margin": -0.008585536852478981,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.28639456629753113,
+              "centroid_margin": 0.08378130197525024,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.19115646183490753,
+              "centroid_margin": -0.1009523868560791,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 800,
+        "rows": 8064,
+        "exposure": 0.0992063492063492,
+        "matched_stale": 4,
+        "matched_low_mass": 2
+      }
+    },
+    "4": {
+      "O0": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5901360544217688
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7210884353741497
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.45918367346938777
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.641156462585034
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5068027210884354
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.2360544204711914,
+              "centroid_margin": -0.014208311215043068,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.28435376286506653,
+              "centroid_margin": 0.0799977034330368,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18775510787963867,
+              "centroid_margin": -0.10841432213783264,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 0,
+        "rows": 8064,
+        "exposure": 0.0,
+        "matched_stale": 0,
+        "matched_low_mass": 0
+      },
+      "O5": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6071428571428571
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7278911564625851
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.48639455782312924
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6462585034013606
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7857142857142857
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5068027210884354
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.24625848233699799,
+              "centroid_margin": 0.007604592479765415,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.29319727420806885,
+              "centroid_margin": 0.0915166512131691,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.1993197351694107,
+              "centroid_margin": -0.07630746066570282,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 806,
+        "rows": 8064,
+        "exposure": 0.09995039682539683,
+        "matched_stale": 0,
+        "matched_low_mass": 0
+      },
+      "O6": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5884353741496599
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.717687074829932
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.45918367346938777
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6394557823129252
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7653061224489796
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.2350340336561203,
+              "centroid_margin": -0.012916367501020432,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.2829931974411011,
+              "centroid_margin": 0.07577861845493317,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18707482516765594,
+              "centroid_margin": -0.10161134600639343,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 800,
+        "rows": 8064,
+        "exposure": 0.0992063492063492,
+        "matched_stale": 5,
+        "matched_low_mass": 1
+      }
+    },
+    "5": {
+      "O0": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5918367346938775
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7210884353741497
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.46258503401360546
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6428571428571429
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7755102040816326
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5102040816326531
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.2360544204711914,
+              "centroid_margin": -0.013532683253288269,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.28639453649520874,
+              "centroid_margin": 0.08053392916917801,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.18571428954601288,
+              "centroid_margin": -0.10759930312633514,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 0,
+        "rows": 8064,
+        "exposure": 0.0,
+        "matched_stale": 0,
+        "matched_low_mass": 0
+      },
+      "O5": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6003401360544217
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7108843537414966
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.4897959183673469
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6394557823129252
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7653061224489796
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.24761904776096344,
+              "centroid_margin": 0.013854604214429855,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.29115647077560425,
+              "centroid_margin": 0.1008223295211792,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.20408162474632263,
+              "centroid_margin": -0.07311312109231949,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 806,
+        "rows": 8064,
+        "exposure": 0.09995039682539683,
+        "matched_stale": 0,
+        "matched_low_mass": 0
+      },
+      "O6": {
+        "panel": {
+          "fixed": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.5884353741496599
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7142857142857143
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.46258503401360546
+            }
+          },
+          "rematched": {
+            "all": {
+              "n": 588,
+              "accuracy": 0.6394557823129252
+            },
+            "old": {
+              "n": 294,
+              "accuracy": 0.7653061224489796
+            },
+            "new": {
+              "n": 294,
+              "accuracy": 0.5136054421768708
+            }
+          },
+          "geometry": {
+            "all": {
+              "purity5": 0.23775510489940643,
+              "centroid_margin": -0.01128421165049076,
+              "margin_rows": 588
+            },
+            "old": {
+              "purity5": 0.281632661819458,
+              "centroid_margin": 0.07896194607019424,
+              "margin_rows": 294
+            },
+            "new": {
+              "purity5": 0.19387754797935486,
+              "centroid_margin": -0.10153037309646606,
+              "margin_rows": 294
+            }
+          }
+        },
+        "applied": 803,
+        "rows": 8064,
+        "exposure": 0.09957837301587301,
+        "matched_stale": 3,
+        "matched_low_mass": 0
+      }
+    }
+  },
+  "move_mass": 0.2,
+  "panel_size": 588,
+  "sampler_seed_base": 716000
+}
