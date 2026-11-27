@@ -78,7 +78,17 @@ def load_batch(model, ds, rows, step):
     return {"tokens": prefix(model[0], torch.cat(views)), "labels": legal, "ids": ids}
 
 
-def training_step(model, opt, batch, criterion, select, *, epoch=EPOCH, mass=MASS):
+def training_step(
+    model,
+    opt,
+    batch,
+    criterion,
+    select,
+    *,
+    epoch=EPOCH,
+    mass=MASS,
+    correction=corrected_distill,
+):
     model.train()
     backbone, head = model
     tokens = batch["tokens"]
@@ -94,7 +104,7 @@ def training_step(model, opt, batch, criterion, select, *, epoch=EPOCH, mass=MAS
     loss = base
     if actions:
         delta = 0.65 * (
-            corrected_distill(logits, logits.detach(), criterion, epoch, actions, mass)
+            correction(logits, logits.detach(), criterion, epoch, actions, mass)
             - criterion(logits, logits.detach(), epoch)
         )
         cls_delta, w_delta = torch.autograd.grad(
