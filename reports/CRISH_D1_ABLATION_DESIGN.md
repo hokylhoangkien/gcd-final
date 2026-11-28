@@ -63,6 +63,26 @@ cat "$BENCH/benchmark.json"
 
 Run that block under Bash with `set -o pipefail` so a timeout or benchmark failure propagates through `tee`. Add `--micro` only if using that same memory mode in production and use a new output directory for each benchmark. The benchmark reports DINO candidate and live shortfalls, matched MOVE count and actual dose, separate refresh and training costs, CUDA allocated peaks and a core epoch estimate excluding evaluation and archive I/O. Zero matched MOVE or unchanged classifiers fail the pilot explicitly. Do not pad the pilot to achieve nonzero exposure. The benchmark path is reserved and the production worker rejects it. No optimizer, scheduler, RNG or weights are exported from a benchmark.
 
+### Bounded local result
+
+The verified R2-100 pilot completed on Windows with RTX 3050 Ti Laptop GPU, torch 2.6.0+cu124, `--micro` and `--workers 0`. It used all 6,144 bank IDs and 12 shared batches (1,536 mixed rows). The optimizer updated the classifier in all three arms.
+
+| Measurement | Local result |
+|---|---:|
+| Total refresh time, three arms | 222.31 s |
+| Matched optimizer time, 12 batches | 293.69 s |
+| Benchmark wall time | 524.80 s |
+| Peak allocated VRAM, refresh / training | 1.557 / 1.625 GiB |
+| Peak reserved VRAM reported by the allocator | 1.791 GiB |
+| DINO positive / requested candidates | 130 / 614 |
+| DINO candidate shortage / cumulative live shortfall | 484 / 65 |
+| Actual matched MOVE per arm | 9 |
+| Actual exposure, per arm | 0.586% |
+| Actual moved mass, per arm | 1.8 |
+| Extrapolated local core epoch, excluding evaluation and export | 29.40 min |
+
+The CLIP and Random MOVE rows matched exactly, with different destinations as designed. DINO matched the count in every batch. The zero-worker local loader and microbatch mode differ from the default Linux setup. Re-run the bounded benchmark in the execution mode chosen for the rented GPU before using any runtime estimate. The local benchmark receipt SHA-256 is `135f9b40c2dc3096560fa589dd1cfca2ef7c0dd5090c9d725129bb417cbcf271`.
+
 ## Start, stop and resume production
 
 The production harness starts with official DINO initialization, the original SimGCD head initialization and batch protocol, and the original 200-epoch cosine schedule. It has no snapshot option. The benchmark path and the production run root must be distinct. The launcher starts only the next milestone and exits the tmux session when that stage finishes. Wall time is configurable **per stage**. Do not use a moving Git checkout or change the CUDA execution mode, environment, dataset or cached inputs during the run.
@@ -110,4 +130,4 @@ python -m relational.export verify D1-ablation-epoch-050.tar
 
 ## Validation
 
-The focused suite covers eligibility, probability transfer, deterministic random destinations, DINO shortfalls without padding, zero-edit baseline parity, exact joint resume through a matched MOVE update after a torn journal append, benchmark provenance and isolation, all four stopping milestones, and archive retries without rewriting earlier artifacts. The launcher passed Bash syntax validation. A live tmux training stage on rented Linux hardware was not started.
+The focused suite covers eligibility, probability transfer, deterministic random destinations, DINO shortfalls without padding, zero-edit baseline parity, exact joint resume through a matched MOVE update after a torn journal append, benchmark provenance and isolation, all four stopping milestones, and archive retries without rewriting earlier artifacts. The launcher passed Bash syntax validation and a stubbed invocation test with paths containing spaces, explicit CUDA selection and a non-default timeout. A live tmux training stage on rented Linux hardware was not started.

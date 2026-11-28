@@ -8,6 +8,7 @@ import os
 import platform
 from collections import Counter
 from dataclasses import replace
+from importlib.metadata import version
 from pathlib import Path
 
 import numpy as np
@@ -255,8 +256,15 @@ def environment(device):
         "torch": str(torch.__version__),
         "torchvision": str(torchvision.__version__),
         "numpy": np.__version__,
+        "pillow": version("Pillow"),
+        "scipy": version("scipy"),
+        "scikit_learn": version("scikit-learn"),
+        "pandas": version("pandas"),
         "torch_threads": torch.get_num_threads(),
         "cuda": torch.version.cuda,
+        "visible_cuda_devices": torch.cuda.device_count()
+        if device.type == "cuda"
+        else 0,
         "cudnn": torch.backends.cudnn.version() if device.type == "cuda" else None,
         "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
         "gpu_capability": list(torch.cuda.get_device_capability(device))
