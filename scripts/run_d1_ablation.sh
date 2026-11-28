@@ -3,8 +3,8 @@
 set -euo pipefail
 
 case "${1:-}" in
-    50|100|150|200) milestone=$1; shift ;;
-    *) echo "Usage: bash scripts/run_d1_ablation.sh {50|100|150|200} [--micro]" >&2; exit 2 ;;
+    20|50|100|150|200) milestone=$1; shift ;;
+    *) echo "Usage: bash scripts/run_d1_ablation.sh {20|50|100|150|200} [--micro]" >&2; exit 2 ;;
 esac
 if (( $# > 1 )) || { (( $# == 1 )) && [[ $1 != --micro ]]; }; then
     echo "Only --micro is allowed after the milestone" >&2
@@ -23,8 +23,15 @@ test -f "$D1_CLIP_CACHE"
 root=$(realpath -m "$D1_ABLATION_ROOT")
 session=${D1_ABLATION_SESSION:-crish-d1-ablation}
 python=$(command -v "${D1_ABLATION_PYTHON:-python}")
-mkdir -p "$root/logs"
-log=$(mktemp "$root/logs/epoch-$milestone.XXXXXX.log")
+pair_args=()
+logroot="$root"
+case "${D1_ABLATION_PAIR:-}" in
+    clip-random|clip-dino) pair_args=(--pair "$D1_ABLATION_PAIR"); session+="-$D1_ABLATION_PAIR"; logroot="$root/$D1_ABLATION_PAIR" ;;
+    "") ;;
+    *) echo "Unknown D1_ABLATION_PAIR" >&2; exit 2 ;;
+esac
+mkdir -p "$logroot/logs"
+log=$(mktemp "$logroot/logs/epoch-$milestone.XXXXXX.log")
 
 # Do not depend on environment variables inherited from an old tmux server.
 cmd=(env "SIMGCD_CARS_ROOT=$(realpath "$SIMGCD_CARS_ROOT")"
@@ -35,8 +42,8 @@ cmd=(env "SIMGCD_CARS_ROOT=$(realpath "$SIMGCD_CARS_ROOT")"
     CUBLAS_WORKSPACE_CONFIG=:4096:8 PYTHONUNBUFFERED=1
     timeout --signal=TERM --kill-after=90s "${D1_ABLATION_TIMEOUT:-72h}"
     "$python" -u -m dual.ablation_ops --root "$root"
-    --clip "$(realpath "$D1_CLIP_CACHE")" --until "$milestone" "$@")
+    --clip "$(realpath "$D1_CLIP_CACHE")" --until "$milestone" "${pair_args[@]}" "$@")
 printf -v invocation '%q ' "${cmd[@]}"
 printf -v redirect '%q' "$log"
 tmux new-session -d -s "$session" -c "$PWD" bash -c "exec $invocation >>$redirect 2>&1"
-printf 'tmux session %s\nPersistent log %s\nStage status %s/status.json\n' "$session" "$log" "$root"
+printf 'tmux session %s\nPersistent log %s\nStage status %s/status.json\n' "$session" "$log" "$logroot"

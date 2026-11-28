@@ -14,7 +14,7 @@ from crish.experiment import file_digest, recover_ledger
 from relational.export import verify
 from relational.state import write_json
 
-from .ablation import PRODUCTION, run
+from .ablation import PAIRS, PRODUCTION, run
 
 MILESTONES = (50, 100, 150, 200)
 
@@ -42,6 +42,34 @@ def checkpoint_receipt(folder):
 
 def archive_dir(root, epoch):
     return root / "exports" / f"epoch-{epoch:03d}"
+
+
+def cumulative_pair_metrics(rows):
+    result = {}
+    for arm in rows[-1]["pair_summary"]:
+        history = [row["pair_summary"][arm] for row in rows]
+        ids = sorted({key for r in history for key in r["unique_ids"]})
+        totals = {
+            k: sum(r[k] for r in history)
+            for k in (
+                "applied",
+                "mixed_rows",
+                "candidate_shortfall",
+                "live_pair_shortfall",
+                "target_mass",
+            )
+        }
+        result[arm] = {
+            **totals,
+            "exposure": totals["applied"] / totals["mixed_rows"],
+            "unique_edited_ids": ids,
+            "unique_edited_count": len(ids),
+            "sum_edit_gradient_norms": {
+                k: sum(r["sum_edit_gradient_norms"][k] for r in history)
+                for k in ("classifier", "block11")
+            },
+        }
+    return result
 
 
 def publish(root, folder, epoch, offset):
@@ -89,6 +117,11 @@ def publish(root, folder, epoch, offset):
                 "config_sha256": checks[config.name],
                 "journal_sha256": checks[journal.name],
                 "last_epoch_accuracy": rows[-1]["accuracy"],
+                **(
+                    {"pair_cumulative": cumulative_pair_metrics(rows)}
+                    if "pair_summary" in rows[-1]
+                    else {}
+                ),
                 "applied_per_arm": {
                     a: record["applied"] for a, record in rows[-1]["arms"].items()
                 },
@@ -115,23 +148,35 @@ def publish(root, folder, epoch, offset):
     return final / name
 
 
-def drive(root, clip, until, *, micro):
+def drive(root, clip, until, *, micro, pair=None):
     if (root / "config.json").exists():
         raise ValueError(
             "Production requires a dedicated run root, separate from a benchmark"
         )
     folder = root / "run"
     epoch, offset = checkpoint_receipt(folder)
+    marks = (
+        (20, *MILESTONES)
+        if pair or epoch == 20 or until == 20 or archive_dir(root, 20).exists()
+        else MILESTONES
+    )
+    if (
+        pair
+        and (folder / "config.json").exists()
+        and json.loads((folder / "config.json").read_text())["arms"]
+        != list(PAIRS[pair])
+    ):
+        raise ValueError("Different pair reference in this run")
     if epoch == until:
         bundle = publish(root, folder, epoch, offset)
     else:
-        following = next((mark for mark in MILESTONES if mark > epoch), None)
+        following = next((mark for mark in marks if mark > epoch), None)
         if until != following:
             raise ValueError(f"Run is at epoch {epoch}; next milestone is {following}")
-        if epoch in MILESTONES:
+        if epoch in marks:
             # Retry a timed-out export before allowing another SGD step.
             publish(root, folder, epoch, offset)
-        for mark in MILESTONES:
+        for mark in marks:
             if mark < epoch and not archive_dir(root, mark).is_dir():
                 raise ValueError(
                     f"Previously completed milestone {mark} is missing its archive"
@@ -140,7 +185,7 @@ def drive(root, clip, until, *, micro):
             root / "status.json",
             {"status": "RUNNING", "from_epoch": epoch, "until": until},
         )
-        run(folder, until, clip, micro=micro)
+        run(folder, until, clip, micro=micro, **({"pair": pair} if pair else {}))
         epoch, offset = checkpoint_receipt(folder)
         if epoch != until:
             raise ValueError(f"Worker did not commit requested milestone {until}")
@@ -158,14 +203,17 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--root", type=Path, required=True)
     p.add_argument("--clip", type=Path, required=True)
-    p.add_argument("--until", type=int, choices=MILESTONES, required=True)
+    p.add_argument("--until", type=int, choices=(20, *MILESTONES), required=True)
     p.add_argument("--micro", action="store_true")
+    p.add_argument("--pair", choices=PAIRS)
     args = p.parse_args()
     os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+    if args.pair:
+        args.root = args.root / args.pair
     args.root.mkdir(parents=True, exist_ok=True)
     with (args.root / ".ablation.lock").open("a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        drive(args.root, args.clip, args.until, micro=args.micro)
+        drive(args.root, args.clip, args.until, micro=args.micro, pair=args.pair)
 
 
 if __name__ == "__main__":

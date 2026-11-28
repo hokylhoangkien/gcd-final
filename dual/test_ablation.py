@@ -15,8 +15,10 @@ from model import DistillLoss
 
 from .ablation import (
     ARMS,
+    PAIRS,
     matched_rows,
     matched_step,
+    pair_rows,
     random_destinations,
     ranked,
     refresh,
@@ -168,7 +170,31 @@ class AblationChecks(unittest.TestCase):
             [p.applied[0][:4] for p in plans.values()], [[1, 4, 4, source]] * 3
         )
 
+    def test_pair_dose_uses_only_its_own_control(self):
+        cfg = Settings()
+        clip = [[0, 10, 1, 2], [1, 11, 1, 2]]
+        for name, arms in PAIRS.items():
+            plans = {a: Plan([], [], 8, cfg, {}) for a in arms}
+            other = (
+                [[0, 10, 1, 3], [1, 11, 1, 3]]
+                if name == "clip-random"
+                else [[5, 18, 1, 4]]
+            )
+            rows, counts = pair_rows(plans, dict(zip(arms, (clip, other), strict=True)))
+            self.assertEqual(counts["applied_per_arm"], len(other))
+            self.assertEqual(rows[arms[1]], other)
+
+    def test_pair_exact_resume(self):
+        for pair in PAIRS:
+            with self.subTest(pair=pair):
+                self.check_resume(pair)
+
     def test_joint_resume_matches_uninterrupted_model_state(self):
+        self.check_resume(None)
+
+    def check_resume(self, pair):
+        torch.manual_seed(1)
+        arms = PAIRS[pair] if pair else ARMS
         sample = fixture()
 
         class Samples:
@@ -216,7 +242,11 @@ class AblationChecks(unittest.TestCase):
                 src = int(p[:, 4].mean(0).argmax())
                 settings = Settings(mass=0.0001)
                 plans[arm] = Plan(
-                    range(4), [(4, src, (src + offset) % 196, 1.0)], 1, settings, {}
+                    range(4),
+                    [(4, src, (src + offset) % 196, 1.0)],
+                    1,
+                    settings,
+                    {"candidate_shortfall": 0},
                 )
             return plans
 
@@ -235,16 +265,16 @@ class AblationChecks(unittest.TestCase):
                 patch("dual.ablation.official_test", side_effect=evaluate),
                 patch("dual.ablation.refresh", side_effect=active_fixture),
             ):
-                run(root / "a", 2, clip)
-                run(root / "b", 1, clip)
+                run(root / "a", 2, clip, pair=pair)
+                run(root / "b", 1, clip, pair=pair)
                 with (root / "b/matched.jsonl").open("ab") as stream:
                     stream.write(b'{"epoch":2')
-                run(root / "b", 2, clip)
+                run(root / "b", 2, clip, pair=pair)
             a, b = (
                 torch.load(root / name / "recovery.pt", weights_only=False)
                 for name in ("a", "b")
             )
-            for arm in ARMS:
+            for arm in arms:
                 self.assertEqual(a["schedulers"][arm], b["schedulers"][arm])
                 for key, val in a["models"][arm].items():
                     self.assertTrue(torch.equal(val, b["models"][arm][key]))
@@ -262,7 +292,7 @@ class AblationChecks(unittest.TestCase):
             ]
             self.assertTrue(any(r["arms"][ARMS[0]]["applied"] for r in rows))
             for r in rows:
-                self.assertEqual(len({r["arms"][a]["applied"] for a in ARMS}), 1)
+                self.assertEqual(len({r["arms"][a]["applied"] for a in arms}), 1)
             self.assertEqual(
                 (root / "a/matched.jsonl").read_bytes(),
                 (root / "b/matched.jsonl").read_bytes(),

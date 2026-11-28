@@ -102,6 +102,16 @@ class OperationsChecks(unittest.TestCase):
                 receipts,
             )
 
+    def test_epoch20_export_retry_preserves_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            committed_fixture(root, 20)
+            drive(root, root / "clip", 20, micro=False)
+            (archive,) = archive_dir(root, 20).glob("*.tar")
+            first = (file_digest(archive), archive.stat().st_mtime_ns)
+            drive(root, root / "clip", 20, micro=False)
+            self.assertEqual(first, (file_digest(archive), archive.stat().st_mtime_ns))
+
     def test_verify_failure_never_publishes_partial_archive(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

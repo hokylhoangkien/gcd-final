@@ -32,6 +32,33 @@ ARMS = ("D1-matched", "D1-Random", "D1-DINO")
 PRODUCTION = "official-dino-coordinated-ablation"
 
 
+PAIRS = {"clip-random": (ARMS[0], ARMS[1]), "clip-dino": (ARMS[0], ARMS[2])}
+
+
+def pair_rows(plans, eligible):
+    reference, control = plans
+    clip = eligible[reference]
+    other = eligible[control]
+    limit = min(
+        min(p.settings.batch_cap, p.budget - len(p.applied)) for p in plans.values()
+    )
+    desired = min(limit, len(clip))
+    if control == "D1-Random":
+        by_source = {tuple(row[:3]): row for row in other}
+        clip = [row for row in clip if tuple(row[:3]) in by_source]
+        other = [by_source[tuple(row[:3])] for row in clip]
+        if any(a[3] == b[3] for a, b in zip(clip, other, strict=True)):
+            raise ValueError("Random destination equals CLIP destination")
+    n = min(limit, len(clip), len(other))
+    return {reference: clip[:n], control: other[:n]}, {
+        "applied_per_arm": n,
+        "desired": desired,
+        "control_live_shortfall": desired - n,
+        "clip_live": len(eligible[reference]),
+        "control_live": len(eligible[control]),
+    }
+
+
 def ranked(scores_and_targets, slots, ids, limit):
     risk, dst = scores_and_targets
     good = np.flatnonzero(np.isfinite(risk) & (risk > 0) & (dst >= 0))
@@ -73,7 +100,7 @@ def refresh(models, loader, center, clip, epoch, settings, device, workers):
     budget = int(len(loader) * loader.batch_size * settings.mixed_exposure_cap)
     records, plans = {}, {}
     clip_rows = []
-    for arm in ARMS:
+    for arm in models:
         clock = Clock(settings.refresh_timeout, device)
         proposals, eligible, short = [], 0, 0
         status = "warmup" if epoch < settings.warmup else "ok"
@@ -150,6 +177,26 @@ def live_rows(plan, logits, batch, epoch, criterion):
     return eligible
 
 
+def pair_summary(plans, counts, mixed_rows):
+    output = {}
+    for arm, plan in plans.items():
+        edited = [r["gradient_dose"][arm] for r in counts if r["applied_per_arm"]]
+        output[arm] = {
+            "mixed_rows": mixed_rows,
+            "applied": len(plan.applied),
+            "exposure": len(plan.applied) / mixed_rows,
+            "unique_ids": sorted({row[2] for row in plan.applied}),
+            "candidate_shortfall": plan.details["candidate_shortfall"],
+            "live_pair_shortfall": sum(r["control_live_shortfall"] for r in counts),
+            "target_mass": len(plan.applied) * plan.settings.mass,
+            "sum_edit_gradient_norms": {
+                scope: sum(g[scope]["edit_norm"] for g in edited)
+                for scope in ("classifier", "block11")
+            },
+        }
+    return output
+
+
 def matched_rows(plans, eligible):
     clip, random, dino = (eligible[a] for a in ARMS)
     random_by_row = {row[0]: row for row in random}
@@ -213,26 +260,29 @@ def matched_step(models, optimizers, batch, criterion, epoch, plans, index, *, m
     # No explicit forward randomness in the locked DINOv1 architecture. A parity
     # check also catches different kernels or a future stateful training layer.
     if any(p.proposals for p in plans.values()):
-        for arm in ARMS:
+        for arm in models:
             expected[arm] = preview(models[arm], batch, micro)
             eligible[arm] = live_rows(
                 plans[arm], expected[arm], batch, epoch, criterion
             )
     else:
-        eligible = {arm: [] for arm in ARMS}
-    selected, counts = matched_rows(plans, eligible)
+        eligible = {arm: [] for arm in models}
+    pair = tuple(models) in PAIRS.values()
+    selected, counts = (
+        pair_rows(plans, eligible) if pair else matched_rows(plans, eligible)
+    )
     losses = {}
     # Share forward RNG too, and advance the common stream exactly once.
     initial = rng_state()
     advanced = None
-    for arm in ARMS:
+    for arm in models:
         restore_rng(initial)
         locked = (
             LockedBatch(plans[arm], expected[arm], selected[arm])
             if selected[arm]
             else None
         )
-        base, total, _ = step(
+        base, total, grad = step(
             models[arm],
             optimizers[arm],
             batch,
@@ -241,7 +291,10 @@ def matched_step(models, optimizers, batch, criterion, epoch, plans, index, *, m
             locked,
             index,
             micro=micro,
+            diagnose=pair and bool(selected[arm]),
         )
+        if pair:
+            counts.setdefault("gradient_dose", {})[arm] = grad
         losses[arm] = [base, total]
         if advanced is None:
             advanced = rng_state()
@@ -274,7 +327,8 @@ def environment(device):
     }
 
 
-def run(folder, until, clip_path, *, micro=False, steps=None):
+def run(folder, until, clip_path, *, micro=False, steps=None, pair=None):
+    arms = PAIRS[pair] if pair else ARMS
     config = folder / "config.json"
     prior = json.loads(config.read_text(encoding="utf8")) if config.exists() else None
     if steps is not None and folder.exists():
@@ -293,7 +347,7 @@ def run(folder, until, clip_path, *, micro=False, steps=None):
     clip, receipt = cache.load(
         clip_path, loader.dataset.unlabelled_dataset, protocol["split"], device
     )
-    for arm in ARMS:
+    for arm in arms:
         # build() reseeds both official model initialization and the sampler RNG.
         models[arm] = model if arm == ARMS[0] else build()[0]
         if arm != ARMS[0]:
@@ -307,7 +361,7 @@ def run(folder, until, clip_path, *, micro=False, steps=None):
         "protocol": protocol,
         "settings": vars(settings),
         "clip": receipt,
-        "arms": list(ARMS),
+        "arms": list(arms),
         "micro": micro,
         "environment": environment(device),
     }
@@ -325,7 +379,7 @@ def run(folder, until, clip_path, *, micro=False, steps=None):
         if saved["identity"] != identity:
             raise ValueError("Ablation resume identity changed")
         start = saved["epoch"]
-        for arm in ARMS:
+        for arm in arms:
             models[arm].load_state_dict(saved["models"][arm])
             optimizers[arm].load_state_dict(saved["optimizers"][arm])
             schedulers[arm].load_state_dict(saved["schedulers"][arm])
@@ -365,12 +419,12 @@ def run(folder, until, clip_path, *, micro=False, steps=None):
         )
         for model in models.values():
             model.train()
-        counts, dose, totals, n_rows = [], 0, {a: np.zeros(2) for a in ARMS}, 0
+        counts, dose, totals, n_rows = [], 0, {a: np.zeros(2) for a in arms}, 0
         for i, batch in enumerate(loader, 1):
             loss, tally = matched_step(
                 models, optimizers, batch, criterion, epoch, plans, i, micro=micro
             )
-            for arm in ARMS:
+            for arm in arms:
                 totals[arm] += loss[arm]
             counts.append(tally)
             dose += tally["applied_per_arm"]
@@ -385,7 +439,7 @@ def run(folder, until, clip_path, *, micro=False, steps=None):
             # sampler RNG once, as in the original single-arm trainer.
             before_eval = rng_state()
             after_eval = None
-            for arm in ARMS:
+            for arm in arms:
                 restore_rng(before_eval)
                 acc[arm] = [
                     float(x)
@@ -404,6 +458,11 @@ def run(folder, until, clip_path, *, micro=False, steps=None):
                 "steps": len(counts),
                 "partial": steps is not None,
                 "batch_matching": counts,
+                **(
+                    {"pair_summary": pair_summary(plans, counts, n_rows)}
+                    if pair
+                    else {}
+                ),
                 "accuracy": acc,
                 "loss": {a: (v / len(counts)).tolist() for a, v in totals.items()},
                 "arms": {a: p.record(n_rows) for a, p in plans.items()},
