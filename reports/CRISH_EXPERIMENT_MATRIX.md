@@ -2,6 +2,8 @@
 
 | Training run | Seed | Observed endpoint | All / Old / New (%) | Evidence |
 |---|---:|---:|---|---|
+| D1 | 1 | 200 | 60.35 / 72.16 / 54.65 | [Final archive audit](CRISH_D1_FINAL_AUDIT.md) |
+| D1-Random / D1-DINO | 1 | — | — | [Matched-exposure design](CRISH_D1_ABLATION_DESIGN.md) |
 | E0 | 1 | 200 | 55.91 / 72.96 / 47.67 | [Archive and frozen audit](CRISH_E0_BASELINE_AUDIT.md) |
 | E3 | 1 | 200 | 56.51 / 71.51 / 49.26 | [Global verifier](CRISH_SIMGCD_GLOBAL.md) |
 | R2 | 1 | 150 | 55.21 / 70.66 / 47.74 | [R2 mechanistic audit](CRISH_RELATIONAL_MECHANISTIC_AUDIT.md) |
@@ -9,6 +11,7 @@
 
 | Diagnostic | Starting checkpoint or feature bank | Comparison |
 |---|---|---|
+| [D1 final audit](CRISH_D1_FINAL_AUDIT.md) | D1-100/150/200, E0-200, R2-100/150 | Archive continuity, frozen geometry/readouts, locked correction and retrospective exposure cohorts |
 | [Frozen E0 benchmark](CRISH_E0_BASELINE_AUDIT.md) | E0-200, R2-100/150 | v2, geometry, readouts, DINO/CLIP and matched offline correction |
 | [G6 confirmation](CRISH_VLM_HELDOUT_CONFIRMATION.md) | R2-100/150 | Locked detector/retriever policies and fixed budgets |
 | [Oracle trajectory](CRISH_ORACLE_MOVE_FIVE_EPOCHS.md) | R2-100 | Oracle MOVE, KEEP and matched random |
