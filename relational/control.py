@@ -7,13 +7,13 @@ import tempfile
 from pathlib import Path
 
 
-def request(root, action):
+def request(root, action, *, variant="R2"):
     import fcntl
 
-    folder = root / "R2"
+    folder = root / variant
     if not (folder / "standalone.json").is_file():
-        raise ValueError("Expected an existing standalone R2 run")
-    with (root / "R2.lock").open("a") as lock:
+        raise ValueError(f"Expected an existing standalone {variant} run")
+    with (root / f"{variant}.lock").open("a") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
