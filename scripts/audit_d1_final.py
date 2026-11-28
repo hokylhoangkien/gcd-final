@@ -593,6 +593,13 @@ def report(result, path):
     p, history = result["provenance"], result["exposure"]
     series = result["trajectory"]
     summary = result["training_summary"]
+    peak = summary["D1"]["peak"]
+    last = result["frozen"]["D1-200"]
+    base = result["frozen"]["E0-200"]
+    replay = last["correction"]["10"]["All"]["CLIP"]
+    association = result["interventions"]["source_cohorts"]["D1-200"]["all"]
+    warmup = result["same_epoch_d1_minus_other_pp"]["E0"][:10]
+    warmup_gap = max(abs(x) for row in warmup for x in row["difference_pp"])
 
     def acc(run, end, window=1):
         values = [
@@ -614,6 +621,10 @@ def report(result, path):
         "",
         f"D1 completed 200 epochs at `{COMMIT}`. Its archived final v2 All / Old / New was **{e0.accuracy(summary['D1']['last'])}%**. The same-epoch D1 minus E0 difference was {values(dict(zip(GROUPS, result['same_epoch_d1_minus_other_pp']['E0'][-1]['difference_pp'])))} percentage points. Runs are single-seed trajectories and these comparisons do not isolate the effect of CLIP evidence.",
         "",
+        f"The All peak was {100 * peak['accuracy'][0]:.2f}% at epoch {peak['epoch']}. The final New advantage over E0 coincides with higher New kNN-5 purity ({last['geometry']['new']['purity5']:.3f} vs {base['geometry']['new']['purity5']:.3f}) and a positive New centroid margin ({last['geometry']['new']['centroid_margin']:+.3f} vs {base['geometry']['new']['centroid_margin']:+.3f}).",
+        "",
+        f"The locked D1-200 CLIP offline policy made {replay['correct_repairs']} repairs and {replay['harmful_edits']} harmful edits at 10% coverage ({replay['vs_keep']['pp']:+.2f} pp vs KEEP). The difficulty-adjusted edited-versus-never association was {100 * association['edited_weighted_adjusted_difference']:+.2f} pp at epoch 200 in the common-support cohort. These findings leave the contributions of CLIP destination choice and exposure unresolved.",
+        "",
         "## Provenance and training continuity",
         "",
         "Archive SHA-256 receipts were checked before extraction. All analysis checkpoints came from the externally verified epoch-200 TAR. Earlier milestone checkpoint digests and byte-exact journal prefixes were corroborated against that archive. The checkpoint identity, recorded byte boundaries, RNG payloads, populated finite SGD momentum buffers, per-epoch LRs and milestone scheduler position agree. This checks retained state and epoch-level continuity. Individual historical optimizer updates, draws and augmentation RNG cannot be replay-verified from these artifacts.",
@@ -627,11 +638,17 @@ def report(result, path):
         lines.append(
             f"| {epoch} | `{r['archive_sha256']}` | {'match' if r['sidecar_matches'] else 'MISMATCH'} | {', '.join(r['member_digest_mismatches']) or 'none'} | {r['optimizer_entries']} | {r['scheduler']['_last_lr'][0]:.8f} |"
         )
+    for epoch, row in p["archives"].items():
+        if not row["sidecar_matches"]:
+            lines += [
+                "",
+                f"Epoch {epoch} declared SHA-256 `{row['expected_archive_sha256']}`. The archive and sidecar are intact on disk. The cause of the sidecar discrepancy is unknown.",
+            ]
     lines += [
         "",
         "## Accuracy trajectories",
         "",
-        "All numbers are percentages, ordered All / Old / New. Last-20 windows end at the marked epoch. Raw curves and same-epoch differences are in the JSON.",
+        f"All numbers are percentages, ordered All / Old / New. Last-20 windows end at the marked epoch. In the first ten warmup epochs the largest absolute D1–E0 difference is {warmup_gap:.4f} pp, within E0 stdout rounding. Raw curves and same-epoch differences are in the JSON.",
         "",
         "| Epoch | Run | Endpoint | Mean of last 20 |",
         "|---:|---|---|---|",
@@ -767,22 +784,23 @@ def report(result, path):
         "",
         "## Historical applied edits and cohort changes",
         "",
-        "The reported edit counts use actual ledger occurrences. Repair/harm describes where the mass went under a retrospective fixed snapshot alignment. A full contemporaneous assignment map and live teacher probabilities were not retained, so the exact per-epoch semantic correctness and soft-target effectiveness cannot be verified. JSON includes sensitivity to all three mappings and Old/New breakdowns. The nearest retained snapshot mapping is shown per window.",
+        "The reported edit counts use actual ledger occurrences. Repair/harm describes where the mass went under a retrospective fixed snapshot alignment. A full contemporaneous assignment map and live teacher probabilities were not retained, so the exact per-epoch semantic correctness and soft-target effectiveness cannot be verified. JSON includes sensitivity to all three mappings and Old/New breakdowns. The window-end retained snapshot mapping is shown per window.",
         "",
-        "| Applied window | Alignment snapshot | Repair / harmful / wrong-to-wrong / unmatched |",
-        "|---|---|---|",
+        "| Applied window | Alignment snapshot | Repair / harmful / wrong-to-wrong / unmatched | Repair / harm (% of all applied) |",
+        "|---|---|---|---|",
     ]
     for window, tag in zip(("11-100", "101-150", "151-200"), TAGS, strict=True):
         c = result["interventions"]["actual_move"][
             "fixed_snapshot_mapping_sensitivity"
         ][window][tag]["all"]
+        total = sum(c.values())
         lines.append(
             f"| {window} | {tag} | "
             + " / ".join(
                 str(c.get(k, 0))
                 for k in ("repair", "harmful", "wrong_to_wrong", "unmatched")
             )
-            + " |"
+            + f" | {100 * c.get('repair', 0) / total:.1f} / {100 * c.get('harmful', 0) / total:.1f} |"
         )
     repeats = result["interventions"]["actual_move"][
         "consecutive_observed_edits_for_same_id"
@@ -809,7 +827,7 @@ def report(result, path):
         "- E0 retains only epoch 200, R2 retains epochs 100 and 150, and E3-F retains manually recovered aggregate metrics. Missing matrix cells remain unmeasured.",
         "- The ablations need shared realized exposure before attributing differences to destination choice or evidence source. See [ablation design](CRISH_D1_ABLATION_DESIGN.md).",
         "",
-        f"Audit runtime {result['seconds']:.1f} s. [Complete machine-readable audit](CRISH_D1_FINAL_AUDIT.json).",
+        f"Report replay runtime {result['seconds']:.1f} s. [Complete machine-readable audit](CRISH_D1_FINAL_AUDIT.json).",
     ]
     tmp = path.with_suffix(".md.tmp")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf8")
@@ -821,6 +839,11 @@ def main():
     parser.add_argument("--logs", type=Path, default=e0.LOG)
     parser.add_argument("--work", type=Path, default=WORK)
     parser.add_argument("--reports", type=Path, default=Path("reports"))
+    parser.add_argument(
+        "--reuse-frozen",
+        action="store_true",
+        help="Verify and score the existing frozen predictions",
+    )
     args = parser.parse_args()
     started = time.monotonic()
     args.work.mkdir(parents=True, exist_ok=True)
@@ -860,9 +883,28 @@ def main():
         f"Reconciled {len(metrics)} D1 epochs and {exposure['applied']} applied occurrences",
         flush=True,
     )
-    freeze(
-        model, ds, center, ids, {**states, **reference_states}, args.work, provenance
-    )
+    if args.reuse_frozen:
+        frozen_receipt = read(args.work / "frozen-provenance.json")
+        for field in ("archives", "identity", "e0_audit_json_sha256"):
+            if json_native(provenance[field]) != frozen_receipt[field]:
+                raise ValueError(f"Frozen D1 provenance changed: {field}")
+        if frozen_receipt["query_policy_sha256"] != digest(e0.heldout.OUT):
+            raise ValueError("Frozen D1 query protocol changed")
+        provenance.update(frozen_receipt)
+        print(
+            "Reusing frozen D1 predictions and readouts; no feature extraction",
+            flush=True,
+        )
+    else:
+        freeze(
+            model,
+            ds,
+            center,
+            ids,
+            {**states, **reference_states},
+            args.work,
+            provenance,
+        )
     frozen, interventions = seal(
         args.work, provenance["frozen_sha256"], series, ledgers, previous["frozen"]
     )
@@ -892,8 +934,8 @@ def main():
     json_path = args.reports / "CRISH_D1_FINAL_AUDIT.json"
     markdown = args.reports / "CRISH_D1_FINAL_AUDIT.md"
     result = json_native(result)
-    report(result, markdown)
     write_json(json_path, result)
+    report(read(json_path), markdown)
     print(f"Published local reports {markdown} and {json_path}", flush=True)
 
 

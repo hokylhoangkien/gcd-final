@@ -200,6 +200,9 @@ class AblationChecks(unittest.TestCase):
                 {"split": "fixture", "relational": {}, "workers": 0},
             )
 
+        def evaluate(*_):
+            return tuple(torch.rand(3).tolist())
+
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             clip = root / "fixture"
@@ -209,7 +212,7 @@ class AblationChecks(unittest.TestCase):
                     "dual.ablation.cache.load",
                     return_value=(torch.ones(4, 2), {"fixture": True}),
                 ),
-                patch("dual.ablation.official_test", return_value=(0.0, 0.0, 0.0)),
+                patch("dual.ablation.official_test", side_effect=evaluate),
             ):
                 run(root / "a", 2, clip)
                 run(root / "b", 1, clip)

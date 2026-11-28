@@ -323,14 +323,22 @@ def run(folder, until, clip_path, *, micro=False, steps=None):
             raise ValueError("Matched intervention counts diverged")
         acc = {}
         if steps is None:
+            # Each evaluator creates a DataLoader iterator. Advance the shared
+            # sampler RNG once, as in the original single-arm trainer.
+            before_eval = rng_state()
+            after_eval = None
             for arm in ARMS:
+                restore_rng(before_eval)
                 acc[arm] = [
                     float(x)
                     for x in official_test(
                         models[arm], evaluation, epoch, f"{arm} ACC", args
                     )
                 ]
+                if after_eval is None:
+                    after_eval = rng_state()
                 schedulers[arm].step()
+            restore_rng(after_eval)
         append(
             journal,
             {
