@@ -1,5 +1,6 @@
 """Focused matched-ablation tests on CPU with deterministic, legally masked batches."""
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -200,6 +201,25 @@ class AblationChecks(unittest.TestCase):
                 {"split": "fixture", "relational": {}, "workers": 0},
             )
 
+        @torch.no_grad()
+        def active_fixture(
+            models, loader, center, clip, epoch, settings, device, workers
+        ):
+            plans = {}
+            temp = DistillLoss(30, 200).teacher_temp_schedule[epoch]
+            for offset, (arm, model) in enumerate(models.items(), 1):
+                p = (
+                    (model(torch.cat(sample[0]))[1] / temp)
+                    .softmax(-1)
+                    .reshape(2, 8, -1)
+                )
+                src = int(p[:, 4].mean(0).argmax())
+                settings = Settings(mass=0.0001)
+                plans[arm] = Plan(
+                    range(4), [(4, src, (src + offset) % 196, 1.0)], 1, settings, {}
+                )
+            return plans
+
         def evaluate(*_):
             return tuple(torch.rand(3).tolist())
 
@@ -213,9 +233,12 @@ class AblationChecks(unittest.TestCase):
                     return_value=(torch.ones(4, 2), {"fixture": True}),
                 ),
                 patch("dual.ablation.official_test", side_effect=evaluate),
+                patch("dual.ablation.refresh", side_effect=active_fixture),
             ):
                 run(root / "a", 2, clip)
                 run(root / "b", 1, clip)
+                with (root / "b/matched.jsonl").open("ab") as stream:
+                    stream.write(b'{"epoch":2')
                 run(root / "b", 2, clip)
             a, b = (
                 torch.load(root / name / "recovery.pt", weights_only=False)
@@ -233,6 +256,13 @@ class AblationChecks(unittest.TestCase):
                         )
                     )
             self.assertTrue(torch.equal(a["rng"][2], b["rng"][2]))
+            rows = [
+                json.loads(line)
+                for line in (root / "b/matched.jsonl").read_bytes().splitlines()
+            ]
+            self.assertTrue(any(r["arms"][ARMS[0]]["applied"] for r in rows))
+            for r in rows:
+                self.assertEqual(len({r["arms"][a]["applied"] for a in ARMS}), 1)
             self.assertEqual(
                 (root / "a/matched.jsonl").read_bytes(),
                 (root / "b/matched.jsonl").read_bytes(),

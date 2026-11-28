@@ -2,21 +2,24 @@
 
 import argparse
 import copy
+import json
 import math
 import os
+import platform
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import torch
+import torchvision
 
 from crish.experiment import atomic_checkpoint, recover_ledger, restore_rng, rng_state
 from crish.global_repair import Clock, Deadline, frozen
 from crish.repair import Action
 from model import DistillLoss
 from relational.sensitivity_metrics import cls, prefix
-from relational.state import append
+from relational.state import append, write_json
 from relational.train import build
 from train import test as official_test
 
@@ -25,6 +28,7 @@ from .policy import Plan, Settings, folds, scores, snapshot
 from .train import optimizer_for, scheduler_for, step
 
 ARMS = ("D1-matched", "D1-Random", "D1-DINO")
+PRODUCTION = "official-dino-coordinated-ablation"
 
 
 def ranked(scores_and_targets, slots, ids, limit):
@@ -244,12 +248,38 @@ def matched_step(models, optimizers, batch, criterion, epoch, plans, index, *, m
     return losses, counts
 
 
+def environment(device):
+    return {
+        "platform": platform.system(),
+        "python": platform.python_version(),
+        "torch": str(torch.__version__),
+        "torchvision": str(torchvision.__version__),
+        "numpy": np.__version__,
+        "torch_threads": torch.get_num_threads(),
+        "cuda": torch.version.cuda,
+        "cudnn": torch.backends.cudnn.version() if device.type == "cuda" else None,
+        "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
+        "gpu_capability": list(torch.cuda.get_device_capability(device))
+        if device.type == "cuda"
+        else None,
+        "cublas_workspace": os.getenv("CUBLAS_WORKSPACE_CONFIG"),
+    }
+
+
 def run(folder, until, clip_path, *, micro=False, steps=None):
+    config = folder / "config.json"
+    prior = json.loads(config.read_text(encoding="utf8")) if config.exists() else None
+    if steps is not None and folder.exists():
+        raise ValueError("Use a new output directory for a partial-epoch smoke")
+    if prior is not None and prior.get("purpose") != PRODUCTION:
+        raise ValueError("Run directory is reserved for a benchmark or partial smoke")
+    state = folder / "recovery.pt"
+    journal = folder / "matched.jsonl"
+    if prior is None and (state.exists() or journal.exists()):
+        raise ValueError("Run has state without an official-initialization manifest")
     models, optimizers, schedulers = {}, {}, {}
     model, loader, evaluation, center, args, protocol = build()
     device = next(model.parameters()).device
-    if steps and folder.exists():
-        raise ValueError("Use a new output directory for a partial-epoch smoke")
     protocol.pop("relational")
     settings = Settings()
     clip, receipt = cache.load(
@@ -265,15 +295,21 @@ def run(folder, until, clip_path, *, micro=False, steps=None):
         optimizers[arm] = optimizer_for(models[arm])
         schedulers[arm] = scheduler_for(optimizers[arm])
     identity = {
+        "purpose": PRODUCTION if steps is None else "ablation-warmup-smoke-only",
         "protocol": protocol,
         "settings": vars(settings),
         "clip": receipt,
-        "arms": ARMS,
+        "arms": list(ARMS),
         "micro": micro,
+        "environment": environment(device),
     }
+    if prior is not None and prior != identity:
+        raise ValueError(
+            "Run initialization, protocol, execution mode or environment changed"
+        )
     folder.mkdir(parents=True, exist_ok=True)
-    state = folder / "recovery.pt"
-    journal = folder / "matched.jsonl"
+    if prior is None:
+        write_json(config, identity)
     journal.touch(exist_ok=True)
     start = 0
     if state.exists():
@@ -286,10 +322,19 @@ def run(folder, until, clip_path, *, micro=False, steps=None):
             optimizers[arm].load_state_dict(saved["optimizers"][arm])
             schedulers[arm].load_state_dict(saved["schedulers"][arm])
             sched = schedulers[arm]
-            if sched.last_epoch != start or any(
-                not math.isclose(g["lr"], lr)
-                for g, lr in zip(
-                    optimizers[arm].param_groups, sched.get_last_lr(), strict=True
+            expected_lr = (
+                0.0001 + (0.1 - 0.0001) * (1 + math.cos(math.pi * start / 200)) / 2
+            )
+            if (
+                sched.last_epoch != start
+                or sched.T_max != 200
+                or sched.eta_min != 0.0001
+                or any(lr != 0.1 for lr in sched.base_lrs)
+                or any(
+                    not math.isclose(g["lr"], lr) or not math.isclose(lr, expected_lr)
+                    for g, lr in zip(
+                        optimizers[arm].param_groups, sched.get_last_lr(), strict=True
+                    )
                 )
             ):
                 raise ValueError("Ablation optimizer/scheduler checkpoint mismatch")
@@ -297,7 +342,12 @@ def run(folder, until, clip_path, *, micro=False, steps=None):
         recover_ledger(journal, saved["journal_bytes"])
         del saved
     elif journal.stat().st_size:
-        raise ValueError("The journal is missing its committed recovery checkpoint")
+        # A crash before the first checkpoint may leave a single uncommitted row.
+        pending = journal.read_bytes().splitlines(keepends=True)
+        complete = [line for line in pending if line.endswith(b"\n")]
+        if len(pending) > 1 or (complete and json.loads(complete[0])["epoch"] != 1):
+            raise ValueError("Committed trajectory is missing its recovery checkpoint")
+        recover_ledger(journal, 0)
     if not start < until <= 200:
         raise ValueError("Target must advance the original 200-epoch schedule")
     criterion = DistillLoss(30, 200)
